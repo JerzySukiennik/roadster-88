@@ -250,7 +250,7 @@ export class CarSim {
     this.gripPrepass();
     const steerAmt = Math.abs(inp.steer);
     const slide = steerAmt * (1 - smoothstep(5, 16, sp));
-    const tcK = 1 + 0.6 * slide;
+    const tcK = 1 + 0.15 * slide;
     const aFwd = Math.max(0, this.lastAccel.dot(this.fwd));
     for (const w of ws) w.cap = this.wheelCap(w, P.traction_control) * tcK + w.inertia * aFwd / (w.r * w.r) + (w.contact ? 0 : 1e9);
     const capF = ws[0].cap + ws[1].cap, capR = ws[2].cap + ws[3].cap;

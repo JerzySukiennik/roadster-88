@@ -5,22 +5,22 @@ Both engines write their own section between their markers. Targets from SPEC "P
 <!-- web:begin -->
 ## web (three.js build)
 
-Run: `node web/tools/parity.mjs` (Node v26.5.0, Rapier 0.21.0, 120 Hz, flat plate). Updated 2026-10-16 00:44 UTC.
+Run: `node web/tools/parity.mjs` (Node v26.5.0, Rapier 0.21.0, 120 Hz, flat plate). Updated 2026-10-16 15:00 UTC.
 
 | Metric | Target | Web |
 |---|---|---|
-| 0-60 mph, motors | 1.9 s | 1.95 s |
-| 0-60 mph, boost (W + Shift) | 1.1 s | 1.12 s |
-| 0-88 mph, motors | (report) | 2.91 s |
-| 0-88 mph, boost | (report) | 1.65 s |
-| 60-0 mph, tyres (S) | about 32 m | 31.8 m (peak 1.46 g) |
-| 60-0 mph, tyres + retro (S + Shift) | shorter | 18.7 m (peak 2.08 g) |
+| 0-60 mph, motors | 1.9 s | 1.92 s |
+| 0-60 mph, boost (W + Shift) | 1.1 s | 1.11 s |
+| 0-88 mph, motors | (report) | 2.87 s |
+| 0-88 mph, boost | (report) | 1.63 s |
+| 60-0 mph, tyres (S) | about 32 m | 21.7 m (peak 1.80 g) |
+| 60-0 mph, tyres + retro (S + Shift) | shorter | 15.2 m (peak 2.66 g) |
 | Top speed, motors (70 s) | 250 mph | 249.3 mph |
 | Top speed, boost (40 s) | 250 mph | 249.4 mph |
 | Hover throttle, rear / front valve | (report) | 0.455 / 0.507 |
 | Hover thrust / weight, thrust / max | 1.0 / (report) | 1.000 / 0.478 |
 | Hop apex, 0.3 s Space (COM rise) | (report) | 0.30 m |
-| Turn radius, 60 mph full lock | (report) | 66.9 m at 59.7 mph, 1.08 g lateral |
+| Turn radius, 60 mph full lock | (report) | 52.7 m at 59.3 mph, 1.36 g lateral |
 | Hover yaw rate, A held | 70 deg/s (assist) | 69.7 deg/s |
 
 Method: car settles 1.2 s at rest. 0-X: full W (plus Shift) from rest, time until forward speed crosses X. 60-0: accelerate to 63 mph, then S (plus Shift), distance from the moment speed drops through 60 mph to standstill. Hover: Space 1.4 s (enters hover after `hover_engage_s`), release, 6 s altitude hold, average over 2 s. Hop: Space held 0.3 s from rest, apex of COM rise. Turn: hold 60 mph with a throttle P-controller and full A for 8 s, average R = v / yaw rate over 3 s. Yaw: hovering, A held 2.5 s, average over 2 s.

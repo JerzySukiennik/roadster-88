@@ -25,9 +25,9 @@
     "width_rear": 0.325,
     "mass_each": 22,
     "inertia_each": 1.9,
-    "max_steer_deg": 34,
-    "steer_speed_falloff": { "full_until": 8, "min_factor": 0.22, "at": 70 },
-    "steer_rate_deg_s": 260,
+    "max_steer_deg": 38,
+    "steer_speed_falloff": { "full_until": 14, "min_factor": 0.36, "at": 90 },
+    "steer_rate_deg_s": 420,
     "ackermann": 0.6
   },
 
@@ -44,13 +44,13 @@
   },
 
   "tyres": {
-    "mu_long": 1.52,
-    "mu_lat": 1.45,
+    "mu_long": 1.75,
+    "mu_lat": 1.75,
     "peak_slip_ratio": 0.10,
-    "peak_slip_angle_deg": 7.0,
-    "falloff_long": 0.82,
-    "falloff_lat": 0.86,
-    "load_sensitivity": 0.07,
+    "peak_slip_angle_deg": 6.0,
+    "falloff_long": 0.92,
+    "falloff_lat": 0.95,
+    "load_sensitivity": 0.04,
     "relaxation_length": 0.35,
     "rolling_resistance": 0.012
   },
@@ -62,7 +62,7 @@
     "limiter_mph": 250,
     "reverse_max_mph": 25,
     "regen_force": 9000,
-    "brake_force": 23000,
+    "brake_force": 42000,
     "brake_front_share": 0.62,
     "traction_control": 0.12,
     "motor_rpm_per_mps": 520
@@ -74,14 +74,14 @@
       "thrust_each": 5500,
       "positions": [[0.40, 0.30, -2.10], [0.17, 0.29, -2.12], [-0.17, 0.29, -2.12], [-0.40, 0.30, -2.10]],
       "pitch_range_deg": [0, 95],
-      "side_deflect_deg": 15
+      "side_deflect_deg": 30
     },
     "front": {
       "count": 2,
       "thrust_each": 9000,
       "positions": [[0.13, 0.30, 2.10], [-0.13, 0.30, 2.10]],
       "pitch_range_deg": [0, 95],
-      "side_deflect_deg": 15,
+      "side_deflect_deg": 30,
       "deploy_time_s": 0.30,
       "retract_delay_s": 1.2,
       "deploy_travel_m": 0.09
@@ -96,6 +96,7 @@
 
   "flight_assist": {
     "enabled_default": true,
+    "lateral_grip": 4.5,
     "attitude_kp": 9.0,
     "rate_kd": 3.2,
     "max_pitch_deg": 25,

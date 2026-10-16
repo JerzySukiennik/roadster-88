@@ -84,11 +84,13 @@ export class FlightComputer {
         const a = Math.min(3.0, 0.9 * vh) * fade;
         fw.x -= v.x / vh * a * m; fw.z -= v.z / vh * a * m;
       }
+      if (this.assist) this.grip(fw, v, fh, m);
     } else if (this.mode === 'ballistic') {
       attitude = this.assist;
       if (inp.boost) fw.addScaled(fh, rearMax * gov);
       else if (inp.throttle) fw.addScaled(fh, rearMax * 0.75 * gov);
       else if (inp.brake) fw.addScaled(fh, -frontMax * 0.75);
+      if (this.assist) this.grip(fw, v, fh, m);
       if (inp.brake) th.requestFront();
       const anyRot = inp.steer || inp.pitch || inp.roll;
       useAlloc = attitude || fw.lenSq() > 0 || anyRot;
@@ -121,5 +123,14 @@ export class FlightComputer {
     } else if (!direct) {
       this.alloc.clear();
     }
+  }
+
+  grip(fw, v, fh, m) {
+    const along = v.x * fh.x + v.z * fh.z;
+    const lx = v.x - fh.x * along, lz = v.z - fh.z * along;
+    const ll = Math.hypot(lx, lz);
+    if (ll < 0.05) return;
+    const a = Math.min(16, (this.tu.flight_assist.lateral_grip || 4.5) * ll);
+    fw.x -= lx / ll * a * m; fw.z -= lz / ll * a * m;
   }
 }

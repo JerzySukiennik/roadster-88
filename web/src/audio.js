@@ -1,4 +1,4 @@
-// Roadster 88 audio: Web Audio engine with a live EV motor synth (whine harmonics on motor rpm, inverter noise, load and regen), per-nozzle cold-gas hiss, wind/tyre loops, positional one-shots and era radio from assets/audio/catalog.json (missing keys stay silent).
+// Roadster 88 audio: Web Audio engine with a live EV motor synth (clean sine whine on motor rpm, low-speed inverter sing, regen), band-limited per-nozzle cold-gas roar, wind/tyre loops, positional one-shots and era radio from assets/audio/catalog.json (missing keys stay silent).
 
 const BASE = '../assets/audio/';
 
@@ -23,6 +23,7 @@ export class AudioEngine {
     this.noiseBuf = this.makeNoise(2);
     this.buildMotor();
     this.buildThrust();
+    this.road = ctx.createBiquadFilter(); this.road.type = 'highpass'; this.road.frequency.value = 220; this.road.Q.value = 0.6; this.road.connect(this.outside);
     this.wind = this.noiseVoice('lowpass', 600, 0.7, this.outside);
     this.ext = /Safari/.test(navigator.userAgent) && !/Chrome|Chromium/.test(navigator.userAgent) ? 'mp3' : (new Audio().canPlayType('audio/ogg; codecs="vorbis"') ? 'ogg' : 'mp3');
     try {
@@ -49,30 +50,39 @@ export class AudioEngine {
 
   buildMotor() {
     const ctx = this.ctx;
-    this.motorBus = ctx.createGain(); this.motorBus.gain.value = 0.0; this.motorBus.connect(this.master);
-    const parts = [[1, 'sine', 0.35], [2, 'sine', 0.12], [3, 'sine', 0.55], [4.5, 'triangle', 0.08], [6, 'sine', 0.32], [9.47, 'sine', 0.1], [12, 'sine', 0.06]];
-    this.motor = parts.map(([ratio, type, amp]) => {
-      const o = ctx.createOscillator(); o.type = type; o.frequency.value = 40 * ratio;
+    const tone = ctx.createBiquadFilter(); tone.type = 'highshelf'; tone.frequency.value = 7000; tone.gain.value = -6;
+    this.motorBus = ctx.createGain(); this.motorBus.gain.value = 0.0; this.motorBus.connect(tone); tone.connect(this.master);
+    const parts = [[2.0, 0.5, 1.004], [2.0, 0.28, 0.996], [4.0, 0.2, 1], [6.07, 0.11, 1], [8.13, 0.05, 1], [1.0, 0.05, 1]];
+    this.motor = parts.map(([ratio, amp, det]) => {
+      const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = 40 * ratio;
       const g = ctx.createGain(); g.gain.value = 0;
       o.connect(g); g.connect(this.motorBus); o.start();
-      return { o, g, ratio, amp };
+      return { o, g, ratio: ratio * det, amp };
     });
-    this.regenOsc = ctx.createOscillator(); this.regenOsc.type = 'sawtooth';
-    const rf = ctx.createBiquadFilter(); rf.type = 'bandpass'; rf.Q.value = 9; this.regenFilter = rf;
+    this.sing = ctx.createOscillator(); this.sing.type = 'sine';
+    this.singGain = ctx.createGain(); this.singGain.gain.value = 0;
+    this.sing.connect(this.singGain); this.singGain.connect(this.motorBus); this.sing.start();
+    this.regenOsc = ctx.createOscillator(); this.regenOsc.type = 'sine';
     this.regenGain = ctx.createGain(); this.regenGain.gain.value = 0;
-    this.regenOsc.connect(rf); rf.connect(this.regenGain); this.regenGain.connect(this.motorBus); this.regenOsc.start();
-    this.inverter = this.noiseVoice('bandpass', 7800, 4, this.motorBus);
+    this.regenOsc.connect(this.regenGain); this.regenGain.connect(this.motorBus); this.regenOsc.start();
+    this.inverter = this.noiseVoice('bandpass', 9000, 6, this.motorBus);
   }
 
   buildThrust() {
     const ctx = this.ctx;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 5200; lp.Q.value = 0.5;
+    const hs = ctx.createBiquadFilter(); hs.type = 'highshelf'; hs.frequency.value = 3000; hs.gain.value = -8;
+    const ls = ctx.createBiquadFilter(); ls.type = 'lowshelf'; ls.frequency.value = 250; ls.gain.value = 4;
+    this.thrustBus = ctx.createGain(); this.thrustBus.gain.value = 1;
+    this.thrustBus.connect(lp); lp.connect(hs); hs.connect(ls); ls.connect(this.outside);
     this.nozzleVoices = [];
     for (let i = 0; i < 6; i++) {
       const p = ctx.createPanner(); p.panningModel = 'equalpower'; p.distanceModel = 'inverse'; p.refDistance = 4; p.rolloffFactor = 0.6;
-      p.connect(this.outside);
-      const hi = this.noiseVoice('highpass', 1800, 0.5, p);
-      const body = this.noiseVoice('bandpass', 900, 0.8, p);
-      this.nozzleVoices.push({ p, hi, body });
+      p.connect(this.thrustBus);
+      const body = this.noiseVoice('bandpass', 420, 0.7, p);
+      const mid = this.noiseVoice('bandpass', 1300, 0.9, p);
+      const hi = this.noiseVoice('highpass', 2500, 0.5, p);
+      this.nozzleVoices.push({ p, body, mid, hi });
     }
   }
 
@@ -112,13 +122,13 @@ export class AudioEngine {
     if (opt.pos) {
       const p = this.ctx.createPanner(); p.panningModel = 'equalpower'; p.distanceModel = 'inverse'; p.refDistance = 5; p.rolloffFactor = 0.8;
       p.positionX.value = opt.pos.x; p.positionY.value = opt.pos.y; p.positionZ.value = opt.pos.z;
-      g.connect(p); p.connect(opt.inside ? this.master : this.outside);
-    } else g.connect(opt.inside ? this.master : this.outside);
+      g.connect(p); p.connect(opt.dest || (opt.inside ? this.master : this.outside));
+    } else g.connect(opt.dest || (opt.inside ? this.master : this.outside));
     src.start();
     return { src, g };
   }
 
-  loop(key) {
+  loop(key, dest) {
     if (this.loops.has(key)) return this.loops.get(key);
     const rec = { g: null, src: null, target: 0, rate: 1, key };
     this.loops.set(key, rec);
@@ -129,14 +139,14 @@ export class AudioEngine {
       if (!buf) return;
       const src = this.ctx.createBufferSource(); src.buffer = buf; src.loop = true;
       const g = this.ctx.createGain(); g.gain.value = 0;
-      src.connect(g); g.connect(key.startsWith('music_') || key === 'radio_static' ? this.master : this.outside); src.start(0, Math.random() * buf.duration);
+      src.connect(g); g.connect(dest || (key.startsWith('music_') || key === 'radio_static' ? this.master : this.outside)); src.start(0, Math.random() * buf.duration);
       rec.src = src; rec.g = g;
     });
     return rec;
   }
 
-  setLoop(key, gain, rate = 1, tc = 0.08) {
-    const L = this.loop(key);
+  setLoop(key, gain, rate = 1, tc = 0.08, dest) {
+    const L = this.loop(key, dest);
     if (!L.g) return;
     const t = this.ctx.currentTime, base = (this.cat[key] && this.cat[key].gain) || 1;
     L.g.gain.setTargetAtTime(gain * base, t, tc);
@@ -165,33 +175,34 @@ export class AudioEngine {
     const t = this.ctx.currentTime, sim = s.sim, P = s.powertrain;
     const inside = s.fpp;
     this.outside.frequency.setTargetAtTime(inside ? 2600 : 20000, t, 0.1);
-    const rpm = sim.motorRpm, f0 = Math.max(8, rpm / 60);
+    const rpm = sim.motorRpm, f0 = Math.max(4, rpm / 60);
     const load = Math.min(1, Math.abs(sim.motorForce) / P.max_wheel_force), regen = Math.min(1, sim.regenForce / P.regen_force) * Math.min(1, sim.speed / 6);
     const vol = sim.enabled && !s.gone ? 1 : 0;
-    const spd = Math.min(1, sim.speed / 20);
-    this.motorBus.gain.setTargetAtTime(vol * (0.05 + 0.2 * load + 0.08 * regen) * (0.35 + 0.65 * Math.min(1, f0 / 60)) * (inside ? 1.25 : 1), t, 0.05);
+    const band = (f) => { const a = Math.min(1, Math.max(0, (f - 120) / 330)), b = Math.min(1, Math.max(0, (f - 6000) / 6000)); return a * a * (3 - 2 * a) * (1 - b); };
+    this.motorBus.gain.setTargetAtTime(vol * (0.015 + 0.3 * load + 0.1 * regen) * (inside ? 1.2 : 0.8), t, 0.06);
     for (const m of this.motor) {
       const f = f0 * m.ratio;
-      m.o.frequency.setTargetAtTime(f, t, 0.02);
-      const audible = f < 14000 ? 1 : 0;
-      const lk = m.ratio === 3 || m.ratio === 6 ? 0.4 + 0.6 * load : 0.6 + 0.4 * load;
-      m.g.gain.setTargetAtTime(m.amp * lk * audible * (f > 9000 ? 0.4 : 1), t, 0.03);
+      m.o.frequency.setTargetAtTime(f, t, 0.03);
+      m.g.gain.setTargetAtTime(m.amp * band(f) * (0.55 + 0.45 * load), t, 0.04);
     }
-    this.regenOsc.frequency.setTargetAtTime(f0 * 4.2, t, 0.02);
-    this.regenFilter.frequency.setTargetAtTime(Math.min(12000, f0 * 4.2), t, 0.02);
-    this.regenGain.gain.setTargetAtTime(regen * 0.35, t, 0.05);
-    this.inverter.f.frequency.setTargetAtTime(3500 + 5000 * Math.min(1, f0 / 600), t, 0.05);
-    this.inverter.g.gain.setTargetAtTime(vol * (0.02 + 0.12 * load) * (spd > 0.02 ? 1 : 0.3), t, 0.04);
+    const slow = Math.max(0, 1 - sim.speed / 12);
+    this.sing.frequency.setTargetAtTime(520 + f0 * 3.1, t, 0.04);
+    this.singGain.gain.setTargetAtTime(0.09 * slow * Math.min(1, sim.speed / 0.6) * (0.3 + 0.7 * load), t, 0.05);
+    this.regenOsc.frequency.setTargetAtTime(f0 * 1.92, t, 0.03);
+    this.regenGain.gain.setTargetAtTime(regen * 0.3 * band(f0 * 1.92), t, 0.06);
+    this.inverter.g.gain.setTargetAtTime(vol * 0.01 * load, t, 0.05);
     const sp = sim.speed;
     this.wind.f.frequency.setTargetAtTime(300 + sp * 22, t, 0.1);
     this.wind.g.gain.setTargetAtTime(vol * Math.min(0.5, (sp / 90) ** 2 * 0.45), t, 0.1);
     this.setLoop('wind_loop', vol * Math.min(1, (sp / 80) ** 2) * 0.8, 0.7 + Math.min(0.8, sp / 110), 0.15);
     const ground = sim.contacts > 0;
-    this.setLoop('tyre_roll_loop', vol * (ground ? Math.min(1, sp / 25) : 0) * 0.8, 0.6 + Math.min(1.0, sp / 60), 0.08);
+    this.setLoop('tyre_roll_loop', vol * (ground ? Math.min(1, sp / 25) : 0) * 0.35, 0.9 + Math.min(0.8, sp / 60), 0.08, this.road);
     let slip = 0; for (const w of sim.wheels) if (w.contact) slip = Math.max(slip, w.slipVel);
     this.setLoop('tyre_skid_loop', vol * Math.min(1, Math.max(0, slip - 2.5) / 7), 0.85 + Math.min(0.3, slip / 40), 0.05);
     const th = sim.thrusters;
-    let total = 0;
+    let total = 0, active = 0;
+    th.all.forEach((n) => { const v = n.attached && vol ? n.valve : 0; if (v > 0.05) active++; });
+    this.thrustBus.gain.setTargetAtTime(1 / Math.sqrt(1 + active * 0.8), t, 0.05);
     th.all.forEach((n, i) => {
       const v = n.attached && vol ? n.valve : 0;
       total += v * n.thrustMax;
@@ -199,22 +210,22 @@ export class AudioEngine {
       if (V) {
         const wp = s.nozzleWorld(n);
         V.p.positionX.setTargetAtTime(wp.x, t, 0.02); V.p.positionY.setTargetAtTime(wp.y, t, 0.02); V.p.positionZ.setTargetAtTime(wp.z, t, 0.02);
-        const k = v * (n.front ? 1.1 : 0.85);
-        V.hi.g.gain.setTargetAtTime(k * 0.22, t, 0.015); V.body.g.gain.setTargetAtTime(k * 0.12, t, 0.02);
-        V.hi.f.frequency.setTargetAtTime(1400 + 1600 * v, t, 0.05);
+        const k = Math.sqrt(v) * (n.front ? 0.9 : 1);
+        V.body.g.gain.setTargetAtTime(k * 0.2, t, 0.04); V.mid.g.gain.setTargetAtTime(k * 0.08, t, 0.04); V.hi.g.gain.setTargetAtTime(k * 0.01, t, 0.04);
+        V.body.f.frequency.setTargetAtTime(340 + 160 * v, t, 0.08);
       }
       const pv = this.prevValve.get(n.name) || 0;
-      if (n.puff === 1) this.play('valve_puff', { gain: 0.35 + 0.4 * v, pos: s.nozzleWorld(n), cooldown: 0.05, rate: 0.9 + Math.random() * 0.25 });
-      else if (n.puff === -1 && pv > 0.15) this.play('valve_puff', { gain: 0.25, pos: s.nozzleWorld(n), cooldown: 0.05, rate: 1.1 });
+      if (n.puff === 1) this.play('valve_puff', { gain: 0.2 + 0.2 * v, pos: s.nozzleWorld(n), cooldown: 0.08, rate: 0.85 + Math.random() * 0.15, dest: this.thrustBus });
+      else if (n.puff === -1 && pv > 0.15) this.play('valve_puff', { gain: 0.15, pos: s.nozzleWorld(n), cooldown: 0.08, rate: 0.95, dest: this.thrustBus });
       this.prevValve.set(n.name, v);
     });
     const tot = total / 40000;
-    this.setLoop('thrust_loop', Math.min(1, tot * 1.4), 0.85 + tot * 0.3, 0.04);
+    this.setLoop('thrust_loop', Math.min(0.6, Math.sqrt(tot) * 0.5), 0.8 + tot * 0.15, 0.08, this.thrustBus);
     const rearAll = th.rear.every((n) => n.valve > 0.6 && n.pitch < 0.25);
-    if (rearAll && !this.boosting) this.play('boost_big', { gain: 0.9, pos: s.carPos });
+    if (rearAll && !this.boosting) this.play('boost_big', { gain: 0.45, pos: s.carPos, dest: this.thrustBus });
     this.boosting = rearAll;
-    if (tot > 0.08 && this.prevTotal <= 0.08) this.play('thrust_start', { gain: 0.6, pos: s.carPos });
-    if (tot < 0.04 && this.prevTotal >= 0.04) this.play('thrust_stop', { gain: 0.5, pos: s.carPos });
+    if (tot > 0.08 && this.prevTotal <= 0.08) this.play('thrust_start', { gain: 0.35, pos: s.carPos, dest: this.thrustBus });
+    if (tot < 0.04 && this.prevTotal >= 0.04) this.play('thrust_stop', { gain: 0.3, pos: s.carPos, dest: this.thrustBus });
     this.prevTotal = tot;
     const dep = th.deployTarget;
     if (dep !== this.prevDeploy) this.play('flap_servo', { gain: 0.6, pos: s.carPos });
