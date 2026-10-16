@@ -94,7 +94,12 @@ export class CameraRig {
 
   apply() {
     const cam = this.cam;
-    if (this.hold) { cam.position.copy(this.hold.pos); cam.lookAt(this.hold.look); cam.fov = this.fov; cam.updateProjectionMatrix(); return; }
+    if (this.hold) {
+      const h = this.hold, b = h.blend, hf = h.fov || this.fov;
+      if (b === undefined) { cam.position.copy(h.pos); cam.lookAt(h.look); cam.fov = hf; }
+      else { cam.position.lerpVectors(h.pos, this.pos, b); cam.lookAt(tmpV2.lerpVectors(h.look, this.lookPos, b)); cam.fov = hf + (this.fov - hf) * b; }
+      cam.near = 0.2; cam.updateProjectionMatrix(); return;
+    }
     const amp = this.shake * 0.02 + this.impact * 0.12, t = this.t * 6;
     cam.position.copy(this.pos);
     cam.position.x += noise1(t) * amp; cam.position.y += noise1(t + 17) * amp * 0.7; cam.position.z += noise1(t + 31) * amp;

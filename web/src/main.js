@@ -1,16 +1,17 @@
-// Roadster 88 web entry: boots renderer, physics and world, runs the fixed-step sim with render interpolation, and wires cameras, input, cars and wrecks, damage, time circuits, effects, audio, HUD and the pause sheet.
+// Roadster 88 web entry: boots renderer, physics and world, runs the fixed-step sim with render interpolation, and wires cameras, input, cars and wrecks, damage, time circuits, effects, audio, HUD and the title and pause menu.
 import * as THREE from 'three/webgpu';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { Gfx, PRESETS } from './render/gfx.js';
 import { SkySystem } from './render/sky.js';
 import { PlateView } from './render/plate.js';
-import { CarMaterials, PAINTS } from './render/carMaterials.js';
+import { CarMaterials } from './render/carMaterials.js';
 import { CarView, loadRealCar } from './render/carView.js';
 import { CameraRig } from './render/camera.js';
 import { FX } from './render/fx.js';
 import { TimeFX } from './render/fxTime.js';
 import { Input } from './input.js';
 import { Hud } from './hud.js';
+import { Menu } from './menu.js';
 import { AudioEngine } from './audio.js';
 import { DamageSystem } from './damage.js';
 import { Cockpit } from './render/cockpit.js';
@@ -77,7 +78,7 @@ class Game {
     this.rayObj = new RAPIER.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: 1, z: 0 });
     this.acc = 0; this.last = performance.now(); this.paused = false; this.time = 0;
     this.frames = []; this.spikes = 0; this.frameCount = 0; this.warm = 0; this.prof = { sim: 0, mid: 0, render: 0 };
-    this.buildPause();
+    this.menu = new Menu(this);
     this.harness = params.has('debug');
     this.input.onLockChange = (locked) => { if (!locked && !this.paused && this.started && !this.harness) this.setPaused(true); };
     const unlock = () => { this.audio.unlock().then(() => this.audio.setRadio(this.settings.radio, this.eraId())); };
@@ -99,7 +100,8 @@ class Game {
     const tw = performance.now();
     await new Promise((res) => { const chk = () => (this.stable >= 20 || performance.now() - tw > 25000 ? res() : setTimeout(chk, 50)); chk(); });
     progress(1, ''); $('loading').classList.add('done'); this.started = true;
-    this.hint('Click to drive. Esc for keys and settings.', 4);
+    if (this.harness || params.has('nomenu')) this.hint('Click to drive. Esc for the menu.', 4);
+    else { this.paused = true; this.menu.showTitle(); }
   }
 
   async loadLattice() {
@@ -220,7 +222,7 @@ class Game {
 
   handleKeys() {
     const I = this.input;
-    if (I.hit('Escape')) this.setPaused(!this.paused);
+    if (I.hit('Escape') && this.menu.mode !== 'title') this.setPaused(!this.paused);
     if (this.paused) return;
     if (I.hit('KeyC')) { this.rig.mode = this.rig.mode === 'chase' ? 'fpp' : 'chase'; this.rig.fppYaw = 0; this.rig.fppPitch = 0; this.gfx.cut(); }
     if (I.hit('KeyR')) this.respawn();
@@ -348,6 +350,7 @@ class Game {
     this.rig.mouse(mx, my, now / 1000);
     const s = this.car.sim;
     const st = this.chaseState(fdt);
+    this.menu.update(fdt);
     if (this.pendingHold) { this.rig.hold = this.pendingHold; this.pendingHold = null; this.gfx.cut(); }
     if (this.rig.mode === 'chase') this.rig.updateChase(fdt, st, now / 1000, (o, d, l) => this.camRay(o, d, l));
     else { this.car.view.root.updateMatrixWorld(true); this.rig.updateFpp(fdt, this.car.view.eyeWorld(new THREE.Vector3()), this.car.pose.quat, st, this.screenFocus()); }
@@ -402,29 +405,14 @@ class Game {
 
   setPaused(p) {
     this.paused = p;
-    $('pause').classList.toggle('hidden', !p);
-    if (p) { if (document.pointerLockElement) document.exitPointerLock(); this.refreshPause(); }
+    if (p) { if (document.pointerLockElement) document.exitPointerLock(); if (this.menu.mode !== 'title') this.menu.showPause(); }
+    else this.menu.hide();
   }
 
-  buildPause() {
-    const seg = (el, items, get, set) => {
-      el.innerHTML = '';
-      for (const [k, label] of items) { const b = document.createElement('button'); b.textContent = label; b.dataset.k = k; b.onclick = () => { set(k); this.refreshPause(); }; el.appendChild(b); }
-      el._get = get;
-    };
-    seg($('quality'), Object.entries(PRESETS).map(([k, v]) => [k, v.label]), () => this.gfx.presetName, (k) => { this.gfx.setPreset(k); store.set('quality', k); });
-    seg($('assistSeg'), [['on', 'On'], ['off', 'Off']], () => (this.settings.assist ? 'on' : 'off'), (k) => this.setAssist(k === 'on'));
-    seg($('paintSeg'), Object.entries(PAINTS).map(([k, v]) => [k, v.label.replace(' Multi-Coat', '').replace(' Metallic', '')]), () => this.settings.paint, (k) => this.setPaint(k));
-    seg($('roofSeg'), [['on', 'On'], ['off', 'Off']], () => (this.settings.roof ? 'on' : 'off'), (k) => this.setRoof(k === 'on'));
-    seg($('wingSeg'), [['on', 'On'], ['off', 'Off']], () => (this.settings.wing ? 'on' : 'off'), (k) => this.setWing(k === 'on'));
-    const keys = [['W', 'Drive / rear thrust'], ['S', 'Brake, reverse / retro'], ['A D', 'Steer / yaw'], ['Shift', 'Boost'], ['Shift + S', 'Retro brake'], ['Space', 'Tap hop, hold lift'], ['Ctrl', 'Descend'], ['Arrows', 'Pitch and roll'], ['Mouse', 'Look'], ['Click', 'Touch screen (cockpit)'], ['C', 'Cockpit / chase'], ['T', 'Arm time circuits'], ['R', 'New Roadster'], ['F', 'Doors'], ['Esc', 'Pause']];
-    $('keys').innerHTML = keys.map(([k, v]) => `<div><b>${k}</b><span>${v}</span></div>`).join('');
-    $('resume').onclick = () => { this.setPaused(false); this.input.requestLock(); };
-  }
-
-  refreshPause() {
-    for (const id of ['quality', 'assistSeg', 'paintSeg', 'roofSeg', 'wingSeg']) { const el = $(id); const v = el._get(); for (const b of el.children) b.classList.toggle('on', b.dataset.k === v); }
-    $('pauseSub').textContent = `${this.gfx.backend} · ${Math.round(this.gfx.scale * 100)}% res · ${this.car.view.placeholder ? 'placeholder car' : 'roadster.glb'}`;
+  resumeFromMenu() {
+    this.paused = false;
+    this.input.requestLock();
+    this.hint('Esc for the menu', 2.5);
   }
 
   setAssist(on) { this.settings.assist = on; store.set('assist', on); this.car.sim.flight.assist = on; }

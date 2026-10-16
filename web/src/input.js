@@ -27,7 +27,8 @@ export class Input {
   }
 
   requestLock() {
-    try { const p = this.canvas.requestPointerLock({ unadjustedMovement: true }); if (p && p.catch) p.catch(() => this.canvas.requestPointerLock()); } catch (e) { this.canvas.requestPointerLock(); }
+    const plain = () => { try { const q = this.canvas.requestPointerLock(); if (q && q.catch) q.catch(() => {}); } catch (e) { /* lock refused */ } };
+    try { const p = this.canvas.requestPointerLock({ unadjustedMovement: true }); if (p && p.catch) p.catch(plain); } catch (e) { plain(); }
   }
 
   is(code) { return this.virtual ? this.virtual.has(code) : this.down.has(code); }

@@ -164,6 +164,15 @@ const S = {
     for (const [y, p, nm] of [[-0.3, -0.14, 'a'], [0.3, -0.14, 'b']]) { await R((a) => window.__r88.look(a[0], a[1]), [y, p]); await wait(900); await shot('scr_' + nm); console.log(nm, await R(() => { const c = window.__r88.game.cockpit; return JSON.stringify(c.hit ? { x: Math.round(c.hit.x), y: Math.round(c.hit.y), hover: c.hover } : null); })); }
     console.log('screen', await R(() => { const g = window.__r88.game, s = g.cockpit.screen, v = new g.constructor === Object ? null : null; const e = g.car.view.eyeWorld(new window.__r88.THREE.Vector3()); const p = s.getWorldPosition(new window.__r88.THREE.Vector3()); return JSON.stringify({ d: e.distanceTo(p).toFixed(2), sx: s.scale.x }); }));
   },
+  async menu() {
+    await wait(2500);
+    await R(() => { const g = window.__r88.game; g.paused = true; g.menu.showTitle(); });
+    await wait(2500); await shot('menu_title');
+    for (const [i, nm] of [[1, 'map'], [2, 'garage'], [3, 'settings'], [4, 'controls']]) { await R((k) => window.__r88.game.menu.setFocus(k, false), i); await wait(700); await shot('menu_' + nm); }
+    await R(() => { const g = window.__r88.game; g.menu.play(); g.paused = false; }); await wait(400); await shot('menu_leaving'); await wait(1200); await shot('menu_ingame');
+    await R(() => window.__r88.game.setPaused(true)); await wait(900); await shot('menu_pause');
+    console.log('menu', await R(() => { const g = window.__r88.game; return `mode ${g.menu.mode} paused ${g.paused} hold ${!!g.rig.hold}`; }));
+  },
   async night() { await R(() => window.__r88.setTime(22, 30)); await wait(2500); await shot('night'); await keys('KeyW'); await wait(2000); await shot('night_drive'); await release(); },
   async fpp() {
     await R(() => window.__r88.camera('fpp')); await wait(1500); await shot('fpp');
@@ -294,6 +303,7 @@ async function crash(mph, name) {
   await R(() => window.__r88.orbit(0, 0.1));
   console.log(name, fmt(await state()), 'broken', (await state()).broken);
 }
+Object.assign(S, (await import('./eras-scenarios.mjs')).erasScenarios({ page, R, wait, shot, stats, reset, tele, keys, release, tap, state, sample }));
 for (const sc of scenarios) { if (!S[sc]) { console.log('unknown scenario', sc); continue; } console.log('== ' + sc); await S[sc](); }
 if (errors.length) console.log('ERRORS:\n' + [...new Set(errors)].slice(0, 30).join('\n'));
 if (flag('logs')) console.log(logs.slice(0, 40).join('\n'));
