@@ -78,6 +78,7 @@ export class CarSim {
     this.wing = !!opts.wing;
     this.enabled = true; this.wreck = false;
     this.forceAcc = new V3(); this.torqueAcc = new V3();
+    this.env = { grip: 1, wind: new V3(), surface: null }; this.steps = 0;
     this.lastAccel = new V3(); this.prevVel = new V3();
     this.groundNozzleHits = [];
     this._a = new V3(); this._b = new V3(); this._c = new V3(); this._d = new V3(); this._e = new V3(); this._f = new V3(); this._g = new V3();
@@ -212,11 +213,14 @@ export class CarSim {
 
   gripPrepass() {
     const Ty = this.tu.tyres, ap = Ty.peak_slip_angle_deg * DEG;
+    const env = this.env;
     for (const w of this.wheels) {
       const N = w.load;
       const ls = clamp(1 - Ty.load_sensitivity * (N / this.N0 - 1), 0.7, 1.15);
       const camberK = 1 - Math.min(0.5, Math.abs(w.camber) * 2.5);
-      w.muX = Ty.mu_long * ls * camberK; w.muY = Ty.mu_lat * ls * camberK;
+      if (env.surface && w.contact && (this.steps & 3) === (w.i & 3)) w.sg = env.surface(w.point.x, w.point.z);
+      const g = (env.surface ? (w.sg || 1) : 1) * env.grip;
+      w.muX = Ty.mu_long * ls * camberK * g; w.muY = Ty.mu_lat * ls * camberK * g;
       w.sy = w.alpha / ap;
     }
   }
@@ -356,10 +360,11 @@ export class CarSim {
 
   aero() {
     const A = this.tu.aero, rho = this.tu.air_density;
-    const v = this.vel, sp = this.speed;
+    const wind = this.env.wind;
+    const vr = this._e.set(this.vel.x - wind.x, this.vel.y - wind.y, this.vel.z - wind.z), sp = vr.len();
     const F = this._a;
     const cd = A.cd_a + (this.wing ? A.wing_drag_a : 0);
-    F.copy(v).scale(-0.5 * rho * cd * sp);
+    F.copy(vr).scale(-0.5 * rho * cd * sp);
     this.addForceAt(F, this.comW);
     const vf = Math.max(0, this.fwdSpeed);
     const q = 0.5 * rho * vf * vf;
@@ -401,6 +406,7 @@ export class CarSim {
     if (!this.enabled) return;
     if (this.wreck) inp = WRECK_INPUT;
     this.input = inp;
+    this.steps++;
     this.steering(dt, inp);
     this.suspension(dt);
     this.powertrain(dt, inp);

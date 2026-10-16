@@ -237,6 +237,15 @@ export class AudioEngine {
     if (th.sideTarget !== this.prevSide && this.prevSide !== undefined) this.play('flap_servo', { gain: 0.35, pos: s.carPos, rate: 1.25 });
     this.prevSide = th.sideTarget;
     this.setLoop('metal_scrape_loop', vol * Math.min(1, s.scrape || 0), 0.9 + Math.min(0.3, sp / 80), 0.05);
+    const W = s.weather;
+    this.setLoop('rain_loop', W ? vol * (W.rain || 0) * (inside ? 0.45 : 0.8) : 0, 1, 0.4);
+    this.setLoop('wind_storm_loop', W && W.wind ? vol * Math.min(1, Math.hypot(W.wind[0], W.wind[1]) / 18 + (W.gust || 0) * 0.4) * (inside ? 0.3 : 0.65) : 0, 1, 0.5);
+    if (W && typeof W.strikes === 'number') {
+      if (this.strikes !== undefined && W.strikes > this.strikes) setTimeout(() => this.play('thunder', { gain: 0.8, inside: true }), 300 + Math.random() * 1800);
+      this.strikes = W.strikes;
+    }
+    if (s.ambient !== this.ambKey) { if (this.ambKey) this.setLoop(this.ambKey, 0, 1, 1.2); this.ambKey = s.ambient || null; }
+    if (this.ambKey) this.setLoop(this.ambKey, vol * (inside ? 0.25 : 0.45), 1, 1.2);
     const tcs = s.tc;
     this.setLoop('tc_flux_loop', tcs.armed ? 0.25 + 0.75 * tcs.charge : (tcs.state === 'departing' ? 1 : 0), 0.8 + tcs.charge * 0.6, 0.1);
   }

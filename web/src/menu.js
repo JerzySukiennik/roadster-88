@@ -123,6 +123,8 @@ export class Menu {
       P.appendChild(this.row('Quality', this.seg(Object.entries(PRESETS).map(([k, v]) => [k, v.label]), () => g.gfx.presetName, (k) => { g.gfx.setPreset(k); g.store.set('quality', k); })));
       P.appendChild(this.row('Flight assist', this.seg([['on', 'On'], ['off', 'Off']], () => (g.settings.assist ? 'on' : 'off'), (k) => g.setAssist(k === 'on'))));
       P.appendChild(this.row('Radio', this.seg([['on', 'On'], ['off', 'Off']], () => (g.settings.radio ? 'on' : 'off'), (k) => g.setRadio(k === 'on'))));
+      const W = g.weather;
+      if (W && Array.isArray(W.kinds) && W.set) P.appendChild(this.row('Weather', this.seg([['auto', 'Auto'], ...W.kinds.map((k) => [k, k[0].toUpperCase() + k.slice(1)])], () => W.override || 'auto', (k) => W.set(k === 'auto' ? null : k))));
       P.appendChild(el('div', 'panel-note', `${g.gfx.backend} · ${Math.round(g.gfx.scale * 100)}% resolution`));
     } else if (this.section === 'controls') {
       head('Controls', 'Keyboard and mouse.');
