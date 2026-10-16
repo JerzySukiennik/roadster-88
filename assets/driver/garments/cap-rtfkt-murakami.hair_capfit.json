@@ -1,0 +1,15 @@
+{
+ "note": "Per-vertex rest-pose offsets (glTF Y-up metres, world = bind space) that compress hair under the cap. Apply as an extra morph target / additive offset on the named hair mesh when the cap is worn. Layout: uint32 indices, then float32 xyz deltas, per mesh in order.",
+ "meshes": {
+  "Hair.Strands.Medium": {
+   "count": 50831,
+   "index_offset_bytes": 0,
+   "delta_offset_bytes": 204264
+  },
+  "Hair.ScalpCap.Medium": {
+   "count": 235,
+   "index_offset_bytes": 203324,
+   "delta_offset_bytes": 814236
+  }
+ }
+}
