@@ -8,3 +8,4 @@ godot/ext/
 *.import.tmp
 __pycache__/
 *.pyc
+model2/
