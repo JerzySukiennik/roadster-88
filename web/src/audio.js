@@ -1,4 +1,4 @@
-// Roadster 88 audio: Web Audio engine with a live EV motor synth (clean sine whine on motor rpm, low-speed inverter sing, regen), band-limited per-nozzle cold-gas roar, wind/tyre loops, positional one-shots and era radio from assets/audio/catalog.json (missing keys stay silent).
+// Roadster 88 audio: Web Audio engine with a live EV motor synth (clean sine whine on motor rpm, low-speed inverter sing, regen), band-limited per-nozzle cold-gas roar, wind/tyre loops, positional one-shots and era radio from assets/audio/catalog.json (missing keys stay silent), with a voice cap and a watchdog that rebuilds the graph if any node starts emitting non-finite samples.
 
 const BASE = '../assets/audio/';
 
@@ -7,6 +7,7 @@ export class AudioEngine {
     this.ctx = null; this.cat = {}; this.buffers = new Map(); this.loading = new Map(); this.ready = false;
     this.loops = new Map(); this.music = null; this.musicKey = null; this.radioOn = false; this.radioVol = 0.55;
     this.prevValve = new Map(); this.prevTotal = 0; this.prevDeploy = 0; this.cool = new Map();
+    this.voices = 0; this.maxVoices = 40; this.watchT = 0; this.resets = 0; this.rebuilding = false; this.radioEra = null;
   }
 
   async unlock() {
@@ -18,7 +19,8 @@ export class AudioEngine {
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -14; comp.knee.value = 10; comp.ratio.value = 4; comp.attack.value = 0.004; comp.release.value = 0.2;
     this.master = ctx.createGain(); this.master.gain.value = 0.85;
-    this.master.connect(comp); comp.connect(ctx.destination);
+    this.master.connect(comp); comp.connect(ctx.destination); this.comp = comp;
+    this.guard = ctx.createAnalyser(); this.guard.fftSize = 256; comp.connect(this.guard); this.guardBuf = new Float32Array(256);
     this.outside = ctx.createBiquadFilter(); this.outside.type = 'lowpass'; this.outside.frequency.value = 20000; this.outside.connect(this.master);
     this.noiseBuf = this.makeNoise(2);
     this.buildMotor();
@@ -110,7 +112,8 @@ export class AudioEngine {
   }
 
   play(key, opt = {}) {
-    if (!this.ctx || !this.cat[key]) return null;
+    if (!this.ctx || !this.cat[key] || this.voices >= this.maxVoices) return null;
+    if (opt.pos && !(Number.isFinite(opt.pos.x) && Number.isFinite(opt.pos.y) && Number.isFinite(opt.pos.z))) return null;
     const now = this.ctx.currentTime, cd = opt.cooldown || 0.03;
     if ((this.cool.get(key) || 0) > now) return null;
     this.cool.set(key, now + cd);
@@ -125,6 +128,8 @@ export class AudioEngine {
       p.positionX.value = opt.pos.x; p.positionY.value = opt.pos.y; p.positionZ.value = opt.pos.z;
       g.connect(p); p.connect(opt.dest || (opt.inside ? this.master : this.outside));
     } else g.connect(opt.dest || (opt.inside ? this.master : this.outside));
+    this.voices++;
+    src.onended = () => { this.voices = Math.max(0, this.voices - 1); try { g.disconnect(); } catch (e) { /* already gone */ } };
     src.start();
     return { src, g };
   }
@@ -155,7 +160,7 @@ export class AudioEngine {
   }
 
   setRadio(on, era) {
-    this.radioOn = on;
+    this.radioOn = on; this.radioEra = era;
     if (!this.ctx) return;
     const key = 'music_' + era;
     if (this.musicKey && this.musicKey !== key) this.setLoop(this.musicKey, 0, 1, 0.3);
@@ -171,8 +176,29 @@ export class AudioEngine {
     else { L.setPosition(p.x, p.y, p.z); L.setOrientation(-e[8], -e[9], -e[10], e[4], e[5], e[6]); }
   }
 
+  watchdog(dt) {
+    this.watchT += dt;
+    if (this.watchT < 0.4 || this.rebuilding) return;
+    this.watchT = 0;
+    this.guard.getFloatTimeDomainData(this.guardBuf);
+    for (let i = 0; i < this.guardBuf.length; i++) if (!Number.isFinite(this.guardBuf[i])) { this.rebuild(); return; }
+  }
+
+  async rebuild() {
+    this.rebuilding = true; this.resets++;
+    console.warn('audio: non-finite output, rebuilding the graph', this.resets);
+    const old = this.ctx;
+    this.ctx = null; this.ready = false; this.loops.clear(); this.musicKey = null; this.voices = 0; this.boosting = false; this.ambKey = null;
+    try { await old.close(); } catch (e) { /* closed */ }
+    await this.unlock();
+    if (this.radioEra) this.setRadio(this.radioOn, this.radioEra);
+    this.rebuilding = false;
+  }
+
   update(dt, s) {
     if (!this.ctx || !this.ready) return;
+    this.watchdog(dt);
+    if (!this.ctx) return;
     const t = this.ctx.currentTime, sim = s.sim, P = s.powertrain;
     const inside = s.fpp;
     this.outside.frequency.setTargetAtTime(inside ? 2600 : 20000, t, 0.1);

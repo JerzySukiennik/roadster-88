@@ -1,5 +1,5 @@
 // Roadster 88 browser harness: drives the game through window.__r88 in a real Chrome (GPU, offscreen window), runs scripted scenarios, saves screenshots and frame-time stats.
-// usage: node web/tools/harness.mjs <scenario[,scenario...]> [--q=high] [--webgl] [--out=dir] [--w=1440 --h=900]
+// usage: node web/tools/harness.mjs <scenario[,scenario...]> [--q=high] [--webgl] [--out=dir] [--w=1440 --h=900] [--map=plate|valley] (the game defaults to the valley, the harness to the plate unless --map or --extra=&map=... is given)
 import { chromium } from '/Users/jurek/openclaw/node_modules/playwright-core/index.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -20,7 +20,8 @@ const errors = [], logs = [];
 page.on('pageerror', (e) => errors.push('pageerror: ' + e.message + ' ' + (e.stack || '').split('\n').slice(1, 6).join(' | ')));
 page.on('console', (m) => { const t = m.text(); if (m.type() === 'error' && !t.includes('404')) errors.push(t); else if (m.type() === 'warning' || m.type() === 'log') logs.push(`[${m.type()}] ${t}`); });
 const q = opt('q', 'high');
-const url = `http://localhost:8788/web/?debug&q=${q}${flag('webgl') ? '&webgl' : ''}${flag('nodynres') ? '&nodynres' : ''}${flag('trace') ? '&trace' : ''}${opt('extra', '')}`;
+const mapArg = opt('map', opt('extra', '').includes('map=') ? '' : 'plate');
+const url = `http://localhost:8788/web/?debug&q=${q}${mapArg ? '&map=' + mapArg : ''}${flag('webgl') ? '&webgl' : ''}${flag('nodynres') ? '&nodynres' : ''}${flag('trace') ? '&trace' : ''}${opt('extra', '')}`;
 const t0 = Date.now();
 await page.goto(url, { waitUntil: 'load' });
 try { await page.waitForFunction(() => window.__r88 && window.__r88.game.started, null, { timeout: 90000 }); }
@@ -184,6 +185,43 @@ const S = {
     await keys('KeyW', 'ShiftLeft'); await wait(1600);
     await R(() => window.__r88.orbit(1.45, 0.02)); await wait(700); await shot('hero_boost'); await release();
   },
+  async audionan() {
+    await wait(2000);
+    await R(async () => { const g = window.__r88.game; await g.audio.unlock(); });
+    await wait(1500);
+    await R(() => {
+      const a = window.__r88.game.audio, ctx = a.ctx;
+      const taps = { comp: a.comp, master: a.master, outside: a.outside, thrust: a.thrustBus, motor: a.motorBus };
+      window.__probe = { hits: [], an: {} };
+      for (const [k, n] of Object.entries(taps)) { const an = ctx.createAnalyser(); an.fftSize = 2048; n.connect(an); window.__probe.an[k] = an; }
+      const buf = new Float32Array(2048);
+      window.__probe.check = (label) => { const out = {}; for (const [k, an] of Object.entries(window.__probe.an)) { an.getFloatTimeDomainData(buf); let nan = 0, peak = 0; for (const v of buf) { if (!Number.isFinite(v)) nan++; else peak = Math.max(peak, Math.abs(v)); } out[k] = nan ? 'NaN' + nan : peak.toFixed(3); } return label + ' ' + JSON.stringify(out); };
+      window.__probe.timer = setInterval(() => { const r = window.__probe.check(''); if (r.includes('NaN') && window.__probe.hits.length < 5) window.__probe.hits.push((performance.now() / 1000).toFixed(1) + r + ' mode ' + window.__r88.game.car.sim.flight.mode); }, 50);
+    });
+    console.log(await R(() => window.__probe.check('idle') + ' state ' + window.__r88.game.audio.ctx.state + ' sr ' + window.__r88.game.audio.ctx.sampleRate));
+    for (let i = 0; i < 6; i++) {
+      await keys('Space'); await wait(i % 2 ? 250 : 900); await keys(); await wait(1200);
+      if (i === 2) { await keys('KeyW', 'ShiftLeft', 'Space'); await wait(1500); await keys(); await wait(800); }
+      if (i === 4) { await R(() => window.__r88.camera('fpp')); await keys('Space'); await wait(1200); await keys(); await wait(800); await R(() => window.__r88.camera('chase')); }
+      console.log(await R((k) => window.__probe.check('hop' + k), i));
+      await keys('ControlLeft'); await wait(1500); await keys(); await wait(600);
+    }
+    console.log('hits', await R(() => JSON.stringify(window.__probe.hits)));
+  },
+  async audioheal() {
+    await wait(2000);
+    await R(async () => { await window.__r88.game.audio.unlock(); });
+    await wait(1200);
+    const probe = () => R(() => { const a = window.__r88.game.audio; if (!a.ctx) return 'no ctx'; a.guard.getFloatTimeDomainData(a.guardBuf); let nan = 0, peak = 0; for (const v of a.guardBuf) { if (!Number.isFinite(v)) nan++; else peak = Math.max(peak, Math.abs(v)); } return `state ${a.ctx.state} nan ${nan} peak ${peak.toFixed(3)} resets ${a.resets} voices ${a.voices}`; });
+    await keys('KeyW'); await wait(800);
+    console.log('before', await probe());
+    await R(() => { const a = window.__r88.game.audio, ctx = a.ctx; const b = ctx.createBuffer(1, 4096, ctx.sampleRate); const d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = i % 7 ? NaN : 1; const src = ctx.createBufferSource(); src.buffer = b; src.connect(a.outside); src.start(); });
+    await wait(150);
+    console.log('poisoned', await probe());
+    await wait(2000);
+    console.log('after', await probe());
+    await release();
+  },
   async night() { await R(() => window.__r88.setTime(22, 30)); await wait(2500); await shot('night'); await keys('KeyW'); await wait(2000); await shot('night_drive'); await release(); },
   async fpp() {
     await R(() => window.__r88.camera('fpp')); await wait(1500); await shot('fpp');
@@ -306,6 +344,131 @@ const S = {
     await keys('Space'); await wait(1800); await keys(); await wait(1500); await shot('alt');
   },
   async perf() { await wait(1500); await reset(); await keys('KeyW', 'KeyA'); await wait(8000); await release(); await stats('perf-drive'); },
+  async valley() {
+    const V = () => R(() => window.__r88.valley());
+    const tg = (x, z, yaw = 0, v = 0, up = 0.15) => R((a) => window.__r88.tg(...a), [x, z, yaw, v, up]);
+    const look = (yaw, pitch) => R((a) => window.__r88.orbit(a[0], a[1]), [yaw, pitch]);
+    const free = () => R(() => { const g = window.__r88.game; g.rig.orbitYaw = 0; g.rig.orbitPitch = 0; g.rig.lastMouse = -99; });
+    console.log('valley', JSON.stringify(await V()));
+    await wait(2500); await shot('valley_spawn'); await reset(); await wait(4000); await stats('valley-idle'); console.log('state', fmt(await state()), JSON.stringify(await V()));
+    await free(); await reset(); await keys('KeyW', 'ShiftLeft'); await sample(8, 1000, 'highway'); await shot('valley_highway_fast'); await release(); await stats('valley-highway'); console.log(JSON.stringify(await V()));
+    const spots = [
+      ['town', -1150, -205, -Math.PI / 2, 0.3, 0.12], ['lake', -150, -300, Math.PI, 0.4, 0.12], ['mesa_ramp', 520, 650, -Math.PI / 2, 0.2, 0.06], ['mesa_top', -150, 650, -Math.PI / 2, 2.6, 0.18],
+      ['jumps', -800, 230, Math.PI / 2, 0.2, 0.05], ['canyon', 1180, 398, Math.PI / 2, 0.2, 0.06], ['canyon_mid', 1710, 200, Math.PI, 0.3, 0.06], ['dunes', 760, -1250, Math.PI / 2, 0.6, 0.1],
+      ['loop_north', -171, 1283, Math.PI / 2, 0.2, 0.05], ['rollers', 640, 650, Math.PI, 0.2, 0.05], ['north_pass', -900, 1750, 0, 0.2, 0.05], ['wash', 520, 152, -2.0, 0.6, 0.1],
+    ];
+    for (const [nm, x, z, yaw, oy, op] of spots) { await tg(x, z, yaw, 0, 0.3); await look(oy, op); await wait(1600); await shot('valley_' + nm); console.log(nm, fmt(await state()), JSON.stringify(await V())); }
+    await tg(640, 760, Math.PI, 0, 0.3); await free(); await wait(800); await reset(); await keys('KeyW', 'ShiftLeft');
+    for (let i = 0; i < 14; i++) { await wait(500); const s = await state(); if (i % 2) console.log('rollers', s.mph.toFixed(0), 'mph y', s.pos[1].toFixed(1), 'z', s.pos[2].toFixed(0), 'c', s.contacts); if (i === 9) await shot('valley_rollers_air'); }
+    await release(); await stats('valley-rollers');
+    await tg(-300, 0, 0, 0, 0.3); await free(); await keys('Space'); await wait(5000); await keys('Space', 'KeyW'); await wait(3000); await keys(); await wait(500); await shot('valley_flight'); await reset(); await wait(3000); await stats('valley-flight'); console.log('flight', fmt(await state()), JSON.stringify(await V())); await release();
+  },
+  async valleylook() {
+    const views = [['spawn', -903.5, -330, 0, 0.0, 0.08], ['canyon', 1180, 398, Math.PI / 2, 0.3, 0.1], ['mesa', 300, 560, -1.9, 0.0, 0.12], ['lakeshore', 150, -250, -2.6, 0.2, 0.1], ['dunes', 950, -1150, Math.PI / 2, 0.5, 0.12], ['town', -1000, -230, -Math.PI / 2, 0.4, 0.15]];
+    for (const [h, m] of [[14, 0], [16, 40]]) {
+      await R((a) => window.__r88.setTime(a[0], a[1]), [h, m]); await wait(800);
+      for (const [nm, x, z, yaw, oy, op] of views) { await R((a) => window.__r88.tg(...a), [x, z, yaw, 0, 0.3]); await R((a) => window.__r88.orbit(a[0], a[1]), [oy, op]); await wait(1800); await shot(`look_${nm}_${h}`); }
+    }
+    await R(() => window.__r88.tg(-200, 200, 2.4, 0, 0.3)); await R(() => { const g = window.__r88.game; g.car.sim.body.setTranslation({ x: -200, y: 260, z: 200 }, true); }); await R(() => window.__r88.orbit(0, 0.5)); await wait(1500); await shot('look_aerial_18');
+    await R((a) => window.__r88.setTime(14, 0)); await wait(1500); await shot('look_aerial_14');
+  },
+  async valleyfun() {
+    const pilot = async (road, idx, mph, secs, label, shots = []) => {
+      await R((a) => {
+        const g = window.__r88.game, V = g.valley, r = V.roads.find((q) => q.id === a.road);
+        const p = r.pts[a.i], q = r.pts[(a.i + 3) % r.pts.length];
+        window.__r88.tg(p[0], p[1], Math.atan2(q[0] - p[0], q[1] - p[1]), a.v, 0.3);
+        g.rig.orbitYaw = 0; g.rig.orbitPitch = 0; g.rig.lastMouse = -99;
+        const P = g.__pilot = { r, target: a.v, maxLat: 0, maxV: 0, minV: 999, air: 0, off: 0, n: 0, maxY: -1e9, lastIdx: a.i, steer: 0 };
+        if (!g.input.__orig) { g.input.__orig = g.input.controls.bind(g.input); g.input.controls = (dt) => { const c = g.input.__orig(dt); if (g.__pilot && g.__pilot.on) c.steer = g.__pilot.steer; return c; }; }
+        P.on = true;
+        clearInterval(g.__pilotT);
+        g.__pilotT = setInterval(() => {
+          const s = g.car.sim, pts = P.r.pts, n = pts.length;
+          let best = P.lastIdx, bd = 1e18;
+          for (let k = -40; k <= 80; k++) { const i = (P.lastIdx + k + n) % n, d = (pts[i][0] - s.pos.x) ** 2 + (pts[i][1] - s.pos.z) ** 2; if (d < bd) { bd = d; best = i; } }
+          P.lastIdx = best;
+          const ld = Math.max(22, s.speed * 0.95), la = Math.round(ld / 4), t = pts[(best + la) % n];
+          const want = Math.atan2(t[0] - s.pos.x, t[1] - s.pos.z);
+          let e = want - s.yaw(); while (e > Math.PI) e -= 2 * Math.PI; while (e < -Math.PI) e += 2 * Math.PI;
+          const W = g.tu.wheels, sf = W.steer_speed_falloff, v = Math.abs(s.fwdSpeed);
+          const f = v <= sf.full_until ? 1 : v >= sf.at ? sf.min_factor : 1 - (1 - sf.min_factor) * (v - sf.full_until) / (sf.at - sf.full_until);
+          const kap = 2 * Math.sin(e) / ld, rdes = s.fwdSpeed * kap, rerr = rdes - s.angW.y; P.I = Math.max(-0.25, Math.min(0.25, (P.I || 0) + rerr * 0.025 * 0.6)); const delta = Math.atan(g.tu.car.wheelbase * kap) + 0.06 * rerr + P.I;
+          P.steer = Math.max(-1, Math.min(1, delta / (W.max_steer_deg * Math.PI / 180 * f)));
+          const k = new Set();
+          if (s.speed < P.target) { k.add('KeyW'); if (P.target - s.speed > 4) k.add('ShiftLeft'); }
+          if (s.speed > P.target + 4) k.add('KeyS');
+          g.input.virtual = k;
+          const lat = Math.sqrt(bd); P.n++; if (lat > P.maxLat) { P.maxLat = lat; P.worst = `idx${best} v${(s.speed / 0.44704).toFixed(0)} air${s.contacts === 0} bank${(P.r.bank ? 0 : 0)}`; } if (lat > 11 && !P.firstOff) P.firstOff = `idx${best} @${s.pos.x.toFixed(0)},${s.pos.z.toFixed(0)} v${(s.speed / 0.44704).toFixed(0)} c${s.contacts}`; P.maxV = Math.max(P.maxV, s.speed); if (P.n > 30) P.minV = Math.min(P.minV, s.speed);
+          if (s.contacts === 0) P.air++; if (lat > 11) P.off++; P.maxY = Math.max(P.maxY, s.pos.y - V.heightAt(s.pos.x, s.pos.z));
+        }, 25);
+      }, { road, i: idx, v: mph * 0.44704 });
+      await reset();
+      for (let t = 0; t < secs; t++) { await wait(1000); if (shots.includes(t)) await shot(`fun_${label}_${t}`); }
+      const P = await R(() => { const g = window.__r88.game; clearInterval(g.__pilotT); g.input.virtual = null; const P = g.__pilot; P.on = false; return { maxLat: P.maxLat.toFixed(1), worst: P.worst, firstOff: P.firstOff, off: P.off, n: P.n, air: P.air, maxMph: (P.maxV / 0.44704).toFixed(0), minMph: (P.minV / 0.44704).toFixed(0), maxAGL: P.maxY.toFixed(1), broken: g.car.lattice ? g.car.lattice.brokenCount : 0 }; });
+      console.log('pilot', label, JSON.stringify(P), fmt(await state())); await stats('fun-' + label);
+    };
+    await pilot('loop', 300, 200, 40, 'loop200', [6, 9, 14, 20, 30]);
+    await pilot('loop', 300, 240, 40, 'loop240', [8, 30]);
+    if (process.env.FUN === 'loop') return;
+    const run = async (label, x, z, yaw, mph, secs, keysDown, shotAt = []) => {
+      await R((a) => window.__r88.tg(a[0], a[1], a[2], a[3], 0.3), [x, z, yaw, mph * 0.44704]);
+      await R(() => { const g = window.__r88.game; g.rig.orbitYaw = 0; g.rig.orbitPitch = 0; g.rig.lastMouse = -99; });
+      await keys(...keysDown);
+      let air = 0, maxAGL = 0, maxY = -1e9, trace = [];
+      for (let i = 0; i < secs * 10; i++) {
+        await wait(100);
+        const st = await state(); const h = await R((p) => window.__r88.game.valley.heightAt(p[0], p[2]), st.pos);
+        if (st.contacts === 0) air++; maxAGL = Math.max(maxAGL, st.pos[1] - h); maxY = Math.max(maxY, st.pos[1]);
+        if (i % 5 === 0) trace.push(`${st.mph.toFixed(0)}mph agl${(st.pos[1] - h).toFixed(1)} c${st.contacts}`);
+        if (shotAt.includes(i)) await shot(`fun_${label}_${i}`);
+      }
+      await release();
+      console.log('run', label, 'air', (air / 10).toFixed(1) + 's', 'maxAGL', maxAGL.toFixed(1), 'broken', (await state()).broken, '|', trace.join(' '));
+    };
+    await R(() => window.__r88.respawn());
+    await run('mesa_lip', -250, 690, 0, 70, 6, ['KeyW'], [18, 26]);
+    await R(() => window.__r88.respawn());
+    await run('kickers', -760, 230, Math.PI / 2, 80, 12, ['KeyW'], [22, 40, 70]);
+    await R(() => window.__r88.respawn());
+    await run('dunes', 720, -1240, Math.PI / 2, 60, 10, ['KeyW'], [30, 60]);
+    await R(() => window.__r88.respawn());
+    await run('mesa_ramp', 520, 650, -Math.PI / 2, 60, 9, ['KeyW', 'ShiftLeft'], [30, 60]);
+  },
+  async valleyperf() {
+    const tg = (x, z, yaw = 0, v = 0, up = 0.15) => R((a) => window.__r88.tg(...a), [x, z, yaw, v, up]);
+    const free = () => R(() => { const g = window.__r88.game; g.rig.orbitYaw = 0; g.rig.orbitPitch = 0; g.rig.lastMouse = -99; });
+    const V = () => R(() => window.__r88.valley());
+    await wait(3000); await reset(); await wait(4000); await stats('perf-spawn'); console.log(fmt(await state()), JSON.stringify(await V()));
+    await free(); await reset(); await keys('KeyW', 'ShiftLeft'); await wait(9000); await release(); await stats('perf-highway'); console.log(fmt(await state()));
+    for (const [nm, x, z, yaw] of [['canyon', 1400, 470, 1.2], ['mesa', -150, 650, -1.6], ['town', -1150, -205, -1.57], ['dunes', 900, -1200, 1.57]]) { await tg(x, z, yaw, 0, 0.3); await free(); await wait(2500); await reset(); await wait(3500); await stats('perf-' + nm); console.log(fmt(await state()), JSON.stringify(await V())); }
+    await tg(-300, 100, 0.5, 0, 0.3); await R(() => { const b = window.__r88.game.car.sim.body; const p = b.translation(); b.setTranslation({ x: p.x, y: p.y + 220, z: p.z }, true); }); await R(() => window.__r88.orbit(0, 0.45)); await keys('Space'); await wait(2500); await reset(); await wait(3500); await release(); await stats('perf-aerial'); console.log(fmt(await state()), JSON.stringify(await V())); await shot('perf_aerial');
+  },
+  async valleyq() {
+    for (const q of ['low', 'medium', 'ultra', 'high']) { await R((q) => window.__r88.game.gfx.setPreset(q), q); await wait(2500); console.log('preset', q, JSON.stringify(await R(() => window.__r88.valley()))); }
+    await shot('valley_preset_back_high');
+  },
+  async valleymap() {
+    await R(() => { const g = window.__r88.game; g.cockpit.app = 'map'; g.cockpit.dirty = true; });
+    await R(() => window.__r88.tg(-560, 1395, Math.PI / 2, 0, 0.3)); await wait(1500);
+    const png = await R(() => { const g = window.__r88.game; g.cockpit.draw(); return g.cockpit.canvas.toDataURL('image/png'); });
+    fs.writeFileSync(`${out}/valley_mapapp${tag}.png`, Buffer.from(png.split(',')[1], 'base64')); console.log('shot valley_mapapp');
+    await R(() => window.__r88.camera('fpp')); await wait(1200); await R(() => window.__r88.look(-0.42, -0.22)); await wait(1500); await shot('valley_mapapp_fpp');
+    await R(() => window.__r88.camera('chase'));
+  },
+  async valleyeras() {
+    const V = () => R(() => window.__r88.valley());
+    const vantage = async (nm) => { await R(() => window.__r88.tg(-560, -60, 2.3, 0, 0.3)); await R(() => window.__r88.orbit(0.0, 0.32)); await wait(2500); await shot('valley_era_' + nm); };
+    for (const e of ['hadean', 'dino', '1885', '2080', 'ruins', 'scifi', '2026']) {
+      const t0 = Date.now(); await R((e) => window.__r88.era(e), e); console.log('era', e, 'apply ms', Date.now() - t0, 'valley ms', (await R(() => window.__r88.game.valley.eraMs)).toFixed(0), JSON.stringify(await V()));
+      await vantage(e);
+      console.log('surface lake', await R(() => window.__r88.game.valley.surfaceAt(-150, -620)), 'highway', await R(() => window.__r88.game.valley.surfaceAt(-900, 0)), 'fluids', await R(() => JSON.stringify(window.__r88.game.valley.fluids.map((f) => [f.kind, f.level.toFixed(1)]))));
+    }
+    await reset(); await wait(3000); await stats('valley-eras-idle');
+    await R(() => window.__r88.tg(-903.5, -600, 0, 0, 0.2)); await R(() => window.__r88.arm(1)); await R(() => window.__r88.tg(-903.5, -600, 0, 36, 0.2)); await keys('KeyW', 'ShiftLeft');
+    for (let i = 0; i < 60; i++) { await wait(100); const st = await state(); if (st.tc === 'arriving') break; }
+    await release(); await wait(1500); await shot('valley_arrive_dino'); console.log('arrive', fmt(await state()), JSON.stringify(await V()));
+  },
 };
 async function crash(mph, name) {
   await release(); await R(() => window.__r88.respawn()); await wait(300);
@@ -315,6 +478,7 @@ async function crash(mph, name) {
   console.log(name, fmt(await state()), 'broken', (await state()).broken);
 }
 Object.assign(S, (await import('./eras-scenarios.mjs')).erasScenarios({ page, R, wait, shot, stats, reset, tele, keys, release, tap, state, sample }));
+if (fs.existsSync(path.join(here, 'life-scenarios.mjs'))) Object.assign(S, (await import('./life-scenarios.mjs')).lifeScenarios({ page, R, wait, shot, stats, reset, tele, keys, release, tap, state, sample, fmt, out, errors }));
 for (const sc of scenarios) { if (!S[sc]) { console.log('unknown scenario', sc); continue; } console.log('== ' + sc); await S[sc](); }
 if (errors.length) console.log('ERRORS:\n' + [...new Set(errors)].slice(0, 30).join('\n'));
 if (flag('logs')) console.log(logs.slice(0, 40).join('\n'));
