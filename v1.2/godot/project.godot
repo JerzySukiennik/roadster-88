@@ -1,0 +1,52 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="Roadster 88"
+config/description="Roadster 88, Part 1: the car on the test plate."
+run/main_scene="res://main.tscn"
+config/features=PackedStringArray("4.6", "Forward Plus")
+boot_splash/bg_color=Color(0.03, 0.03, 0.035, 1)
+boot_splash/show_image=false
+config/icon="res://icon.svg"
+config/macos_native_icon="res://icon.svg"
+
+[display]
+
+window/size/viewport_width=1600
+window/size/viewport_height=1000
+
+[filesystem]
+
+import/fbx2gltf/enabled=false
+import/blender/enabled=false
+
+[physics]
+
+common/physics_ticks_per_second=120
+common/max_physics_steps_per_frame=10
+3d/physics_engine="Jolt Physics"
+jolt_physics_3d/simulation/velocity_steps=12
+jolt_physics_3d/simulation/position_steps=4
+3d/default_gravity=9.81
+common/physics_interpolation=true
+
+[rendering]
+
+lights_and_shadows/directional_shadow/soft_shadow_filter_quality=3
+reflections/sky_reflections/ggx_samples=64
+textures/default_filters/anisotropic_filtering_level=3
+environment/ssao/quality=1
+environment/ssil/quality=1
+anti_aliasing/quality/use_debanding=true
+global_illumination/sdfgi/frames_to_converge=4
+environment/defaults/default_clear_color=Color(0.05, 0.05, 0.06, 1)
+environment/screen_space_reflection/roughness_quality=1

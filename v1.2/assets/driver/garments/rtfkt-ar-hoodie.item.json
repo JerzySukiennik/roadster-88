@@ -1,0 +1,78 @@
+{
+ "id": "rtfkt-ar-hoodie",
+ "name": "RTFKT AR Hoodie",
+ "slot": "top_over",
+ "layer": 20,
+ "body_mask": [
+  "torso",
+  "arms",
+  "forearms",
+  "neck"
+ ],
+ "hides_hair": "partial",
+ "variants": [
+  "hood_up",
+  "hood_down"
+ ],
+ "default_variant": "hood_up",
+ "file": "rtfkt-ar-hoodie.glb",
+ "mesh": "RTFKT_AR_Hoodie",
+ "tris": 10262,
+ "vertices": 5246,
+ "textures": {
+  "baseColor": "2048 sRGB",
+  "normal": "2048 OpenGL",
+  "orm": "2048 (R occlusion, G roughness, B metallic)"
+ },
+ "material": {
+  "name": "RTFKT_Hoodie",
+  "doubleSided": true
+ },
+ "skeleton": "Jurek.Rig (shared, 92 bones) + 12 extra Cloth_ bones, 104 joints in the file",
+ "extra_bones": {
+  "hood": [
+   "Cloth_Hood_Base (child of Neck)",
+   "Cloth_Hood_Mid",
+   "Cloth_Hood_Top",
+   "Cloth_Hood_Tip",
+   "Cloth_Hood_SideL",
+   "Cloth_Hood_SideR"
+  ],
+  "drawstrings": [
+   "Cloth_Cord_L_1..3",
+   "Cloth_Cord_R_1..3 (chains under Cloth_Hood_Base)"
+  ]
+ },
+ "clips": {
+  "hood_up": {
+   "frames": 36,
+   "fps": 30,
+   "note": "hood slides from the back over the head, overshoot, cords swing and settle; ends at rest pose"
+  },
+  "hood_down": {
+   "frames": 33,
+   "fps": 30,
+   "note": "hood folds back onto the upper back, cords swing; ends at hood_state_down"
+  },
+  "hood_state_up": {
+   "frames": 2,
+   "note": "static pose, hood on the head (rest)"
+  },
+  "hood_state_down": {
+   "frames": 2,
+   "note": "static pose, hood resting on the back"
+  },
+  "cord_sway": {
+   "frames": 91,
+   "loop": true,
+   "note": "gentle idle drawstring sway"
+  }
+ },
+ "clip_tracks": "Cloth_ bones only (rotation, Hood_Base also translation): they layer on top of any body clip without overriding body bones",
+ "hair_note": "hides_hair partial: hood clears the medium-LOD hair by 17-31 mm; swap to short hair or flatten Hair_Side_*/Hair_Back_* a few degrees when the hood is down is not needed, hair is free when the hood is down",
+ "print_credits": "RTFKT x Nike graphics are hand redrawn approximations for a personal avatar of the owner's own hoodie",
+ "files": {
+  "blend": "source/rtfkt-ar-hoodie.blend",
+  "fbx": "source/rtfkt-ar-hoodie.fbx"
+ }
+}
