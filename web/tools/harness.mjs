@@ -173,6 +173,17 @@ const S = {
     await R(() => window.__r88.game.setPaused(true)); await wait(900); await shot('menu_pause');
     console.log('menu', await R(() => { const g = window.__r88.game; return `mode ${g.menu.mode} paused ${g.paused} hold ${!!g.rig.hold}`; }));
   },
+  async hero() {
+    await wait(2000);
+    await R(() => { document.getElementById('hud').style.display = 'none'; document.getElementById('hint').style.display = 'none'; window.__r88.setTime(15, 40); });
+    await wait(1500);
+    await keys('Space'); await wait(700); await keys(); await wait(2600); console.log('hero', JSON.stringify((await state()).pos), (await state()).mode);
+    for (const [i, y, p] of [[0, 2.35, 0.02], [1, 1.75, 0.0], [2, 0.75, 0.04], [3, 2.9, 0.08]]) { await R((a) => window.__r88.orbit(a[0], a[1]), [y, p]); await wait(1100); await shot('hero_' + i); }
+    await keys('ControlLeft'); await wait(3000); await keys(); await wait(1500);
+    await R(() => { const g = window.__r88.game; g.rig.orbitYaw = 0; g.rig.orbitPitch = 0; g.rig.lastMouse = -99; });
+    await keys('KeyW', 'ShiftLeft'); await wait(1600);
+    await R(() => window.__r88.orbit(1.45, 0.02)); await wait(700); await shot('hero_boost'); await release();
+  },
   async night() { await R(() => window.__r88.setTime(22, 30)); await wait(2500); await shot('night'); await keys('KeyW'); await wait(2000); await shot('night_drive'); await release(); },
   async fpp() {
     await R(() => window.__r88.camera('fpp')); await wait(1500); await shot('fpp');
