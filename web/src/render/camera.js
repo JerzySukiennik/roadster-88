@@ -65,7 +65,7 @@ export class CameraRig {
     this.offVel.addScaledVector(acc, dt);
     this.offset.addScaledVector(this.offVel, dt);
     const accLocal = s.accel.clone();
-    const lagT = accLocal.multiplyScalar(-0.018);
+    const lagT = accLocal.multiplyScalar(-0.006);
     lagT.y *= 0.5;
     lagT.clampLength(0, 0.7);
     const la = lagT.sub(this.lag).multiplyScalar(30).addScaledVector(this.lagVel, -2 * Math.sqrt(30) * 0.85);
@@ -83,9 +83,11 @@ export class CameraRig {
     if (camPos.y < gy + 0.45) camPos.y = gy + 0.45;
     this.pos.copy(camPos);
     this.lookPos.copy(look);
-    const fovT = T.fov_min + (T.fov_max - T.fov_min) * THREE.MathUtils.smoothstep(mph, 0, T.fov_full_at_mph) + s.boost * 3.5;
-    this.fov += (fovT - this.fov) * Math.min(1, dt * 2.5);
-    this.shake = Math.max(s.boost * 0.5 + s.thrust * 0.35, THREE.MathUtils.smoothstep(mph, 120, 250) * 0.25);
+    const road = s.grounded ? Math.min(1, s.speed / 110) * 0.15 : 0;
+    this.rumble = Math.min(2, s.thrust * 0.35 + s.boost * 0.6 + road);
+    const fovT = T.fov_min + (T.fov_max - T.fov_min) * THREE.MathUtils.smoothstep(mph, 0, T.fov_full_at_mph) + this.rumble * 1.5 + s.boost * 2;
+    this.fov += (fovT - this.fov) * Math.min(1, dt * 3);
+    this.shake = THREE.MathUtils.smoothstep(mph, 120, 250) * 0.25;
     this.impact = Math.max(0, this.impact - dt * 1.8);
     this.apply(dt);
   }
@@ -97,6 +99,8 @@ export class CameraRig {
     cam.position.copy(this.pos);
     cam.position.x += noise1(t) * amp; cam.position.y += noise1(t + 17) * amp * 0.7; cam.position.z += noise1(t + 31) * amp;
     cam.lookAt(this.lookPos);
+    const hf = (this.rumble || 0) * 0.045, th = this.t * 22;
+    if (hf > 0.0005) cam.position.add(tmpV.set(noise1(th * 1.13 + 3) * hf, noise1(th * 0.97 + 9) * hf, 0).applyQuaternion(cam.quaternion));
     cam.rotateZ(noise1(t + 50) * amp * 0.25);
     cam.near = 0.2;
     cam.fov = this.fov; cam.updateProjectionMatrix();

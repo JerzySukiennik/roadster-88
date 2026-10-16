@@ -25,6 +25,7 @@ export class AudioEngine {
     this.buildThrust();
     this.road = ctx.createBiquadFilter(); this.road.type = 'highpass'; this.road.frequency.value = 220; this.road.Q.value = 0.6; this.road.connect(this.outside);
     this.wind = this.noiseVoice('lowpass', 600, 0.7, this.outside);
+    this.rumble = this.noiseVoice('lowpass', 150, 0.8, this.outside);
     this.ext = /Safari/.test(navigator.userAgent) && !/Chrome|Chromium/.test(navigator.userAgent) ? 'mp3' : (new Audio().canPlayType('audio/ogg; codecs="vorbis"') ? 'ogg' : 'mp3');
     try {
       const r = await fetch(BASE + 'catalog.json', { cache: 'no-store' });
@@ -222,7 +223,10 @@ export class AudioEngine {
     const tot = total / 40000;
     this.setLoop('thrust_loop', Math.min(0.6, Math.sqrt(tot) * 0.5), 0.8 + tot * 0.15, 0.08, this.thrustBus);
     const rearAll = th.rear.every((n) => n.valve > 0.6 && n.pitch < 0.25);
-    if (rearAll && !this.boosting) this.play('boost_big', { gain: 0.45, pos: s.carPos, dest: this.thrustBus });
+    const boostK = vol * th.rear.reduce((a, n) => a + (n.attached && n.pitch < 0.4 ? n.valve : 0), 0) / Math.max(1, th.rear.length);
+    this.rumble.f.frequency.setTargetAtTime(110 + 70 * boostK, t, 0.1);
+    this.rumble.g.gain.setTargetAtTime(boostK * (inside ? 0.75 : 0.6), t, 0.12);
+    if (rearAll && !this.boosting) this.play('boost_big', { gain: 0.7, pos: s.carPos, dest: this.thrustBus });
     this.boosting = rearAll;
     if (tot > 0.08 && this.prevTotal <= 0.08) this.play('thrust_start', { gain: 0.35, pos: s.carPos, dest: this.thrustBus });
     if (tot < 0.04 && this.prevTotal >= 0.04) this.play('thrust_stop', { gain: 0.3, pos: s.carPos, dest: this.thrustBus });
