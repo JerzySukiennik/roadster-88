@@ -46,7 +46,7 @@ class Game {
     this.sky = new SkySystem(this.gfx, this.gfx.preset);
     if (params.has('envoff')) this.sky.envOff = true;
     if (params.has('shadowoff')) this.sky.sun.castShadow = false;
-    this.gfx.onPreset = (P) => { this.sky.applyShadowPreset(P); if (this.plate) { this.plate.stat.needsUpdate = true; setTimeout(() => { this.plate.stat.needsUpdate = true; }, 1500); } };
+    this.gfx.onPreset = (P) => { this.sky.applyShadowPreset(P); };
     this.tc = new TimeCircuits(this.tu);
     this.tc.setDestination(ERAS[store.get('destEra', 1)].date);
     this.applyClock(true);
@@ -59,7 +59,7 @@ class Game {
     this.mats = new CarMaterials();
     this.settings = { assist: store.get('assist', true), wing: store.get('wing', false), roof: store.get('roof', true), paint: store.get('paint', 'red'), radio: store.get('radio', false) };
     this.mats.setPaint(this.settings.paint);
-    this.template = await loadRealCar();
+    this.template = await loadRealCar(this.gfx.preset.carLod);
     this.latticeData = await this.loadLattice();
     this.damage = new DamageSystem(this);
     this.timeFx = new TimeFX(this.gfx.scene, this.fx, this.mats);
@@ -98,8 +98,6 @@ class Game {
     this.gfx.renderer.setAnimationLoop(() => this.frame());
     const tw = performance.now();
     await new Promise((res) => { const chk = () => (this.stable >= 20 || performance.now() - tw > 25000 ? res() : setTimeout(chk, 50)); chk(); });
-    this.plate.stat.needsUpdate = true;
-    setTimeout(() => { this.plate.stat.needsUpdate = true; }, 1500);
     progress(1, ''); $('loading').classList.add('done'); this.started = true;
     this.hint('Click to drive. Esc for keys and settings.', 4);
   }
@@ -194,7 +192,7 @@ class Game {
       w.sim.destroy(); this.gfx.scene.remove(w.view.root);
       this.cars.splice(this.cars.indexOf(w), 1);
     }
-    this.rig.initialized = false;
+    this.rig.initialized = false; this.gfx.cut();
     this.hint('New Roadster', 1.5);
   }
 
@@ -221,7 +219,7 @@ class Game {
     const I = this.input;
     if (I.hit('Escape')) this.setPaused(!this.paused);
     if (this.paused) return;
-    if (I.hit('KeyC')) { this.rig.mode = this.rig.mode === 'chase' ? 'fpp' : 'chase'; this.rig.fppYaw = 0; this.rig.fppPitch = 0; }
+    if (I.hit('KeyC')) { this.rig.mode = this.rig.mode === 'chase' ? 'fpp' : 'chase'; this.rig.fppYaw = 0; this.rig.fppPitch = 0; this.gfx.cut(); }
     if (I.hit('KeyR')) this.respawn();
     if (I.hit('KeyF')) { const open = this.car.view.toggleDoors(); this.audio.play(open ? 'door_open' : 'door_close', { pos: this.car.curr.pos }); }
     if (I.hit('KeyT')) this.toggleArm();
@@ -257,7 +255,6 @@ class Game {
       if (e === 'depart') {
         const rear = sim.wheels.slice(2).filter((w) => w.contact), use = rear.length ? rear : sim.wheels.filter((w) => w.contact);
         const wheelPts = use.map((w) => ({ x: w.point.x, y: w.point.y, z: w.point.z }));
-        if (this.harness) console.log('depart car', car.curr.pos.toArray().map((v) => v.toFixed(2)).join(','), 'sim', sim.pos.z.toFixed(2), 'wheels', JSON.stringify(wheelPts.map((p) => p.z.toFixed(2))), 'vel', sim.vel.z.toFixed(1));
         this.timeFx.depart(car.curr.pos.clone(), car.curr.quat.clone(), sim.vel, sim.contacts >= 2, wheelPts);
         A.play('tc_boom_double', { gain: 1, inside: true });
         A.play('tc_fire_whoosh', { pos: car.curr.pos, gain: 0.9 });
@@ -278,7 +275,7 @@ class Game {
         sim.body.setEnabled(true);
         if (this.saved) { sim.body.setLinvel(this.saved.lin, true); sim.body.setAngvel(this.saved.ang, true); }
         car.view.root.visible = true;
-        this.rig.hold = null; this.rig.initialized = false;
+        this.rig.hold = null; this.rig.initialized = false; this.gfx.cut();
         this.timeFx.arrive();
         A.play('tc_arrive_zap', { pos: car.curr.pos, gain: 1 });
         A.setRadio(this.settings.radio, this.eraId());
@@ -293,7 +290,7 @@ class Game {
     st.pos = c.pose.pos; st.quat = c.pose.quat;
     st.vel.set(s.vel.x, s.vel.y, s.vel.z); st.speed = s.speed; st.fwdSpeed = s.fwdSpeed;
     st.grounded = s.contacts >= 2; st.airborne = s.contacts === 0; st.reverse = s.gear === 'R';
-    st.accel.set(s.lastAccel.x, s.lastAccel.y, s.lastAccel.z);
+    st.accel.set(s.lastAccel.x, s.lastAccel.y, s.lastAccel.z).clampLength(0, 45);
     st.accelLocal.copy(st.accel).applyQuaternion(c.pose.quat.clone().invert());
     st.boost = (s.thrusters.rear.reduce((a, n) => a + n.valve, 0) / 4) * (s.flight.mode === 'ground' ? 1 : 0.3);
     st.thrust = s.thrusters.totalForce.len() / 40000;
@@ -336,7 +333,7 @@ class Game {
     this.rig.mouse(mx, my, now / 1000);
     const s = this.car.sim;
     const st = this.chaseState(fdt);
-    if (this.pendingHold) { this.rig.hold = this.pendingHold; this.pendingHold = null; }
+    if (this.pendingHold) { this.rig.hold = this.pendingHold; this.pendingHold = null; this.gfx.cut(); }
     if (this.rig.mode === 'chase') this.rig.updateChase(fdt, st, now / 1000, (o, d, l) => this.camRay(o, d, l));
     else { this.car.view.root.updateMatrixWorld(true); this.rig.updateFpp(fdt, this.car.view.eyeWorld(new THREE.Vector3()), this.car.pose.quat, st); }
     const chase = this.rig.mode === 'chase';
@@ -430,11 +427,11 @@ class Game {
       tap(code) { g.input.pressed.add(code); },
       gpu() { const a = g.gfx.renderer.backend.adapter; return a && a.info ? { vendor: a.info.vendor, arch: a.info.architecture } : null; },
       state() { const s = g.car.sim; return { yaw: s.yaw() * 57.3, beta: Math.atan2(s.latSpeed, Math.abs(s.fwdSpeed) + 0.01) * 57.3, wy: s.angW.y * 57.3, cam: g.rig.heading * 57.3, mph: s.speed / MPH, pos: [s.pos.x, s.pos.y, s.pos.z], mode: s.flight.mode, gear: s.gear, contacts: s.contacts, tc: g.tc.state, fps: 1000 / (g.frames.slice(-60).reduce((a, b) => a + b, 0) / Math.max(1, g.frames.slice(-60).length)), scale: g.gfx.scale, backend: g.gfx.backend, gpu: g.gfx.gpuMs, calls: g.gfx.renderer.info.render.drawCalls, prof: g.prof, broken: g.car.lattice ? g.car.lattice.brokenCount : 0 }; },
-      teleport(x, y, z, yaw = 0, v = 0) { g.car.sim.teleport([x, y, z], yaw, v); g.capture(g.car); g.capture(g.car); g.rig.initialized = false; },
+      teleport(x, y, z, yaw = 0, v = 0) { g.car.sim.teleport([x, y, z], yaw, v); g.capture(g.car); g.capture(g.car); g.rig.initialized = false; g.gfx.cut(); },
       stats() { const f = g.frames.slice().sort((a, b) => a - b); const p = (q) => f[Math.min(f.length - 1, Math.floor(f.length * q))]; return { n: f.length, avg: f.reduce((a, b) => a + b, 0) / Math.max(1, f.length), p50: p(0.5), p95: p(0.95), p99: p(0.99), max: f[f.length - 1], spikes: g.spikes, scale: g.gfx.scale }; },
       resetStats() { g.frames.length = 0; g.spikes = 0; },
       setTime(h, m = 0, mo = 10, d = 15) { Object.assign(g.tc.present, { hour: h, minute: m, month: mo, day: d }); g.applyClock(true); },
-      camera(mode) { g.rig.mode = mode; g.rig.fppYaw = 0; g.rig.fppPitch = 0; },
+      camera(mode) { g.rig.mode = mode; g.rig.fppYaw = 0; g.rig.fppPitch = 0; g.gfx.cut(); },
       look(yaw, pitch) { g.rig.fppYaw = yaw; g.rig.fppPitch = pitch; },
       orbit(yaw, pitch) { g.rig.orbitYaw = yaw; g.rig.orbitPitch = pitch; g.rig.lastMouse = performance.now() / 1000 + 1e6; },
       arm(era) { if (era !== undefined) g.tc.setDestination(ERAS[era].date); if (!g.tc.armed) g.toggleArm(); },

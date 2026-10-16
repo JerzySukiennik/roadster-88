@@ -4,7 +4,7 @@ import { fxMaterial } from './gfx.js';
 import { uniform, vec3, float, mix, hash, floor, positionLocal, normalView, positionViewDirection, dot, pow, max, clamp, fwidth, length, smoothstep, mx_noise_float, positionWorld, normalize, bumpMap, sin, atan, fract, abs, step } from 'three/tsl';
 
 export const PAINTS = {
-  red: { label: 'Red Multi-Coat', a: [0.62, 0.02, 0.026], b: [0.11, 0.0, 0.006], metal: 0.42, rough: 0.36, flake: 0.55 },
+  red: { label: 'Red Multi-Coat', a: [0.72, 0.012, 0.018], b: [0.14, 0.0, 0.004], metal: 0.45, rough: 0.3, flake: 0.5 },
   white: { label: 'Pearl White Multi-Coat', a: [0.86, 0.86, 0.84], b: [0.6, 0.62, 0.66], metal: 0.08, rough: 0.3, flake: 0.25 },
   black: { label: 'Solid Black', a: [0.014, 0.014, 0.016], b: [0.006, 0.006, 0.007], metal: 0.0, rough: 0.22, flake: 0.0 },
   silver: { label: 'Midnight Silver Metallic', a: [0.2, 0.21, 0.225], b: [0.07, 0.075, 0.085], metal: 0.78, rough: 0.3, flake: 0.7 },

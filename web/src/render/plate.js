@@ -7,7 +7,7 @@ const aaLine = (coord, period, width) => {
   const d = abs(fract(coord.div(period).add(0.5)).sub(0.5)).mul(period);
   const aa = fwidth(coord).max(1e-4);
   const cov = clamp(float(width).div(aa), 0, 1);
-  const fade = float(1).sub(smoothstep(float(period).mul(0.08), float(period).mul(0.3), aa));
+  const fade = float(1).sub(smoothstep(float(Math.min(period * 0.025, 0.06)), float(Math.min(period * 0.1, 0.2)), aa));
   return float(1).sub(smoothstep(float(width).mul(0.5).sub(aa.mul(0.5)), float(width).mul(0.5).add(aa.mul(0.5)), d)).mul(cov.mul(0.85).add(0.15)).mul(fade);
 };
 
@@ -158,7 +158,8 @@ export class PlateView {
     const scene = gfx.scene;
     const root = new THREE.Group(); root.name = 'Plate';
     scene.add(root); this.root = root;
-    const stat = new THREE.BundleGroup(); stat.name = 'PlateStatic'; stat.static = true;
+    const stat = new THREE.Group(); stat.name = 'PlateStatic';
+    stat.matrixAutoUpdate = false;
     root.add(stat); this.stat = stat;
     const envRoot = new THREE.Group();
     sky.addEnvProxy(envRoot);

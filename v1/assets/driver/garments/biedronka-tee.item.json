@@ -1,0 +1,48 @@
+{
+ "id": "biedronka-tee",
+ "name": "Biedronka T-shirt",
+ "slot": "top_under",
+ "layer": 10,
+ "body_mask": [],
+ "hides_hair": "false",
+ "fit": "regular",
+ "variants": [
+  {
+   "name": "white",
+   "material": "Biedronka_White",
+   "baseColor": "baseColor_white_2048",
+   "note": "white cotton jersey, full-colour Biedronka logo"
+  },
+  {
+   "name": "black",
+   "material": "Biedronka_Black",
+   "baseColor": "baseColor_black_2048",
+   "note": "black jersey, same logo artwork (guessed colourway)"
+  }
+ ],
+ "default_variant": "white",
+ "variant_mechanism": "KHR_materials_variants in the GLB (variants: white, black); mesh also carries extras.variants",
+ "mesh": "BiedronkaTee",
+ "skeleton": "Jurek.Rig (shared, 92 bones; garment weighted to the body bones only)",
+ "tris": 10436,
+ "verts": 6210,
+ "textures": {
+  "baseColor_white": "2048x2048 JPEG q92 (sRGB)",
+  "baseColor_black": "2048x2048 JPEG q92 (sRGB)",
+  "normal": "2048x2048 JPEG q92 (OpenGL +Y)",
+  "orm": "2048x2048 JPEG q92 (R occlusion, G roughness, B metallic)"
+ },
+ "uv": "UVMap, single atlas (front 2200 px/m, back/sleeves 1100 px/m, collar 2000 px/m)",
+ "clips": [],
+ "clips_note": "no own clips; follows the body clips (A_pose, idle, walk, run, turn_*, wave) through the shared skeleton",
+ "body_mask_note": "empty on purpose: the neckline exposes chest skin that belongs to the torso region, and the garment sits 8 mm+ off the skin, so nothing needs hiding",
+ "export": {
+  "glb": "biedronka-tee.glb",
+  "blend": "source/biedronka-tee.blend",
+  "fbx": "source/biedronka-tee.fbx"
+ },
+ "files": {
+  "blend": "source/biedronka-tee.blend",
+  "fbx": "source/biedronka-tee.fbx"
+ }
+}

@@ -1,19 +1,32 @@
 // Roadster 88 graphics core: WebGPURenderer (WebGL2 fallback), TSL post chain (GTAO, TAAU, motion blur, bloom, lens flare, flash), quality presets and dynamic resolution.
 import * as THREE from 'three/webgpu';
-import { pass, mrt, output, velocity, normalView, packNormalToRGB, unpackRGBToNormal, sample, screenUV, uniform, vec2, vec3, vec4, int, float, mix, convertToTexture, smoothstep, length, exp, step, atan, cos, abs } from 'three/tsl';
+import { pass, mrt, output, velocity, normalView, packNormalToRGB, unpackRGBToNormal, sample, screenUV, uniform, vec2, vec3, vec4, int, float, mix, convertToTexture, smoothstep, length, exp, step, atan, cos, abs, Fn, Loop, uv, min, interleavedGradientNoise, screenCoordinate, perspectiveDepthToViewZ } from 'three/tsl';
 import { ao } from 'three/addons/tsl/display/GTAONode.js';
 import { taau } from 'three/addons/tsl/display/TAAUNode.js';
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
-import { motionBlur } from 'three/addons/tsl/display/MotionBlur.js';
 import { sharpen } from 'three/addons/tsl/display/SharpenNode.js';
 
+const smoothBlur = Fn(([tex, vel, n]) => {
+  const v = vec2(vel.x, vel.y.negate()).mul(0.5).toVar();
+  const len = length(v);
+  v.assign(v.mul(min(float(1), float(0.035).div(len.max(1e-5)))));
+  const jitter = interleavedGradientNoise(screenCoordinate).sub(0.5);
+  const acc = vec4(0).toVar();
+  Loop({ start: int(0), end: int(n), type: 'int', condition: '<' }, ({ i }) => {
+    const t = float(i).add(0.5).add(jitter).div(float(n)).sub(0.5);
+    acc.addAssign(tex.sample(uv().add(v.mul(t))));
+  });
+  return acc.div(float(n));
+});
+
 export function fxMaterial(m) {
+  if (m.transparent && !m.alphaTest) m.alphaTest = 0.015;
   return m;
 }
 
 export const PRESETS = {
-  low: { label: 'Low', dpr: 1.0, scale: 0.7, minScale: 0.5, ao: false, mblur: false, flare: false, bloom: true, shadowMap: 1024, shadowBox: 44, envEvery: 0, envSize: 64, mobileAvatar: true, sharpen: 0.25, particles: 0.5 },
-  medium: { label: 'Medium', dpr: 1.25, scale: 0.8, minScale: 0.55, ao: false, mblur: true, flare: false, bloom: true, shadowMap: 2048, shadowBox: 56, envEvery: 30, envSize: 96, mobileAvatar: true, sharpen: 0.2, particles: 0.75 },
+  low: { label: 'Low', dpr: 1.0, scale: 0.7, minScale: 0.5, ao: false, mblur: false, flare: false, bloom: true, shadowMap: 1024, shadowBox: 44, envEvery: 0, envSize: 64, mobileAvatar: true, sharpen: 0.25, particles: 0.5, carLod: true },
+  medium: { label: 'Medium', dpr: 1.25, scale: 0.8, minScale: 0.55, ao: false, mblur: true, flare: false, bloom: true, shadowMap: 2048, shadowBox: 56, envEvery: 30, envSize: 96, mobileAvatar: true, sharpen: 0.2, particles: 0.75, carLod: true },
   high: { label: 'High', dpr: 1.5, scale: 0.85, minScale: 0.6, ao: true, mblur: true, flare: true, bloom: true, shadowMap: 2048, shadowBox: 64, envEvery: 8, envSize: 128, mobileAvatar: false, sharpen: 0.15, particles: 1 },
   ultra: { label: 'Ultra', dpr: 2.0, scale: 1.0, minScale: 0.65, ao: true, mblur: true, flare: true, bloom: true, shadowMap: 4096, shadowBox: 90, envEvery: 3, envSize: 256, mobileAvatar: false, sharpen: 0.1, particles: 1 },
 };
@@ -40,7 +53,7 @@ export class Gfx {
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(62, 1, 0.08, 9000);
     this.u = {
-      blur: uniform(0), flash: uniform(0), exposure: uniform(0.5), sunUV: uniform(new THREE.Vector2(0.5, 0.5)), sunVis: uniform(0), sunCol: uniform(new THREE.Color(1, 0.9, 0.8)), aspect: uniform(1.6), bloomStrength: uniform(0.16), flareAmount: uniform(1), sharp: uniform(0.15), tint: uniform(new THREE.Color(1, 1, 1)),
+      blur: uniform(0), flash: uniform(0), near: uniform(0.1), far: uniform(9000), exposure: uniform(0.5), sunUV: uniform(new THREE.Vector2(0.5, 0.5)), sunVis: uniform(0), sunCol: uniform(new THREE.Color(1, 0.9, 0.8)), aspect: uniform(1.6), bloomStrength: uniform(0.16), flareAmount: uniform(1), sharp: uniform(0.15), tint: uniform(new THREE.Color(1, 1, 1)),
     };
     this.presetName = opts.preset || 'high';
     this.preset = PRESETS[this.presetName];
@@ -82,7 +95,11 @@ export class Gfx {
       this.nodes.push(aoPass);
     }
     let color = scenePass.getTextureNode('output');
-    if (this.aoPass) color = convertToTexture(vec4(color.rgb.mul(mix(float(1), this.aoPass.getTextureNode().sample(screenUV).r, float(0.75))), float(1)));
+    if (this.aoPass) {
+      const vz = perspectiveDepthToViewZ(scenePass.getTextureNode('depth').sample(screenUV).r, u.near, u.far).negate();
+      const k = float(0.7).mul(float(1).sub(smoothstep(10.0, 30.0, vz)));
+      color = convertToTexture(vec4(color.rgb.mul(mix(float(1), this.aoPass.getTextureNode().sample(screenUV).r, k)), float(1)));
+    }
     const depth = scenePass.getTextureNode('depth');
     const vel = scenePass.getTextureNode('velocity');
     const aa = taau(color, depth, vel, camera);
@@ -92,7 +109,7 @@ export class Gfx {
     if (P.sharpen > 0 && !this.flags.notaa) { const sh = sharpen(aa.getTextureNode(), P.sharpen); this.nodes.push(sh); img = sh.getTextureNode(); }
     img = convertToTexture(vec4(img.rgb.mul(u.exposure), float(1)));
     this.nodes.push(img);
-    if (P.mblur && !this.flags.nomblur) img = motionBlur(img, vel.mul(u.blur), int(8));
+    if (P.mblur && !this.flags.nomblur) img = smoothBlur(img, vel.mul(u.blur), P.mblurSamples || 8);
     let out = img;
     if (P.bloom && !this.flags.nobloom) {
       const b = bloom(img, u.bloomStrength, 0.4, 1.25);
@@ -141,10 +158,15 @@ export class Gfx {
     if (ms > 200) return;
     this.frameMs += (ms - this.frameMs) * 0.08;
     this.cooldown -= frameDt;
-    if (this.frameMs > 18.2) { this.slowT += frameDt; this.fastT = 0; } else if (this.frameMs < 16.2) { this.fastT += frameDt; this.slowT = 0; } else { this.slowT = Math.max(0, this.slowT - frameDt); this.fastT = 0; }
+    if (this.frameMs > 19.5) { this.slowT += frameDt; this.fastT = 0; } else if (this.frameMs < 17.3) { this.fastT += frameDt; this.slowT = 0; } else { this.slowT = Math.max(0, this.slowT - frameDt); this.fastT = 0; }
     if (this.cooldown > 0) return;
-    if (this.slowT > 0.35 && this.scale > this.preset.minScale) { this.scale = Math.max(this.preset.minScale, this.scale - 0.05); this.applyScale(); this.cooldown = 0.6; this.slowT = 0; }
-    else if (this.fastT > 3 && this.scale < this.preset.scale) { this.scale = Math.min(this.preset.scale, this.scale + 0.03); this.applyScale(); this.cooldown = 1.5; this.fastT = 0; }
+    if (this.slowT > 0.5 && this.scale > this.preset.minScale) { this.scale = Math.max(this.preset.minScale, this.scale - 0.05); this.applyScale(); this.cooldown = 0.8; this.slowT = 0; }
+    else if (this.fastT > 2 && this.scale < this.preset.scale) { this.scale = Math.min(this.preset.scale, this.scale + 0.05); this.applyScale(); this.cooldown = 1.2; this.fastT = 0; }
+  }
+
+  cut() {
+    const aa = this.aa;
+    if (aa && aa._historyRenderTarget) aa._historyRenderTarget.width = 1;
   }
 
   updateSun(dir, color, strength) {
@@ -159,6 +181,7 @@ export class Gfx {
   }
 
   render() {
+    this.u.near.value = this.camera.near; this.u.far.value = this.camera.far;
     this.pipeline.render();
     if (this.gpuTime && !this.gpuPending) { this.gpuPending = true; this.renderer.resolveTimestampsAsync('render').then((v) => { this.gpuPending = false; if (v !== undefined && v !== null) this.gpuMs += ((typeof v === 'number' ? v : this.renderer.info.render.timestamp) - this.gpuMs) * 0.1; }).catch(() => { this.gpuPending = false; }); }
   }

@@ -67,7 +67,7 @@ export class CameraRig {
     const accLocal = s.accel.clone();
     const lagT = accLocal.multiplyScalar(-0.018);
     lagT.y *= 0.5;
-    lagT.clampLength(0, 1.4);
+    lagT.clampLength(0, 0.7);
     const la = lagT.sub(this.lag).multiplyScalar(30).addScaledVector(this.lagVel, -2 * Math.sqrt(30) * 0.85);
     this.lagVel.addScaledVector(la, dt); this.lag.addScaledVector(this.lagVel, dt);
     const camPos = carPos.clone().add(this.offset).add(this.lag);

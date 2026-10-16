@@ -51,6 +51,8 @@ One root node `Roadster`. Every movable or detachable thing is its own node with
 
 **Budget:** body LOD0 about 150-250k tris total with interior, textures 2K (4K only for paint flake normal if needed), Draco or meshopt compression allowed (both engines must load it: Godot 4.6 reads meshopt? If not, ship an uncompressed `roadster_raw.glb` too).
 
+A lighter LOD with identical nodes ships as `assets/car/roadster_lod1.glb` (~310k tris vs ~720k): use it for the Low/Medium presets or as a distance LOD.
+
 Until the real car exists, engines build a placeholder with **the same node names and pivots** (boxes are fine) so swapping is a file replace.
 
 ## 4. Damage lattice (`shared/lattice.json`)

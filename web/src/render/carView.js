@@ -26,10 +26,11 @@ function shareGeometry(g) {
 }
 
 let realCarPromise = null;
-export function loadRealCar() {
+export function loadRealCar(lod) {
   if (realCarPromise) return realCarPromise;
   realCarPromise = (async () => {
-    for (const f of ['../assets/car/roadster.glb', '../assets/car/roadster_raw.glb']) {
+    const list = lod ? ['../assets/car/roadster_lod1.glb', '../assets/car/roadster.glb'] : ['../assets/car/roadster.glb', '../assets/car/roadster_raw.glb'];
+    for (const f of list) {
       try {
         const h = await fetch(f, { method: 'HEAD' });
         if (!h.ok) continue;

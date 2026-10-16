@@ -132,7 +132,7 @@ def main():
     print(f'outer {len(Fc)} tris {time.time() - t0:.0f}s', flush=True)
     V, Fc = mesher.decimate(V, Fc, target, agg=4)
     V, _ = mesher.relax(B.outer, V, Fc, iters=6)
-    V, Fc = mesher.refine(B.outer, V, Fc, max_deg=9.0, passes=3)
+    V, Fc = mesher.refine(B.outer, V, Fc, max_deg=float(os.environ.get('REFINE_DEG', '9')), passes=int(os.environ.get('REFINE_PASSES', '3')))
     print(f'decimated+relaxed+refined {len(Fc)} {time.time() - t0:.0f}s', flush=True)
     g = P.GAP / 2
     for name in P.PRIORITY:

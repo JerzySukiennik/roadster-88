@@ -1,4 +1,4 @@
-# MotionBlur: subtle speed-scaled per-pixel motion blur as a CompositorEffect (compute shader reading Godot's motion-vector buffer after transparents).
+# MotionBlur: speed-scaled per-pixel motion blur as a CompositorEffect; object motion from Godot's velocity buffer, static pixels from depth reprojection with the previous camera, camera cuts skipped.
 @tool
 class_name MotionBlur
 extends CompositorEffect
@@ -14,9 +14,24 @@ layout(push_constant, std430) uniform Params {
 	vec2 size;
 	float intensity;
 	float max_px;
+	mat4 reproj;
 } p;
 float hash(vec2 v) {
 	return fract(sin(dot(v, vec2(12.9898, 78.233))) * 43758.5453);
+}
+vec2 cam_vel(vec2 uv, float d) {
+	vec4 ndc = vec4(uv * 2.0 - 1.0, d, 1.0);
+	vec4 pc = p.reproj * ndc;
+	vec2 pn = pc.xy / max(abs(pc.w), 1e-6) * sign(pc.w);
+	vec2 puv = pn * 0.5 + 0.5;
+	return puv - uv;
+}
+vec2 get_vel(ivec2 q, vec2 uv) {
+	vec2 v = texelFetch(velocity, q, 0).xy;
+	if (dot(v, v) > 0.64) {
+		v = cam_vel(uv, texelFetch(depth_tex, q, 0).r);
+	}
+	return v;
 }
 void main() {
 	ivec2 px = ivec2(gl_GlobalInvocationID.xy);
@@ -24,15 +39,15 @@ void main() {
 		return;
 	}
 	vec2 uv = (vec2(px) + 0.5) / p.size;
-	vec4 base0 = texture(src_color, uv);
-	if (texture(depth_tex, uv).r <= 0.000001) {
-		imageStore(out_color, px, base0);
+	vec4 base = texelFetch(src_color, px, 0);
+	float d0 = texelFetch(depth_tex, px, 0).r;
+	if (d0 <= 0.000001) {
+		imageStore(out_color, px, base);
 		return;
 	}
-	vec2 vel = texture(velocity, uv).xy * p.intensity;
+	vec2 vel = get_vel(px, uv) * p.intensity;
 	vec2 vpx = vel * p.size;
 	float len = length(vpx);
-	vec4 base = texture(src_color, uv);
 	if (len < 0.75) {
 		imageStore(out_color, px, base);
 		return;
@@ -47,11 +62,14 @@ void main() {
 	float wsum = 1.0;
 	for (int i = 0; i < n; i++) {
 		float t = (float(i) + 0.5 + j) / float(n) - 0.5;
-		vec2 suv = uv - vel * t;
+		vec2 suv = clamp(uv - vel * t, vec2(0.0), vec2(1.0));
+		ivec2 sq = clamp(ivec2(suv * p.size), ivec2(0), ivec2(p.size) - 1);
+		if (texelFetch(depth_tex, sq, 0).r <= 0.000001) {
+			continue;
+		}
 		vec4 c = texture(src_color, suv);
-		vec2 sv = texture(velocity, suv).xy * p.intensity;
+		vec2 sv = get_vel(sq, suv) * p.intensity;
 		float w = clamp(length(sv * p.size) / max(len, 1.0), 0.0, 1.0);
-		w *= step(0.000001, texture(depth_tex, suv).r);
 		acc += c * w;
 		wsum += w;
 	}
@@ -86,6 +104,9 @@ var copy_pipeline: RID
 var sampler: RID
 var intensity := 0.0
 var max_px := 40.0
+var has_prev := false
+var prev_vp := Projection.IDENTITY
+var prev_xf := Transform3D.IDENTITY
 
 func _init() -> void:
 	effect_callback_type = CompositorEffect.EFFECT_CALLBACK_TYPE_POST_TRANSPARENT
@@ -132,8 +153,28 @@ func _init_compute() -> void:
 	ss.repeat_v = RenderingDevice.SAMPLER_REPEAT_MODE_CLAMP_TO_EDGE
 	sampler = rd.sampler_create(ss)
 
+func _camera_reproj(render_data: RenderData) -> Variant:
+	var sd := render_data.get_render_scene_data()
+	if sd == null:
+		return null
+	var proj: Projection = sd.get_cam_projection()
+	var xf: Transform3D = sd.get_cam_transform()
+	var vp: Projection = proj * Projection(xf.affine_inverse())
+	var out: Variant = null
+	if has_prev:
+		var cut := xf.origin.distance_to(prev_xf.origin) > 4.0 or xf.basis.z.dot(prev_xf.basis.z) < 0.94
+		if not cut:
+			out = prev_vp * vp.inverse()
+	prev_vp = vp
+	prev_xf = xf
+	has_prev = true
+	return out
+
 func _render_callback(_type: int, render_data: RenderData) -> void:
-	if rd == null or not pipeline.is_valid() or not copy_pipeline.is_valid() or intensity <= 0.001:
+	if rd == null or not pipeline.is_valid() or not copy_pipeline.is_valid():
+		return
+	var reproj: Variant = _camera_reproj(render_data)
+	if reproj == null or intensity <= 0.001:
 		return
 	var buffers := render_data.get_render_scene_buffers() as RenderSceneBuffersRD
 	if buffers == null:
@@ -149,8 +190,13 @@ func _render_callback(_type: int, render_data: RenderData) -> void:
 		var usage := RenderingDevice.TEXTURE_USAGE_SAMPLING_BIT | RenderingDevice.TEXTURE_USAGE_STORAGE_BIT
 		buffers.create_texture(&"r88_mb", &"src", RenderingDevice.DATA_FORMAT_R16G16B16A16_SFLOAT, usage, RenderingDevice.TEXTURE_SAMPLES_1, size, 1, 1, true, false)
 	var groups := Vector3i((size.x - 1) / 8 + 1, (size.y - 1) / 8 + 1, 1)
+	var m: Projection = reproj
 	var pc := PackedFloat32Array([float(size.x), float(size.y), intensity, max_px])
+	for col in [m.x, m.y, m.z, m.w]:
+		var v4: Vector4 = col
+		pc.append_array(PackedFloat32Array([v4.x, v4.y, v4.z, v4.w]))
 	var pcb := pc.to_byte_array()
+	var cpcb := PackedFloat32Array([float(size.x), float(size.y), 0.0, 0.0]).to_byte_array()
 	for view in buffers.get_view_count():
 		var color := buffers.get_color_layer(view)
 		var vel := buffers.get_velocity_layer(view)
@@ -169,7 +215,7 @@ func _render_callback(_type: int, render_data: RenderData) -> void:
 		var cl0 := rd.compute_list_begin()
 		rd.compute_list_bind_compute_pipeline(cl0, copy_pipeline)
 		rd.compute_list_bind_uniform_set(cl0, cset, 0)
-		rd.compute_list_set_push_constant(cl0, pcb, pcb.size())
+		rd.compute_list_set_push_constant(cl0, cpcb, cpcb.size())
 		rd.compute_list_dispatch(cl0, groups.x, groups.y, groups.z)
 		rd.compute_list_end()
 		var u0 := RDUniform.new()

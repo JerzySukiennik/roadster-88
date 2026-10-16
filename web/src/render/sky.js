@@ -96,8 +96,8 @@ export class SkySystem {
     const h = box / 2, c = s.camera;
     c.left = -h; c.right = h; c.top = h; c.bottom = -h; c.near = 1; c.far = 900;
     c.updateProjectionMatrix();
-    s.bias = -0.0002;
-    s.normalBias = 0.02;
+    s.bias = -0.0006;
+    s.normalBias = 0.06;
     s.radius = 1.6;
     this.texel = box / P.shadowMap;
     if (this.envSize && P.envSize && P.envSize !== this.envSize) this.buildEnvTarget(P.envSize);

@@ -1,6 +1,7 @@
 // Roadster 88 particle effects: pooled GPU sprites (alpha and additive) for cold-gas plumes, valve puffs, ground dust rings, tyre smoke, sparks, frost vapour and fire, plus tyre skid marks on the plate.
 import * as THREE from 'three/webgpu';
 import { instancedBufferAttribute, uv, float, vec2, vec3, uniform, attribute, texture } from 'three/tsl';
+import { softParticles } from 'three/addons/tsl/utils/SoftParticles.js';
 import { fxMaterial } from './gfx.js';
 
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -43,7 +44,7 @@ class Pool {
     const cell = additive ? float(3) : M.z.mul(2.999).floor();
     const shape = texture(ATLAS, vec2(uv().x.add(cell).mul(0.25), uv().y)).a;
     m.colorNode = additive ? C.xyz : C.xyz.mul(light);
-    m.opacityNode = shape.mul(C.w);
+    m.opacityNode = additive ? shape.mul(C.w) : softParticles({ opacity: shape.mul(C.w), distance: float(0.5), contrast: float(1.5) });
     const sp = new THREE.Sprite(m);
     sp.count = 0; sp.frustumCulled = false; sp.renderOrder = additive ? 11 : 10;
     scene.add(sp);
@@ -178,8 +179,8 @@ export class FX {
         for (let k = 0; k < cnt; k++) {
           const sp = rnd(18, 34) * (0.45 + 0.55 * v);
           const t = Math.random() * dt;
-          const s1 = (rnd(0.7, 1.15) + boost * rnd(0.5, 0.9)) * big * (0.45 + 0.75 * v);
-          this.alpha.spawn(o.x + vel.x * t, o.y + vel.y * t, o.z + vel.z * t, vel.x + d.x * sp + rnd(-1.2, 1.2), vel.y + d.y * sp + rnd(-1.2, 1.2), vel.z + d.z * sp + rnd(-1.2, 1.2), rnd(0.18, 0.3) * (0.7 + 0.5 * v) * (1 + boost * 0.5), 0.06 * big, s1 * 0.85, 1, 1, 1, (0.6 + boost * 0.15) * (0.45 + 0.55 * v), 5.5, 0.5);
+          const s1 = (rnd(0.55, 0.95) + boost * rnd(0.25, 0.45)) * big * (0.45 + 0.6 * v);
+          this.alpha.spawn(o.x + vel.x * t, o.y + vel.y * t, o.z + vel.z * t, vel.x + d.x * sp + rnd(-1.2, 1.2), vel.y + d.y * sp + rnd(-1.2, 1.2), vel.z + d.z * sp + rnd(-1.2, 1.2), rnd(0.14, 0.24) * (0.7 + 0.5 * v) * (1 + boost * 0.4), 0.06 * big, s1, 1, 1, 1, (0.42 + boost * 0.1) * (0.45 + 0.55 * v), 6, 0.5);
         }
         if (n.groundDist < 4.5 && d.y < -0.35) {
           const gx = o.x + d.x * n.groundDist, gy = o.y + d.y * n.groundDist, gz = o.z + d.z * n.groundDist;

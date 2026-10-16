@@ -16,6 +16,7 @@ var fc: FlightComputer
 var input := CarInput.new()
 var rig: Node3D = null
 var damage: Node = null
+var model_lod: int = 0
 var wrecked: bool = false
 var com_local: Vector3
 var inertia_v: Vector3

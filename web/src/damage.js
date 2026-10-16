@@ -118,7 +118,6 @@ export class DamageSystem {
     if (od.kind === 'prop') footprint = 0.5;
     if (od.kind === 'car') footprint = 1.2;
     const axis = new THREE.Vector3(0, 1, 0).applyQuaternion(q);
-    if (this.g.harness) console.log('impact', od.kind, od.tag, 'vn', vn.toFixed(1), 'J', Math.round(J), 'pL', pL.toArray().map((v) => v.toFixed(2)).join(','), 'nL', nL.toArray().map((v) => v.toFixed(2)).join(','));
     const depth = car.lattice.impact({ p: pL.toArray(), n: nL.toArray(), speed: vn, energy: E, cylRadius, axis: axis.toArray(), footprint });
     if (car === this.g.car) {
       this.g.rig.addImpact(Math.min(1.5, J / 25000));
@@ -241,7 +240,6 @@ export class DamageSystem {
   }
 
   loseWheel(car, name, J) {
-    if (this.g.harness) console.log('loseWheel', name, Math.round(J), new Error().stack.split('\n')[2].trim());
     car.lost.add(name);
     const w = car.sim.wheels.find((x) => x.name === name);
     if (w) w.lost = true;

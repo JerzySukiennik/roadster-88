@@ -112,7 +112,7 @@ MATS = {
     'Rubber': material('Rubber', (0.02, 0.02, 0.02), rough=0.85),
     'Tire': material('Tire', (0.03, 0.03, 0.03), rough=0.86, base_tex='tyre_base.png', normal_tex='tyre_normal.png',
                      normal_strength=1.0),
-    'Rim': material('Rim', (0.10, 0.10, 0.105), metallic=0.85, rough=0.32),
+    'Rim': material('Rim', (0.30, 0.30, 0.31), metallic=0.92, rough=0.26),
     'Brake_Disc': material('Brake_Disc', (0.3, 0.3, 0.3), metallic=0.4, rough=0.55, base_tex='disc_base.png',
                            normal_tex='disc_normal.png'),
     'Caliper': material('Caliper', (0.55, 0.02, 0.02), rough=0.25, coat=0.8),

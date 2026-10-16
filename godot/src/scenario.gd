@@ -716,3 +716,43 @@ func sc_physprof() -> void:
 	get_tree().physics_interpolation = false
 	await wait(0.5)
 	print("PHYS no interpolation ", await _phys_avg(2.0))
+
+func _set_lod(l: int) -> void:
+	game.args["lod"] = str(l)
+	game._swap_model(game.car)
+	await frames(10)
+
+func sc_lod() -> void:
+	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+	await place(Vector3(0, 0.05, 40), 0.0)
+	await wait(2.5)
+	var lines := []
+	var p := car_pos()
+	for view in ["chase", "close"]:
+		if view == "close":
+			cam_at(p + Vector3(4.2, 1.1, 5.6), p + Vector3(0, 0.55, 0.2), 38.0)
+		var r := {0: [], 1: []}
+		for l in [0, 1, 0, 1]:
+			await _set_lod(l)
+			var g: float = await _gpu_avg(1.5)
+			r[l].append([g, _avg(times)])
+		for l in [0, 1]:
+			var g2 := 0.0
+			var f2 := 0.0
+			for e in r[l]:
+				g2 += e[0] * 0.5
+				f2 += e[1] * 0.5
+			var line := "%s lod%d gpu %.2f ms frame %.2f ms prims %d" % [view, l, g2, f2, RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME)]
+			print("LOD ", line)
+			lines.append(line)
+	await _set_lod(1)
+	await wait(1.0)
+	await shot("lod1_front34")
+	await _set_lod(0)
+	await wait(1.0)
+	await shot("lod0_front34")
+	var f := FileAccess.open(out_dir.path_join("lod.txt"), FileAccess.WRITE)
+	for l in lines:
+		f.store_line(l)
+	f.close()
+

@@ -1,4 +1,4 @@
-# Game: builds the test plate, sky, cars, cameras and UI, maps keyboard and mouse to the active Roadster, handles respawn, wrecks and quality presets.
+# Game: builds the test plate, sky, cars, cameras and UI, maps keyboard and mouse to the active Roadster, handles respawn, wrecks, quality presets (car LOD per preset) and dynamic resolution.
 extends Node
 
 const MPH := 0.44704
@@ -29,6 +29,11 @@ var args: Dictionary = {}
 var world3d: Node3D
 var input_enabled := true
 var frame_times: PackedFloat32Array = PackedFloat32Array()
+var dyn_scale := 1.0
+var dyn_acc := 0.0
+var dyn_gpu := 0.0
+var dyn_n := 0
+var dyn_cool := 0.0
 
 func _ready() -> void:
 	_parse_args()
@@ -60,6 +65,7 @@ func _ready() -> void:
 	_build_systems()
 	apply_preset(preset)
 	get_viewport().size_changed.connect(func(): apply_preset(preset))
+	RenderingServer.viewport_set_measure_render_time(get_viewport().get_viewport_rid(), true)
 	if args.has("scenario"):
 		var sc := load("res://src/scenario.gd")
 		scenario = sc.new()
@@ -125,12 +131,23 @@ func _input_map() -> void:
 		mb.button_index = MOUSE_BUTTON_LEFT
 		InputMap.action_add_event("tap", mb)
 
+func model_lod() -> int:
+	if args.has("lod"):
+		return clampi(int(args["lod"]), 0, 1)
+	return 1 if preset <= 1 else 0
+
 func spawn_car(xf: Transform3D) -> Car:
 	var c := Car.new()
 	c.name = "Roadster"
 	world3d.add_child(c)
 	c.setup()
-	var model: Node3D = CarModel.instantiate()
+	_dress(c)
+	c.teleport(xf)
+	return c
+
+func _dress(c: Car) -> void:
+	c.model_lod = model_lod()
+	var model: Node3D = CarModel.instantiate(c.model_lod)
 	c.add_child(model)
 	var mats := CarMaterials.new()
 	mats.set_paint(paint)
@@ -141,16 +158,40 @@ func spawn_car(xf: Transform3D) -> Car:
 	rig.set_wing(wing)
 	rig.set_roof(roof)
 	rig.set_lod_bias([0.35, 0.6, 1.0, 1.4][preset])
+	rig.set_shadows(preset >= 2)
 	c.rig = rig
 	c.fc.assist = assist
+	c.damage = null
 	if ResourceLoader.exists("res://src/damage/car_damage.gd"):
 		var dmg: Node = load("res://src/damage/car_damage.gd").new()
 		dmg.name = "Damage"
 		c.add_child(dmg)
 		dmg.setup(c, model, mats, self)
 		c.damage = dmg
-	c.teleport(xf)
-	return c
+
+func _pristine(c: Car) -> bool:
+	var d = c.damage
+	if d == null:
+		return true
+	return float(d.total_energy) <= 0.0 and (d.detached as Dictionary).is_empty() and (d.cracks as Array).is_empty() and (d.shattered as Dictionary).is_empty()
+
+func _swap_model(c: Car) -> void:
+	var old_rig = c.rig
+	var old_dmg = c.damage
+	if old_dmg and c.impacted.is_connected(old_dmg._on_impact):
+		c.impacted.disconnect(old_dmg._on_impact)
+	_dress(c)
+	if old_rig:
+		c.rig.door_target = old_rig.door_target
+		c.rig.door = old_rig.door
+	for s in [hud, tt, audio, fx, cockpit, driver, menu]:
+		if s and s.has_method("on_car_changed"):
+			s.on_car_changed(c)
+	if old_rig:
+		old_rig.model.queue_free()
+		old_rig.queue_free()
+	if old_dmg:
+		old_dmg.queue_free()
 
 func respawn() -> void:
 	if car == null:
@@ -196,14 +237,30 @@ func _free_spot(origin: Vector3, b: Basis, off: Vector3) -> Vector3:
 	return origin + b * off + Vector3(0, 0.05, 0)
 
 func apply_preset(p: int) -> void:
+	if clampi(p, 0, 3) != preset:
+		dyn_scale = 1.0
 	preset = clampi(p, 0, 3)
 	var vp := get_viewport()
 	sky.apply_preset(preset, vp)
+	_apply_scale()
+	for c in [car] + wrecks:
+		if is_instance_valid(c) and c.rig:
+			c.rig.set_shadows(preset >= 2)
+			c.rig.set_lod_bias([0.35, 0.6, 1.0, 1.4][preset])
+	if car and car.model_lod != model_lod() and _pristine(car):
+		_swap_model(car)
+	if fx and fx.has_method("on_preset"):
+		fx.on_preset(preset)
+	if post and post.has_method("on_preset"):
+		post.on_preset(preset)
+
+func _apply_scale() -> void:
+	var vp := get_viewport()
 	var scale := res_scale
-	var phys_h := float(DisplayServer.window_get_size().y)
 	if scale <= 0.0:
 		var target_h: float = [680.0, 780.0, 900.0, 1100.0][preset]
-		scale = clampf(target_h / maxf(phys_h, 1.0), 0.4, 1.0)
+		var phys_h := float(DisplayServer.window_get_size().y)
+		scale = clampf(target_h / maxf(phys_h, 1.0) * dyn_scale, 0.35, 1.0)
 	vp.scaling_3d_scale = scale
 	if scale < 0.99:
 		vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR2 if preset >= 2 else Viewport.SCALING_3D_MODE_FSR
@@ -212,14 +269,35 @@ func apply_preset(p: int) -> void:
 			vp.use_taa = false
 	else:
 		vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
-	for c in [car] + wrecks:
-		if is_instance_valid(c) and c.rig:
-			c.rig.set_shadows(preset >= 2)
-			c.rig.set_lod_bias([0.35, 0.6, 1.0, 1.4][preset])
-	if fx and fx.has_method("on_preset"):
-		fx.on_preset(preset)
-	if post and post.has_method("on_preset"):
-		post.on_preset(preset)
+
+func _dynamic_resolution(dt: float) -> void:
+	if scenario != null or paused or res_scale > 0.0 or args.has("nodynres"):
+		dyn_acc = 0.0
+		dyn_gpu = 0.0
+		dyn_n = 0
+		return
+	dyn_cool -= dt
+	dyn_acc += dt
+	dyn_gpu += RenderingServer.viewport_get_measured_render_time_gpu(get_viewport().get_viewport_rid())
+	dyn_n += 1
+	if dyn_acc < 1.0:
+		return
+	var avg_ms := dyn_acc / dyn_n * 1000.0
+	var gpu_ms := dyn_gpu / dyn_n
+	dyn_acc = 0.0
+	dyn_gpu = 0.0
+	dyn_n = 0
+	if dyn_cool > 0.0:
+		return
+	var want := dyn_scale
+	if avg_ms > 18.5 and gpu_ms > 12.5:
+		want = maxf(0.6, dyn_scale - 0.08)
+	elif gpu_ms < 9.5 and avg_ms < 17.8:
+		want = minf(1.0, dyn_scale + 0.04)
+	if absf(want - dyn_scale) > 0.001:
+		dyn_scale = want
+		dyn_cool = 2.0
+		_apply_scale()
 
 func set_paint(p: String) -> void:
 	paint = p
@@ -289,6 +367,7 @@ func _process(dt: float) -> void:
 	frame_times.append(dt)
 	if frame_times.size() > 600:
 		frame_times = frame_times.slice(300)
+	_dynamic_resolution(dt)
 	if sky:
 		var night := sky.is_night()
 		for c in [car] + wrecks:

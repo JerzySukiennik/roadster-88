@@ -85,7 +85,8 @@ const S = {
     await R(() => window.__r88.respawn()); await wait(300);
     await R(() => window.__r88.arm(4)); await wait(400);
     await tele(0, 0.05, -900, 0, 30); await keys('KeyW', 'ShiftLeft');
-    for (let i = 0; i < 40; i++) { await wait(100); const st = await state(); if (st.mph > 76 && !this.c1) { this.c1 = 1; await shot('time_charge'); } if (st.tc === 'departing' || st.tc === 'gone') break; }
+    await tele(0, 0.05, -900, 0, 35.3); await keys('KeyW'); await wait(500); await shot('time_charge'); await keys('KeyW', 'ShiftLeft');
+    for (let i = 0; i < 40; i++) { await wait(60); const st = await state(); if (st.tc === 'departing' || st.tc === 'gone') break; }
     const dbg = () => R(() => { const g = window.__r88.game; return JSON.stringify({ tc: g.tc.state, t: g.tc.t.toFixed(2), flash: g.gfx.u.flash.value.toFixed(2), exp: g.gfx.u.exposure.value.toFixed(2), arc: g.timeFx.arcIntensity.value.toFixed(2), glow: g.mats.u.arcGlow.value.toFixed(2), frost: g.mats.u.frost.value.toFixed(2), impl: g.timeFx.implosion.visible, vis: g.car.view.root.visible, hold: !!g.rig.hold, sunI: g.sky.sun.intensity.toFixed(2), night: g.sky.state.night.toFixed(2) }); });
     console.log('dbg0', await dbg());
     await wait(150); await shot('time_depart'); console.log('dbg1', await dbg()); await release(); await wait(700); await shot('time_trails'); console.log('dbg2', await dbg());
@@ -123,6 +124,7 @@ const S = {
     await R(() => { const g = window.__r88.game; g.car.view.root.visible = false; }); await wait(100); await shot('td_3');
   },
   async depart() {
+    await R(() => window.__r88.respawn()); await wait(300);
     await R(() => window.__r88.arm(6)); await tele(0, 0.05, -900, 0, 30.0); await wait(400); await keys('KeyW', 'ShiftLeft');
     for (let i = 0; i < 30; i++) { const st = await state(); if (st.tc === 'departing') break; await wait(30); }
     await R(() => { const g = window.__r88.game, T = window.__r88.THREE; const c = g.gfx.camera; const f = c.getWorldDirection(new T.Vector3()); const p = c.position.clone().addScaledVector(f, 10); for (let i = 0; i < 30; i++) g.fx.add.spawn(p.x + (Math.random() - 0.5) * 2, p.y + (Math.random() - 0.5), p.z, 0, 0, 0, 2, 0.6, 0.6, 0, 4, 0, 1, 1, 0); for (let i = 0; i < 30; i++) g.fx.alpha.spawn(p.x + 2 + (Math.random() - 0.5) * 2, p.y + (Math.random() - 0.5), p.z, 0, 0, 0, 2, 0.6, 0.6, 1, 0, 1, 1, 1, 0); });
@@ -179,6 +181,14 @@ const S = {
     for (let i = 0; i < 60; i++) { const s = await state(); if (s.pos[2] > -440) break; await wait(30); }
     await keys('KeyW', 'Space'); await wait(1000); await keys('KeyW'); await wait(300); await shot('gap_air');
     await sample(10, 250, 'gap'); await release();
+  },
+  async spritetest() {
+    await R(() => { const g = window.__r88.game; g.car.view.root.visible = false; if (location.search.includes('nodt')) { g.fx.add.sprite.material.depthTest = false; g.fx.add.sprite.material.needsUpdate = true; } });
+    await R(() => { const g = window.__r88.game, T = window.__r88.THREE; const c = g.gfx.camera; const f = c.getWorldDirection(new T.Vector3()); g.__spawnT = setInterval(() => { for (const [h, col] of [[0.3, [0, 4, 0]], [1.0, [4, 0, 0]], [1.8, [0, 0, 4]]]) { const q = c.position.clone().addScaledVector(f, 8); for (let i = 0; i < 6; i++) g.fx.add.spawn(q.x + (Math.random() - 0.5) * 2, h, q.z, 0, 0, 0, 0.5, 0.5, 0.5, ...col, 1, 1, 0); } }, 50); });
+    await wait(900); await shot('sprite' + tag); await R(() => clearInterval(window.__r88.game.__spawnT));
+  },
+  async alt() {
+    await keys('Space'); await wait(1800); await keys(); await wait(1500); await shot('alt');
   },
   async perf() { await wait(1500); await reset(); await keys('KeyW', 'KeyA'); await wait(8000); await release(); await stats('perf-drive'); },
 };
