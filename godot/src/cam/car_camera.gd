@@ -30,6 +30,7 @@ var override_xf: Variant = null
 var noise := FastNoiseLite.new()
 
 func _ready() -> void:
+	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	cfg = Tuning.data()["camera"]
 	near = 0.05
 	far = 9000.0

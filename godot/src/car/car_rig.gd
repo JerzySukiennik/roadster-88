@@ -53,7 +53,7 @@ func setup(c, m: Node3D, materials: CarMaterials) -> void:
 			var eye: Vector3 = n["Eye_Driver"].transform.origin if n.has("Eye_Driver") else Vector3(0.38, 1.0, -0.6)
 			if toward.dot(eye - dn.transform.origin) < 0.0:
 				toward = -toward
-			dn.position += toward * 0.007
+			dn.position += toward * 0.02
 			rest[disp] = dn.transform
 	_make_lights()
 

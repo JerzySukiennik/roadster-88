@@ -37,7 +37,7 @@ export class Hud {
         if (!up && digits[i] > c.target) c.pos += 10;
         c.target = digits[i];
       }
-      c.pos += (c.target - c.pos) * Math.min(1, dt * 22);
+      c.pos += (c.target - c.pos) * Math.min(1, dt * (i === 2 ? 30 : 18));
       if (Math.abs(c.target - c.pos) < 0.002) c.pos = c.target;
       const shown = ((c.pos % 10) + 10) % 10;
       c.col.style.transform = `translateY(${-shown * DIGIT_H}px)`;

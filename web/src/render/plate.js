@@ -7,7 +7,8 @@ const aaLine = (coord, period, width) => {
   const d = abs(fract(coord.div(period).add(0.5)).sub(0.5)).mul(period);
   const aa = fwidth(coord).max(1e-4);
   const cov = clamp(float(width).div(aa), 0, 1);
-  return float(1).sub(smoothstep(float(width).mul(0.5).sub(aa.mul(0.5)), float(width).mul(0.5).add(aa.mul(0.5)), d)).mul(cov.mul(0.7).add(0.3));
+  const fade = float(1).sub(smoothstep(float(period).mul(0.08), float(period).mul(0.3), aa));
+  return float(1).sub(smoothstep(float(width).mul(0.5).sub(aa.mul(0.5)), float(width).mul(0.5).add(aa.mul(0.5)), d)).mul(cov.mul(0.85).add(0.15)).mul(fade);
 };
 
 const rectMask = (p, r, soft) => {
@@ -277,7 +278,9 @@ export class PlateView {
     const trees = smoothstep(0.35, 0.6, mx_noise_float(positionWorld.mul(0.012).add(vec3(3, 0, 1))));
     m.colorNode = mix(mix(vec3(0.42, 0.33, 0.19), vec3(0.6, 0.48, 0.28), n.mul(0.5).add(0.5)).mul(float(1).add(n2.mul(0.1))), vec3(0.1, 0.12, 0.06), trees.mul(0.75));
     const ring = new THREE.Mesh(g, m); ring.receiveShadow = false; ring.userData.k = 'horizon'; root.add(ring);
-    const apron = new THREE.RingGeometry(0, 1700, 64, 1).rotateX(-Math.PI / 2);
+    const ash = new THREE.Shape(); ash.absarc(0, 0, 1700, 0, Math.PI * 2, false);
+    const hole = new THREE.Path(); const P0 = this.L.plate; hole.moveTo(P0.x0, P0.z0); hole.lineTo(P0.x0, P0.z1); hole.lineTo(P0.x1, P0.z1); hole.lineTo(P0.x1, P0.z0); hole.closePath(); ash.holes.push(hole);
+    const apron = new THREE.ShapeGeometry(ash, 48).rotateX(Math.PI / 2);
     const am = new THREE.MeshStandardNodeMaterial({ roughness: 0.95 });
     const an = mx_fractal_noise_float(positionWorld.mul(0.02), 3, 2, 0.5);
     am.colorNode = mix(vec3(0.36, 0.3, 0.2), vec3(0.5, 0.42, 0.27), an.mul(0.5).add(0.5));

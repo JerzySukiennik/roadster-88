@@ -95,6 +95,7 @@ VIEWS = {
     'fpp': (None, None, 22),
     'door': ((-3.2, -0.2, 0.7), (-0.9, -0.1, 0.5), 40),
     'dot': ((0.9, -2.6, 1.25), (0.509, -1.731, 0.696), 60),
+    'cabin': ((1.6, 0.9, 2.2), (0.2, -0.1, 0.55), 30),
 }
 for name in (ONLY or list(VIEWS)):
     pos, tgt, lens = VIEWS[name]

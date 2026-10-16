@@ -9,6 +9,7 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 layout(rgba16f, set = 0, binding = 0) uniform restrict writeonly image2D out_color;
 layout(set = 0, binding = 1) uniform sampler2D src_color;
 layout(set = 0, binding = 2) uniform sampler2D velocity;
+layout(set = 0, binding = 3) uniform sampler2D depth_tex;
 layout(push_constant, std430) uniform Params {
 	vec2 size;
 	float intensity;
@@ -23,6 +24,11 @@ void main() {
 		return;
 	}
 	vec2 uv = (vec2(px) + 0.5) / p.size;
+	vec4 base0 = texture(src_color, uv);
+	if (texture(depth_tex, uv).r <= 0.000001) {
+		imageStore(out_color, px, base0);
+		return;
+	}
 	vec2 vel = texture(velocity, uv).xy * p.intensity;
 	vec2 vpx = vel * p.size;
 	float len = length(vpx);
@@ -45,6 +51,7 @@ void main() {
 		vec4 c = texture(src_color, suv);
 		vec2 sv = texture(velocity, suv).xy * p.intensity;
 		float w = clamp(length(sv * p.size) / max(len, 1.0), 0.0, 1.0);
+		w *= step(0.000001, texture(depth_tex, suv).r);
 		acc += c * w;
 		wsum += w;
 	}
@@ -179,7 +186,12 @@ func _render_callback(_type: int, render_data: RenderData) -> void:
 		u2.binding = 2
 		u2.add_id(sampler)
 		u2.add_id(vel)
-		var uset := UniformSetCacheRD.get_cache(shader, 0, [u0, u1, u2])
+		var u3 := RDUniform.new()
+		u3.uniform_type = RenderingDevice.UNIFORM_TYPE_SAMPLER_WITH_TEXTURE
+		u3.binding = 3
+		u3.add_id(sampler)
+		u3.add_id(buffers.get_depth_layer(view))
+		var uset := UniformSetCacheRD.get_cache(shader, 0, [u0, u1, u2, u3])
 		var cl := rd.compute_list_begin()
 		rd.compute_list_bind_compute_pipeline(cl, pipeline)
 		rd.compute_list_bind_uniform_set(cl, uset, 0)

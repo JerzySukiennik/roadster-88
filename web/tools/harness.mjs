@@ -46,13 +46,14 @@ const S = {
   async idle() { await wait(6000); await reset(); await wait(5000); await stats('idle'); await sample(3, 300, 'state'); await shot('idle'); },
   async orbit() { for (const [i, y] of [[0, 2.4], [1, -2.2], [2, 3.14], [3, 0.9]]) { await R((a) => window.__r88.orbit(a[0], a[1]), [y, 0.05]); await wait(900); await shot(`orbit_${i}`); } },
   async launch() {
+    await R(() => { const g = window.__r88.game; g.rig.orbitYaw = 0; g.rig.orbitPitch = 0; g.rig.lastMouse = -99; });
     await wait(800); await reset();
     await keys('KeyW'); await sample(10, 250, 'launch'); await shot('launch_2s');
     await wait(3000); await shot('launch_5s'); await sample(4, 500, 'cruise'); await release(); await stats('launch');
   },
   async boost() {
-    await wait(800); await reset();
-    await keys('KeyW', 'ShiftLeft'); await sample(6, 200, 'boost'); await shot('boost_1s'); await wait(4000); await shot('boost_5s'); await release(); await stats('boost');
+    await wait(5000); await reset();
+    await keys('KeyW', 'ShiftLeft'); await sample(6, 200, 'boost'); await shot('boost_1s'); await wait(4000); await shot('boost_5s'); await release(); await stats('boost'); console.log('dtlog', await R(() => window.__r88.game.dtLog.slice(-300).join(' ')));
   },
   async hop() {
     await tele(120, 0.05, -620, 0, 22); await wait(300);

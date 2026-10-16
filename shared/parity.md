@@ -31,7 +31,7 @@ Model notes (so the Godot build can match): suspension force F = k x + c v (bump
 <!-- godot:begin -->
 ## godot (Godot 4.6.2 build)
 
-Run: `godot/tools/parity.sh` (= `Godot --headless --path godot --fixed-fps 120 --script res://tools/parity.gd`, Jolt, 120 Hz, flat plate). Updated 2026-10-15 23:49 UTC.
+Run: `godot/tools/parity.sh` (= `Godot --headless --path godot --fixed-fps 120 --script res://tools/parity.gd`, Jolt, 120 Hz, flat plate). Updated 2026-10-16 00:59 UTC.
 
 | Metric | Target | Godot |
 |---|---|---|
@@ -49,5 +49,5 @@ Run: `godot/tools/parity.sh` (= `Godot --headless --path godot --fixed-fps 120 -
 | Turn radius, 60 mph full lock | (report) | 66.9 m at 59.7 mph, 1.08 g lateral |
 | Hover yaw rate, A held | 70 deg/s (assist) | 69.7 deg/s |
 
-Method: identical protocol to the web harness (settle 1.2 s, 0-X until forward speed crosses X, 60-0 from 63 mph measured from the 60 mph crossing, hover = Space 1.4 s then 6 s hold then 2 s average, hop = Space 0.3 s, turn = 60 mph P-loop + full A for 8 s then 3 s average, yaw = A 2.5 s in hover then 2 s average). Same car model as web/src/sim (ported to GDScript); thrust allocation is a prioritised bounded least-squares (vertical + pitch/roll first, then axial, then side deflection for yaw) instead of the web's projected-gradient solver.
+Method: identical protocol to the web harness (settle 1.2 s, 0-X until forward speed crosses X, 60-0 from 63 mph measured from the 60 mph crossing, hover = Space 1.4 s then 6 s hold then 2 s average, hop = Space 0.3 s, turn = 60 mph P-loop + full A for 8 s then 3 s average, yaw = A 2.5 s in hover then 2 s average). Same car model as web/src/sim ported to GDScript (suspension, combined-slip tyres with 4-substep implicit wheel spin, TC/ABS, regen, aero, flight computer modes and the same warm-started accelerated projected-gradient thrust allocator), so the numbers track the web build within about 1 percent.
 <!-- godot:end -->

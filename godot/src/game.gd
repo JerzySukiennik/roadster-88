@@ -202,7 +202,7 @@ func apply_preset(p: int) -> void:
 	var scale := res_scale
 	var phys_h := float(DisplayServer.window_get_size().y)
 	if scale <= 0.0:
-		var target_h: float = [700.0, 860.0, 1000.0, 1200.0][preset]
+		var target_h: float = [680.0, 780.0, 900.0, 1100.0][preset]
 		scale = clampf(target_h / maxf(phys_h, 1.0), 0.4, 1.0)
 	vp.scaling_3d_scale = scale
 	if scale < 0.99:

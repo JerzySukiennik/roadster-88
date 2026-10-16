@@ -15,7 +15,7 @@ html, body { margin: 0; height: 100%; background: #000; overflow: hidden; font-f
 .hud.fade { opacity: 0; }
 .hud.off { display: none; }
 .hud-speed { position: absolute; left: 44px; bottom: 34px; display: flex; align-items: flex-end; gap: 14px; }
-.digits { font-weight: 300; font-size: 64px; line-height: 0.9; letter-spacing: -0.02em; display: flex; height: 58px; overflow: hidden; text-shadow: 0 1px 14px rgba(0, 0, 0, 0.35); font-variant-numeric: tabular-nums; }
+.digits { font-weight: 300; font-size: 54px; line-height: 0.9; letter-spacing: -0.02em; display: flex; height: 58px; overflow: hidden; text-shadow: 0 1px 14px rgba(0, 0, 0, 0.35); font-variant-numeric: tabular-nums; }
 .digit { position: relative; width: 0.58em; height: 58px; overflow: hidden; }
 .digit .col { position: absolute; left: 0; top: 0; width: 100%; will-change: transform; }
 .digit .col span { display: block; height: 58px; line-height: 58px; text-align: center; }

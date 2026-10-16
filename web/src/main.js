@@ -257,6 +257,7 @@ class Game {
       if (e === 'depart') {
         const rear = sim.wheels.slice(2).filter((w) => w.contact), use = rear.length ? rear : sim.wheels.filter((w) => w.contact);
         const wheelPts = use.map((w) => ({ x: w.point.x, y: w.point.y, z: w.point.z }));
+        if (this.harness) console.log('depart car', car.curr.pos.toArray().map((v) => v.toFixed(2)).join(','), 'sim', sim.pos.z.toFixed(2), 'wheels', JSON.stringify(wheelPts.map((p) => p.z.toFixed(2))), 'vel', sim.vel.z.toFixed(1));
         this.timeFx.depart(car.curr.pos.clone(), car.curr.quat.clone(), sim.vel, sim.contacts >= 2, wheelPts);
         A.play('tc_boom_double', { gain: 1, inside: true });
         A.play('tc_fire_whoosh', { pos: car.curr.pos, gain: 0.9 });
@@ -365,7 +366,7 @@ class Game {
     this.plate.syncProps(this.phys);
     this.fx.setLight(this.sky.sun.color, this.sky.sun.intensity, night);
     if (!this.paused) {
-      if (this.car.view.root.visible) this.fx.thrusters(fdt, s, this.car.pose.quat, this.car.pose.pos);
+      if (this.car.view.root.visible && !params.has('noplume')) this.fx.thrusters(fdt, s, this.car.pose.quat, this.car.pose.pos);
       for (const c of this.cars) this.fx.tyres(fdt, c.sim, c.pose.quat, c.pose.pos);
       this.damage.update(fdt);
       this.car.view.root.updateMatrixWorld(true);

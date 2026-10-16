@@ -1,32 +1,31 @@
 // Roadster 88 particle effects: pooled GPU sprites (alpha and additive) for cold-gas plumes, valve puffs, ground dust rings, tyre smoke, sparks, frost vapour and fire, plus tyre skid marks on the plate.
 import * as THREE from 'three/webgpu';
-import { instancedBufferAttribute, uv, float, vec2, uniform, attribute, texture } from 'three/tsl';
+import { instancedBufferAttribute, uv, float, vec2, vec3, uniform, attribute, texture } from 'three/tsl';
 import { fxMaterial } from './gfx.js';
 
 const rnd = (a, b) => a + Math.random() * (b - a);
 
 function spriteAtlas() {
-  const S = 128, c = document.createElement('canvas'); c.width = S * 4; c.height = S;
-  const g = c.getContext('2d'), img = g.createImageData(S * 4, S);
+  const S = 64, W = S * 4, data = new Uint8Array(W * S * 4);
   const hash = (x, y, s) => { const h = Math.sin(x * 127.1 + y * 311.7 + s * 74.7) * 43758.5453; return h - Math.floor(h); };
-  const noise = (x, y, s) => { const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi; const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf); const a = hash(xi, yi, s), b = hash(xi + 1, yi, s), cc = hash(xi, yi + 1, s), d = hash(xi + 1, yi + 1, s); return a + (b - a) * u + (cc - a) * v + (a - b - cc + d) * u * v; };
+  const noise = (x, y, s) => { const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi; const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf); const a = hash(xi, yi, s), b = hash(xi + 1, yi, s), c = hash(xi, yi + 1, s), d = hash(xi + 1, yi + 1, s); return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v; };
   for (let k = 0; k < 4; k++) for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
     const qx = (x + 0.5) / S * 2 - 1, qy = (y + 0.5) / S * 2 - 1, r = Math.hypot(qx, qy);
     let n = 0, amp = 0.5, f = 3; for (let o = 0; o < 4; o++) { n += noise(qx * f + 10, qy * f + 10, k * 9 + o) * amp; amp *= 0.5; f *= 2; }
     const edge = Math.max(0, 1 - Math.max(0, (r + (n - 0.5) * 0.5 - 0.1) / 0.85));
     const a = k === 3 ? Math.pow(Math.max(0, 1 - r), 2.2) : Math.pow(edge, 1.4) * (0.55 + 0.6 * n);
-    const i = (y * S * 4 + k * S + x) * 4;
-    img.data[i] = img.data[i + 1] = img.data[i + 2] = 255; img.data[i + 3] = Math.round(Math.min(1, a) * 255);
+    const i = (y * W + k * S + x) * 4;
+    data[i] = data[i + 1] = data[i + 2] = 255; data[i + 3] = Math.round(Math.min(1, a) * 255);
   }
-  g.putImageData(img, 0, 0);
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.NoColorSpace; t.generateMipmaps = true; t.minFilter = THREE.LinearMipmapLinearFilter;
+  const t = new THREE.DataTexture(data, W, S, THREE.RGBAFormat, THREE.UnsignedByteType);
+  t.colorSpace = THREE.NoColorSpace; t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearFilter; t.generateMipmaps = false; t.needsUpdate = true;
   return t;
 }
 let ATLAS = null;
 
 class Pool {
   constructor(scene, cap, additive, light) {
-    this.cap = cap; this.n = 0;
+    this.cap = cap; this.n = 0; this.additive = additive;
     this.p = new Float32Array(cap * 3); this.v = new Float32Array(cap * 3);
     this.age = new Float32Array(cap); this.life = new Float32Array(cap);
     this.s0 = new Float32Array(cap); this.s1 = new Float32Array(cap);
@@ -75,7 +74,7 @@ class Pool {
       this.rot[i] += this.spin[i] * dt;
       const t = this.age[i] / this.life[i];
       const size = this.s0[i] + (this.s1[i] - this.s0[i]) * (1 - (1 - t) * (1 - t));
-      const fade = Math.min(1, t * 8) * (1 - t) * (1 - t);
+      const fade = Math.min(1, t * 8) * (1 - t) * (this.additive ? 1 - t : 1);
       const o = i * 4;
       P[o] = this.p[j]; P[o + 1] = this.p[j + 1]; P[o + 2] = this.p[j + 2]; P[o + 3] = size;
       C[o] = this.c[j]; C[o + 1] = this.c[j + 1]; C[o + 2] = this.c[j + 2]; C[o + 3] = this.a0[i] * fade;
@@ -180,7 +179,7 @@ export class FX {
           const sp = rnd(18, 34) * (0.45 + 0.55 * v);
           const t = Math.random() * dt;
           const s1 = (rnd(0.7, 1.15) + boost * rnd(0.5, 0.9)) * big * (0.45 + 0.75 * v);
-          this.alpha.spawn(o.x + vel.x * t, o.y + vel.y * t, o.z + vel.z * t, vel.x + d.x * sp + rnd(-1.2, 1.2), vel.y + d.y * sp + rnd(-1.2, 1.2), vel.z + d.z * sp + rnd(-1.2, 1.2), rnd(0.18, 0.3) * (0.7 + 0.5 * v) * (1 + boost * 0.5), 0.06 * big, s1 * 0.85, 1, 1, 1, (0.55 + boost * 0.15) * (0.4 + 0.6 * v), 5.5, 0.5);
+          this.alpha.spawn(o.x + vel.x * t, o.y + vel.y * t, o.z + vel.z * t, vel.x + d.x * sp + rnd(-1.2, 1.2), vel.y + d.y * sp + rnd(-1.2, 1.2), vel.z + d.z * sp + rnd(-1.2, 1.2), rnd(0.18, 0.3) * (0.7 + 0.5 * v) * (1 + boost * 0.5), 0.06 * big, s1 * 0.85, 1, 1, 1, (0.6 + boost * 0.15) * (0.45 + 0.55 * v), 5.5, 0.5);
         }
         if (n.groundDist < 4.5 && d.y < -0.35) {
           const gx = o.x + d.x * n.groundDist, gy = o.y + d.y * n.groundDist, gz = o.z + d.z * n.groundDist;

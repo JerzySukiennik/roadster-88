@@ -662,20 +662,55 @@ interior_parts.append(rounded_box('Dash_Band', bl_size(1.62, 0.05, 0.02), 0.008,
 interior_parts.append(rounded_box('Dash_Light', bl_size(1.5, 0.004, 0.006), 0.0015, 1, [MATS['LED_Head']], (0, 0.703, 0.298)))
 
 
+def soft_box(name, size, cuts, deform, mats, loc_car, rot, parent):
+    bm = bmesh.new()
+    bmesh.ops.create_cube(bm, size=1.0)
+    bmesh.ops.subdivide_edges(bm, edges=list(bm.edges), cuts=cuts, use_grid_fill=True)
+    for v in bm.verts:
+        lx, lz, ly = v.co.x * size[0], v.co.y * size[2], v.co.z * size[1]
+        dx, dy, dz = deform(lx, ly, -lz, size)
+        v.co = Vector((lx + dx, -(-lz + dz), ly + dy))
+    me = bpy.data.meshes.new(name)
+    bm.to_mesh(me)
+    bm.free()
+    for p in me.polygons:
+        p.use_smooth = True
+    o = obj(name, me, list(mats))
+    link(o, parent or root)
+    o.rotation_euler = rot
+    o.location = c2b(loc_car)
+    mod = o.modifiers.new('Subdiv', 'SUBSURF')
+    mod.levels = 2
+    mod.render_levels = 2
+    return o
+
+
+def cushion_deform(x, y, z, size):
+    ax = abs(x)
+    side = max(0.0, min(1.0, (ax - 0.13) / 0.11))
+    up = 0.055 * side * side * (3 - 2 * side) if y > 0 else 0.0
+    front = 0.012 if (y > 0 and z > size[2] * 0.35) else 0.0
+    return 0.0, up + front, 0.0
+
+
+def back_deform(x, y, z, size):
+    ax = abs(x)
+    side = max(0.0, min(1.0, (ax - 0.12) / 0.12))
+    wrap = 0.08 * side * side * (3 - 2 * side) * (1.0 if y < 0.22 else max(0.0, 1 - (y - 0.22) / 0.12))
+    top = max(0.0, min(1.0, (y - 0.20) / 0.1))
+    dx = -x * 0.30 * top
+    return dx, 0.0, wrap
+
+
 def seat(name, x, z, y0, scale=1.0, recline=0.40):
     grp = empty(name, (x, y0, z), interior)
     s = scale
-    cush = rounded_box(f'{name}_Cushion', bl_size(0.50 * s, 0.10, 0.50 * s), 0.04, 4, [MATS['Interior_Leather']],
-                       (x, y0 + 0.05, z + 0.05), (0.12, 0, 0), grp)
-    back = rounded_box(f'{name}_Back', bl_size(0.50 * s, 0.70 * s, 0.10), 0.045, 4, [MATS['Interior_Leather']],
-                       (x, y0 + 0.36 * s, z - 0.25 - 0.16 * s), (-recline, 0, 0), grp)
-    shell = rounded_box(f'{name}_Shell', bl_size(0.52 * s, 0.72 * s, 0.04), 0.02, 3, [MATS['Carbon']],
-                        (x, y0 + 0.36 * s, z - 0.31 - 0.16 * s), (-recline, 0, 0), grp)
-    for sgn in (1, -1):
-        rounded_box(f'{name}_Bolster', bl_size(0.07, 0.42 * s, 0.13), 0.03, 3, [MATS['Interior_Leather']],
-                    (x + sgn * 0.22 * s, y0 + 0.30 * s, z - 0.22 - 0.12 * s), (-recline, 0, 0), grp)
-        rounded_box(f'{name}_SideCush', bl_size(0.07, 0.10, 0.42 * s), 0.03, 3, [MATS['Interior_Leather']],
-                    (x + sgn * 0.22 * s, y0 + 0.08, z + 0.04), (0.12, 0, 0), grp)
+    soft_box(f'{name}_Cushion', (0.50 * s, 0.09, 0.50 * s), 3, cushion_deform, [MATS['Interior_Leather']],
+             (x, y0 + 0.05, z + 0.05), (0.12, 0, 0), grp)
+    soft_box(f'{name}_Back', (0.50 * s, 0.72 * s, 0.085), 3, back_deform, [MATS['Interior_Leather']],
+             (x, y0 + 0.36 * s, z - 0.25 - 0.16 * s), (-recline, 0, 0), grp)
+    rounded_box(f'{name}_Shell', bl_size(0.46 * s, 0.70 * s, 0.035), 0.02, 3, [MATS['Carbon']],
+                (x, y0 + 0.36 * s, z - 0.31 - 0.16 * s), (-recline, 0, 0), grp)
     return grp
 
 
