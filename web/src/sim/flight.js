@@ -61,14 +61,16 @@ export class FlightComputer {
       for (const n of th.rear) { n.cmdPitch = 0; n.cmdSide = 0; n.cmdValve = boost ? gov : 0; }
       if (retro) th.requestFront();
       for (const n of th.front) { n.cmdPitch = 0; n.cmdSide = 0; n.cmdValve = retro && s.fwdSpeed > 0.5 ? 1 : 0; }
+      for (const n of th.side) { n.cmdPitch = 0; n.cmdSide = 0; n.cmdValve = 0; }
       if (!boost && !retro) this.alloc.clear();
     } else if (this.mode === 'hop') {
       useAlloc = true; attitude = this.assist;
+      th.requestSide();
       fw.copy(up).scale(rearMax + frontMax);
       if (inp.throttle || inp.boost) fw.addScaled(fh, (inp.boost ? 1 : 0.5) * rearMax * gov);
     } else if (this.mode === 'hover') {
       useAlloc = true; attitude = true;
-      th.requestFront();
+      th.requestFront(); th.requestSide();
       let vzCmd = inp.lift ? F.climb_rate : inp.descend ? -F.descend_rate : 0;
       if (inp.descend && s.clearance < 3) vzCmd = Math.max(vzCmd, -(0.7 + s.clearance * 1.6));
       this.debug.vzCmd = vzCmd;
@@ -94,6 +96,7 @@ export class FlightComputer {
       if (inp.brake) th.requestFront();
       const anyRot = inp.steer || inp.pitch || inp.roll;
       useAlloc = attitude || fw.lenSq() > 0 || anyRot;
+      if (useAlloc) th.requestSide();
     }
 
     this.wantT.set(0, 0, 0);
@@ -119,7 +122,7 @@ export class FlightComputer {
         if (inp.steer) this.wantT.y = I.yaw * k * (yawCmd - w.y);
       }
       this.wantF.copy(fw).applyQuatInv(q);
-      this.alloc.solve(this.wantF, this.wantT, s.com, th.deploy);
+      this.alloc.solve(this.wantF, this.wantT, s.com);
     } else if (!direct) {
       this.alloc.clear();
     }

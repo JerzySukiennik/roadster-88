@@ -301,6 +301,69 @@ func sc_hop() -> void:
 	await shot("landed")
 	inp().brake = 0.0
 
+func sc_v2() -> void:
+	await place(Vector3(0, 0.05, 0), 0.0)
+	await wait(1.5)
+	var p := car_pos()
+	cam_at(p + Vector3(4.6, 1.4, 3.6), p + Vector3(0, 0.6, 0), 45.0)
+	await wait(0.3)
+	await shot("rest")
+	game.car.rig.toggle_door()
+	await wait(1.8)
+	await shot("doors")
+	game.car.rig.toggle_door()
+	game.car.rig.set_wing(true)
+	cam_at(p + Vector3(-4.2, 1.6, -4.8), p + Vector3(0, 0.6, 0), 45.0)
+	await wait(1.8)
+	await shot("wing")
+	game.car.rig.set_wing(false)
+	cam_free()
+	await wait(1.4)
+	inp().lift = true
+	await wait(0.6)
+	inp().lift = false
+	await wait(0.15)
+	inp().lift = true
+	await wait(0.15)
+	inp().lift = false
+	await wait(2.0)
+	measuring = true
+	p = car_pos()
+	cam_at(p + Vector3(6.5, 0.8, 4.0), p + Vector3(0, 0.0, 0), 50.0)
+	await wait(0.6)
+	await shot("hover_low")
+	print("hover h ", p.y, " side deploy ", game.car.th.side_deploy, " valves ", game.car.th.all.map(func(n): return snappedf(n.valve, 0.01)))
+	cam_free()
+	await wait(0.8)
+	await shot("hover_chase")
+	inp().descend = true
+	await wait(2.5)
+	inp().descend = false
+	await wait(1.5)
+	inp().throttle = 1.0
+	inp().boost = true
+	await wait(1.2)
+	await shot("boost_chase")
+	p = car_pos()
+	cam_at(p + Vector3(7.0, 1.2, -2.0), p + Vector3(0, 0.5, -3.0), 50.0)
+	await wait(0.3)
+	await shot("boost_side")
+	inp().throttle = 0.0
+	inp().boost = false
+	cam_free()
+	measuring = false
+	await wait(2.0)
+	game.cam.fpp = true
+	game.cockpit.on_view_changed(true)
+	await wait(1.2)
+	await shot("fpp_forward")
+	game.cam.head_yaw = deg_to_rad(-17.0)
+	game.cam.head_pitch = deg_to_rad(-7.0)
+	await wait(1.5)
+	await shot("fpp_focus")
+	print("gaze uv ", game.cockpit.gaze_uv(), " focus ", game.cam.focus_k)
+	game.cam.fpp = false
+
 func sc_hover() -> void:
 	await place(Vector3(-20, 0.05, 80), 0.3)
 	await wait(1.0)

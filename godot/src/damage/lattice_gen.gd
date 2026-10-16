@@ -163,6 +163,13 @@ static func generate() -> Dictionary:
 		var ids3 := _near(nodes, Vector3(float(fp[i][0]), float(fp[i][1]), float(fp[i][2])), 2)
 		nozzles[fn[i]] = ids3
 		parts.append({"name": fn[i], "nodes": ids3, "break_impulse": 24000})
+	if th.has("side"):
+		var sp: Array = th["side"]["positions"]
+		var sn := ["Nozzle_SL1", "Nozzle_SL2", "Nozzle_SR1", "Nozzle_SR2"]
+		for i in mini(sp.size(), sn.size()):
+			var ids4 := _near(nodes, Vector3(float(sp[i][0]), float(sp[i][1]), float(sp[i][2])), 2)
+			nozzles[sn[i]] = ids4
+			parts.append({"name": sn[i], "nodes": ids4, "break_impulse": 24000})
 	return {"version": 1, "nodes": nodes, "beams": beams, "parts": parts, "wheels": wheels, "nozzles": nozzles}
 
 static func _near(nodes: Array, p: Vector3, count: int) -> Array:

@@ -1,6 +1,6 @@
 // Roadster 88 graphics core: WebGPURenderer (WebGL2 fallback), TSL post chain (GTAO, TAAU, motion blur, bloom, lens flare, flash), quality presets and dynamic resolution.
 import * as THREE from 'three/webgpu';
-import { pass, mrt, output, velocity, normalView, packNormalToRGB, unpackRGBToNormal, sample, screenUV, uniform, vec2, vec3, vec4, int, float, mix, convertToTexture, smoothstep, length, exp, step, atan, cos, abs, Fn, Loop, uv, min, interleavedGradientNoise, screenCoordinate, perspectiveDepthToViewZ } from 'three/tsl';
+import { pass, mrt, output, velocity, normalView, packNormalToRGB, unpackRGBToNormal, sample, screenUV, uniform, vec2, vec3, vec4, int, float, mix, convertToTexture, smoothstep, length, exp, step, atan, cos, abs, Fn, Loop, uv, min, interleavedGradientNoise, screenCoordinate, perspectiveDepthToViewZ, cameraViewMatrix } from 'three/tsl';
 import { ao } from 'three/addons/tsl/display/GTAONode.js';
 import { taau } from 'three/addons/tsl/display/TAAUNode.js';
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
@@ -21,6 +21,7 @@ const smoothBlur = Fn(([tex, vel, n]) => {
 
 export function fxMaterial(m) {
   if (m.transparent && !m.alphaTest) m.alphaTest = 0.015;
+  if (m.transparent) m.mrtNode = mrt({ normal: packNormalToRGB(cameraViewMatrix.mul(vec4(0, 1, 0, 0)).xyz) });
   return m;
 }
 

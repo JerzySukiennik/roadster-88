@@ -39,7 +39,36 @@ export class Cockpit {
     if (s && s.isMesh) { this.fixUv(s, view.placeholder); s.material = this.material(this.tex); }
     if (c && c.isMesh) { this.fixUv(c, view.placeholder); c.material = this.material(this.clTex); }
     this.screen = s; this.cluster = c;
+    if (s && s.isMesh && !view.placeholder) this.relocate(view, s);
     for (const m of [s, c]) if (m && m.isMesh && !view.placeholder) this.unbury(view, m);
+  }
+
+  relocate(view, s) {
+    const g = s.geometry; g.computeBoundingBox();
+    const bb = g.boundingBox, size = bb.getSize(new THREE.Vector3()), ctr = bb.getCenter(new THREE.Vector3());
+    const dims = [size.x, size.y, size.z];
+    const ax = dims.indexOf(Math.min(...dims));
+    const rest = [0, 1, 2].filter((i) => i !== ax).sort((a, b) => dims[b] - dims[a]);
+    const nL = new THREE.Vector3().setComponent(ax, 1);
+    const eye = view.n.Eye_Driver ? view.n.Eye_Driver.position.clone() : new THREE.Vector3(0.36, 0.96, -0.52);
+    const P = new THREE.Vector3(0.07, 0.87, 0.42);
+    s.position.copy(P);
+    const want = eye.clone().sub(P).normalize();
+    if (nL.clone().applyQuaternion(s.quaternion).dot(want) < 0) nL.negate();
+    s.quaternion.premultiply(new THREE.Quaternion().setFromUnitVectors(nL.clone().applyQuaternion(s.quaternion), want));
+    s.scale.setScalar(1.45);
+    const mat = this.g.mats.get('Paint_Black') || this.g.mats.get('Interior_Dark');
+    const bs = [0, 0, 0]; bs[ax] = 0.018; bs[rest[0]] = dims[rest[0]] * 1.06; bs[rest[1]] = dims[rest[1]] * 1.08;
+    const back = new THREE.Mesh(new THREE.BoxGeometry(bs[0], bs[1], bs[2]), mat);
+    back.name = 'Screen_Back'; back.position.copy(ctr).addScaledVector(nL, -0.011);
+    s.add(back);
+    const up = new THREE.Vector3().setComponent(rest[1], 1);
+    if (up.clone().applyQuaternion(s.quaternion).y < 0) up.negate();
+    const ss = [0, 0, 0]; ss[ax] = 0.025; ss[rest[0]] = 0.06; ss[rest[1]] = 0.16;
+    const stem = new THREE.Mesh(new THREE.BoxGeometry(ss[0], ss[1], ss[2]), mat);
+    stem.name = 'Screen_Stem'; stem.position.copy(ctr).addScaledVector(up, -(dims[rest[1]] * 0.5 + 0.07)).addScaledVector(nL, -0.03);
+    s.add(stem);
+    s.updateMatrixWorld(true);
   }
 
   unbury(view, mesh) {
@@ -93,7 +122,9 @@ export class Cockpit {
     const animating = this.updateRoll(dt);
     const live = animating || this.app === 'map' || tc.armed || tc.busy;
     this.timer -= dt; this.clTimer -= dt;
-    if (this.timer <= 0 && (this.dirty || live || this.timer < -1)) { this.draw(); this.dirty = false; this.timer = fpp ? (live ? 1 / 24 : 1 / 8) : 0.5; }
+    const hk = this.hit ? Math.round(this.hit.x / 5) * 10000 + Math.round(this.hit.y / 5) : -1;
+    if (hk !== this.lastHk) { this.lastHk = hk; this.dirty = true; }
+    if (this.timer <= 0 && (this.dirty || live || this.timer < -1)) { this.draw(); this.dirty = false; this.timer = fpp ? (live || this.hit ? 1 / 30 : 1 / 8) : 0.5; }
     if (this.clTimer <= 0) { this.drawCluster(); this.clTimer = fpp ? 1 / 20 : 1 / 4; }
     this.bright.value = 1.3 + 4.2 * (1 - this.g.sky.state.night);
   }
@@ -148,6 +179,11 @@ export class Cockpit {
       this.icon(g, id, x + bw / 2, y + 26, this.app === id ? C.ink : C.dim);
       g.font = `500 17px ${FONT}`; g.fillStyle = this.app === id ? C.ink : C.dim; g.textAlign = 'center'; g.fillText(label, x + bw / 2, y + 54); g.textAlign = 'left';
     });
+    if (this.hit) {
+      const hot = !!this.hover;
+      g.beginPath(); g.arc(this.hit.x, this.hit.y, hot ? 22 : 16, 0, Math.PI * 2); g.lineWidth = 3; g.strokeStyle = hot ? C.blue : 'rgba(255,255,255,0.85)'; g.stroke();
+      g.beginPath(); g.arc(this.hit.x, this.hit.y, 5, 0, Math.PI * 2); g.fillStyle = hot ? C.blue : '#fff'; g.fill();
+    }
     this.tex.needsUpdate = true;
   }
 

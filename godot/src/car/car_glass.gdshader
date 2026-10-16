@@ -4,8 +4,8 @@ render_mode blend_mix, depth_draw_opaque, cull_disabled, specular_schlick_ggx;
 
 #include "res://src/car/lattice_skin.gdshaderinc"
 
-uniform vec4 tint : source_color = vec4(0.015, 0.018, 0.022, 0.8);
-uniform float inside_alpha : hint_range(0.0, 1.0) = 0.18;
+uniform vec4 tint : source_color = vec4(0.004, 0.004, 0.006, 0.86);
+uniform float inside_alpha : hint_range(0.0, 1.0) = 0.3;
 uniform float gloss : hint_range(0.0, 1.0) = 0.03;
 uniform vec4 crack0 = vec4(0.0, 0.0, 0.0, 0.0);
 uniform vec4 crack1 = vec4(0.0, 0.0, 0.0, 0.0);

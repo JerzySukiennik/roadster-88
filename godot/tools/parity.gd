@@ -125,6 +125,7 @@ func _run() -> void:
 		await step({})
 	var rear := 0.0
 	var front := 0.0
+	var side := 0.0
 	var thrust := 0.0
 	var vy := 0.0
 	var n := 0
@@ -136,16 +137,21 @@ func _run() -> void:
 		var fs := 0.0
 		for z in th.front:
 			fs += z.valve
+		var ss := 0.0
+		for z in th.side:
+			ss += z.valve
 		rear += rs / 4.0
 		front += fs / 2.0
+		side += ss / maxf(1.0, float(th.side.size()))
 		thrust += th.total_force.y
 		vy += absf(car.linear_velocity.y)
 		n += 1
 		await step({})
 	results["hoverRear"] = rear / n
 	results["hoverFront"] = front / n
+	results["hoverSide"] = side / n
 	results["hoverTW"] = thrust / n / (car.mass * 9.81)
-	results["hoverMaxRatio"] = (thrust / n) / (car.th.max_rear() + car.th.max_front())
+	results["hoverMaxRatio"] = (thrust / n) / (car.th.max_rear() + car.th.max_front() + car.th.max_side())
 	results["hoverAlt"] = com_y() - y0
 	results["hoverVy"] = vy / n
 	results["hoverMode"] = car.fc.mode_name()
@@ -236,7 +242,7 @@ func _write() -> void:
 		"| 60-0 mph, tyres + retro (S + Shift) | shorter | %s m (peak %s g) |" % [_f(r.get("brake60retro"), 1), _f(r.get("brake60retrog"))],
 		"| Top speed, motors (70 s) | 250 mph | %s mph |" % _f(r.get("top"), 1),
 		"| Top speed, boost (40 s) | 250 mph | %s mph |" % _f(r.get("topBoost"), 1),
-		"| Hover throttle, rear / front valve | (report) | %s / %s |" % [_f(r.get("hoverRear"), 3), _f(r.get("hoverFront"), 3)],
+		"| Hover throttle, rear / front / side valve | (report) | %s / %s / %s |" % [_f(r.get("hoverRear"), 3), _f(r.get("hoverFront"), 3), _f(r.get("hoverSide"), 3)],
 		"| Hover thrust / weight, thrust / max | 1.0 / (report) | %s / %s |" % [_f(r.get("hoverTW"), 3), _f(r.get("hoverMaxRatio"), 3)],
 		"| Hop apex, 0.3 s Space (COM rise) | (report) | %s m |" % _f(r.get("hop"), 2),
 		"| Turn radius, 60 mph full lock | (report) | %s m at %s mph, %s g lateral |" % [_f(r.get("turnR"), 1), _f(r.get("turnMph"), 1), _f(r.get("turnG"))],

@@ -7,22 +7,22 @@
 
   "car": {
     "mass": 1950,
-    "com": [0.0, 0.43, -0.06],
-    "inertia": { "pitch": 3050, "yaw": 3380, "roll": 690 },
-    "wheelbase": 2.85,
-    "track_front": 1.70,
-    "track_rear": 1.69,
-    "length": 4.47,
-    "width": 2.00,
-    "height": 1.13,
-    "collider_box": { "size": [1.96, 0.76, 4.40], "center": [0.0, 0.60, 0.02] }
+    "com": [0.0, 0.45, -0.10],
+    "inertia": { "pitch": 2800, "yaw": 3100, "roll": 690 },
+    "wheelbase": 2.792,
+    "track_front": 1.590,
+    "track_rear": 1.580,
+    "length": 4.24,
+    "width": 1.89,
+    "height": 1.178,
+    "collider_box": { "size": [1.86, 0.76, 4.18], "center": [0.0, 0.58, 0.09] }
   },
 
   "wheels": {
-    "radius_front": 0.347,
-    "radius_rear": 0.364,
-    "width_front": 0.265,
-    "width_rear": 0.325,
+    "radius_front": 0.352,
+    "radius_rear": 0.358,
+    "width_front": 0.275,
+    "width_rear": 0.305,
     "mass_each": 22,
     "inertia_each": 1.9,
     "max_steer_deg": 38,
@@ -72,19 +72,32 @@
     "rear": {
       "count": 4,
       "thrust_each": 5500,
-      "positions": [[0.40, 0.30, -2.10], [0.17, 0.29, -2.12], [-0.17, 0.29, -2.12], [-0.40, 0.30, -2.10]],
+      "positions": [[0.36, 0.495, -1.975], [0.12, 0.495, -1.975], [-0.12, 0.495, -1.975], [-0.36, 0.495, -1.975]],
       "pitch_range_deg": [0, 95],
-      "side_deflect_deg": 30
+      "side_deflect_deg": 30,
+      "exit_m": 0.077
     },
     "front": {
       "count": 2,
       "thrust_each": 9000,
-      "positions": [[0.13, 0.30, 2.10], [-0.13, 0.30, 2.10]],
+      "positions": [[0.40, 0.29, 2.02], [-0.40, 0.29, 2.02]],
       "pitch_range_deg": [0, 95],
       "side_deflect_deg": 30,
       "deploy_time_s": 0.30,
       "retract_delay_s": 1.2,
-      "deploy_travel_m": 0.09
+      "deploy_travel_m": 0.13,
+      "exit_m": 0.062
+    },
+    "side": {
+      "count": 4,
+      "thrust_each": 4500,
+      "positions": [[0.80, 0.165, 0.86], [0.80, 0.165, -0.90], [-0.80, 0.165, 0.86], [-0.80, 0.165, -0.90]],
+      "pitch_range_deg": [-30, 30],
+      "side_deflect_deg": 30,
+      "deploy_time_s": 0.33,
+      "retract_delay_s": 1.2,
+      "deploy_travel_m": 0.055,
+      "exit_m": 0.052
     },
     "valve_open_s": 0.05,
     "valve_close_s": 0.08,

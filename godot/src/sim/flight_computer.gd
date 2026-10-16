@@ -124,9 +124,14 @@ func update(dt: float, inp: CarInput, vs: VehicleSim, inertia: Vector3) -> void:
 			n.cmd_pitch = 0.0
 			n.cmd_side = 0.0
 			n.cmd_valve = 1.0 if retro else 0.0
+		for n in th.side:
+			n.cmd_pitch = 0.0
+			n.cmd_side = 0.0
+			n.cmd_valve = 0.0
 	elif mode == HOP:
 		use_alloc = true
 		attitude = assist
+		th.request_side()
 		fw = Vector3.UP * (rear_max + front_max)
 		if inp.throttle > 0.0 or inp.boost:
 			fw += fh * ((1.0 if inp.boost else 0.5) * rear_max * gov)
@@ -134,6 +139,7 @@ func update(dt: float, inp: CarInput, vs: VehicleSim, inertia: Vector3) -> void:
 		use_alloc = true
 		attitude = true
 		th.request_front()
+		th.request_side()
 		var vz := float(F["climb_rate"]) if inp.lift else (-float(F["descend_rate"]) if inp.descend else 0.0)
 		if inp.descend and vs.clearance < 3.0:
 			vz = maxf(vz, -(0.7 + vs.clearance * 1.6))
@@ -154,6 +160,8 @@ func update(dt: float, inp: CarInput, vs: VehicleSim, inertia: Vector3) -> void:
 			var acc := minf(3.0, 0.9 * vh) * fade
 			fw.x -= v.x / vh * acc * m
 			fw.z -= v.z / vh * acc * m
+		if assist:
+			fw = _grip(fw, v, fh, m)
 	elif mode == BALLISTIC:
 		attitude = assist and crash_hold <= 0.0 and vs.q_basis.y.y > 0.15
 		if inp.boost:
@@ -163,10 +171,14 @@ func update(dt: float, inp: CarInput, vs: VehicleSim, inertia: Vector3) -> void:
 		elif inp.brake > 0.0:
 			fw += fh * (-front_max * 0.75)
 			retro = true
+		if assist:
+			fw = _grip(fw, v, fh, m)
 		if inp.brake > 0.0:
 			th.request_front()
 		var any_rot := absf(inp.steer) > 0.0 or absf(inp.pitch) > 0.0 or absf(inp.roll) > 0.0
 		use_alloc = attitude or fw.length_squared() > 0.0 or any_rot
+		if use_alloc:
+			th.request_side()
 
 	want_t = Vector3.ZERO
 	if use_alloc:
@@ -202,6 +214,16 @@ func update(dt: float, inp: CarInput, vs: VehicleSim, inertia: Vector3) -> void:
 		th.solve(want_f, want_t, vs.com_local)
 	elif not direct:
 		th.clear()
+
+func _grip(fw: Vector3, v: Vector3, fh: Vector3, m: float) -> Vector3:
+	var along := v.x * fh.x + v.z * fh.z
+	var lx := v.x - fh.x * along
+	var lz := v.z - fh.z * along
+	var ll := sqrt(lx * lx + lz * lz)
+	if ll < 0.05:
+		return fw
+	var a := minf(16.0, float(F.get("lateral_grip", 4.5)) * ll)
+	return Vector3(fw.x - lx / ll * a * m, fw.y, fw.z - lz / ll * a * m)
 
 func lifting() -> bool:
 	return mode == HOP or mode == HOVER

@@ -1,15 +1,27 @@
-# Thrusters: six cold-gas nozzles (valve timing, gimbal slew, front flap deploy, frost, damage) in the car frame, plus the control allocator. Mirrors web/src/sim/thrusters.js.
+# Thrusters: ten cold-gas nozzles in three groups (rear boost, front retro, side lift) with valve timing, gimbal slew, flap and pod deploy, frost and damage in the car frame, plus the control allocator. Mirrors web/src/sim/thrusters.js and allocator.js.
 class_name Thrusters
 extends RefCounted
 
 const REAR_NAMES := ["Nozzle_RL1", "Nozzle_RL2", "Nozzle_RR2", "Nozzle_RR1"]
 const FRONT_NAMES := ["Nozzle_FL", "Nozzle_FR"]
+const SIDE_NAMES := ["Nozzle_SL1", "Nozzle_SL2", "Nozzle_SR1", "Nozzle_SR2"]
+const BASIS := {
+	"rear": [0.0, 1.0, 1.0, 0.0],
+	"front": [0.0, -1.0, 1.0, 0.0],
+	"side": [1.0, 0.0, 0.0, 1.0],
+}
 
 class Nozzle:
 	var name: String
+	var group: String
 	var front: bool
+	var a0y: float
+	var a0z: float
+	var a9y: float
+	var a9z: float
 	var base: Vector3
 	var pos: Vector3
+	var exit: float = 0.1
 	var thrust_max: float
 	var pitch_min: float
 	var pitch_max: float
@@ -32,11 +44,10 @@ class Nozzle:
 	var puff: int = 0
 	var last_valve: float = 0.0
 
-	func available(deploy: float) -> float:
-		if not attached:
-			return 0.0
-		var d := clampf((deploy - 0.5) / 0.5, 0.0, 1.0) if front else 1.0
-		return thrust_max * health * d
+	func dir_of(p: float, s: float) -> Vector3:
+		var fa := cos(p) * cos(s)
+		var fb := sin(p) * cos(s)
+		return Vector3(sin(s), fa * a0y + fb * a9y, fa * a0z + fb * a9z)
 
 	func thrust() -> float:
 		return force.length()
@@ -44,10 +55,14 @@ class Nozzle:
 var t: Dictionary
 var rear: Array[Nozzle] = []
 var front: Array[Nozzle] = []
+var side: Array[Nozzle] = []
 var all: Array[Nozzle] = []
 var deploy: float = 0.0
 var deploy_target: float = 0.0
 var front_last_use: float = -99.0
+var side_deploy: float = 0.0
+var side_target: float = 0.0
+var side_last_use: float = -99.0
 var time: float = 0.0
 var flap: float = 0.0
 var extend: float = 0.0
@@ -57,32 +72,37 @@ var achieved: PackedFloat64Array = PackedFloat64Array([0, 0, 0, 0, 0, 0])
 
 func _init() -> void:
 	t = Tuning.data()["thrusters"]
-	var r: Dictionary = t["rear"]
-	var f: Dictionary = t["front"]
-	var rp: Array = r["positions"]
-	for i in rp.size():
-		all.append(_mk(REAR_NAMES[i] if i < 4 else "Nozzle_R%d" % i, false, rp[i], float(r["thrust_each"]), r["pitch_range_deg"], float(r["side_deflect_deg"])))
-	var fp: Array = f["positions"]
-	for i in fp.size():
-		all.append(_mk(FRONT_NAMES[i] if i < 2 else "Nozzle_F%d" % i, true, fp[i], float(f["thrust_each"]), f["pitch_range_deg"], float(f["side_deflect_deg"])))
-	for n in all:
-		if n.front:
-			front.append(n)
-		else:
-			rear.append(n)
+	_group("rear", REAR_NAMES, rear)
+	_group("front", FRONT_NAMES, front)
+	_group("side", SIDE_NAMES, side)
 
-func _mk(nm: String, is_front: bool, p: Array, tmax: float, pr: Array, smax: float) -> Nozzle:
-	var n := Nozzle.new()
-	n.name = nm
-	n.front = is_front
-	n.base = Vector3(float(p[0]), float(p[1]), float(p[2]))
-	n.pos = n.base
-	n.thrust_max = tmax
-	n.pitch_min = deg_to_rad(float(pr[0]))
-	n.pitch_max = deg_to_rad(float(pr[1]))
-	n.side_max = deg_to_rad(smax)
-	n.dir = Vector3(0, 0, -1.0 if is_front else 1.0)
-	return n
+func _group(g: String, names: Array, list: Array[Nozzle]) -> void:
+	if not t.has(g):
+		return
+	var c: Dictionary = t[g]
+	var ps: Array = c["positions"]
+	var pr: Array = c["pitch_range_deg"]
+	var b: Array = BASIS[g]
+	for i in ps.size():
+		var p: Array = ps[i]
+		var n := Nozzle.new()
+		n.name = names[i] if i < names.size() else "%s_%d" % [g, i]
+		n.group = g
+		n.front = g == "front"
+		n.a0y = b[0]
+		n.a0z = b[1]
+		n.a9y = b[2]
+		n.a9z = b[3]
+		n.base = Vector3(float(p[0]), float(p[1]), float(p[2]))
+		n.pos = n.base
+		n.exit = float(c.get("exit_m", 0.1))
+		n.thrust_max = float(c["thrust_each"])
+		n.pitch_min = deg_to_rad(float(pr[0]))
+		n.pitch_max = deg_to_rad(float(pr[1]))
+		n.side_max = deg_to_rad(float(c["side_deflect_deg"]))
+		n.dir = n.dir_of(0.0, 0.0)
+		list.append(n)
+		all.append(n)
 
 func nozzle(nm: String) -> Nozzle:
 	for n in all:
@@ -90,33 +110,46 @@ func nozzle(nm: String) -> Nozzle:
 			return n
 	return null
 
-static func thrust_dir(is_front: bool, pitch: float, side: float) -> Vector3:
-	var cp := cos(pitch)
-	var sp := sin(pitch)
-	var cs := cos(side)
-	var ss := sin(side)
-	return Vector3(ss, sp * cs, (-cp if is_front else cp) * cs)
+func available(n: Nozzle) -> float:
+	if not n.attached:
+		return 0.0
+	var d := 1.0
+	if n.group == "front":
+		d = clampf((deploy - 0.5) / 0.5, 0.0, 1.0)
+	elif n.group == "side":
+		d = clampf((side_deploy - 0.5) / 0.5, 0.0, 1.0)
+	return n.thrust_max * n.health * d
 
 func request_front() -> void:
 	front_last_use = time
 
+func request_side() -> void:
+	side_last_use = time
+
 func update(dt: float, com: Vector3) -> void:
 	var ft: Dictionary = t["front"]
+	var st: Dictionary = t.get("side", {})
 	time += dt
 	deploy_target = 1.0 if (time - front_last_use) < float(ft["retract_delay_s"]) else 0.0
 	deploy = move_toward(deploy, deploy_target, dt / float(ft["deploy_time_s"]))
 	flap = clampf(deploy / 0.45, 0.0, 1.0)
 	extend = clampf((deploy - 0.35) / 0.65, 0.0, 1.0)
+	if not st.is_empty():
+		side_target = 1.0 if (time - side_last_use) < float(st["retract_delay_s"]) else 0.0
+		side_deploy = move_toward(side_deploy, side_target, dt / float(st["deploy_time_s"]))
 	var g_rate := deg_to_rad(float(t["gimbal_rate_deg_s"])) * dt
 	var v_open := float(t["valve_open_s"])
 	var v_close := float(t["valve_close_s"])
 	var travel := float(ft["deploy_travel_m"])
+	var s_travel := float(st.get("deploy_travel_m", 0.0))
 	total_force = Vector3.ZERO
 	total_torque = Vector3.ZERO
 	for n in all:
-		if n.front:
+		if n.group == "front":
 			n.pos = Vector3(n.base.x, n.base.y, n.base.z + travel * extend)
-		var avail := n.available(deploy)
+		elif n.group == "side":
+			n.pos = Vector3(n.base.x, n.base.y - s_travel * side_deploy, n.base.z)
+		var avail := available(n)
 		var want_p := clampf(n.cmd_pitch - n.mis_pitch, n.pitch_min, n.pitch_max)
 		var want_s := clampf(n.cmd_side - n.mis_side, -n.side_max, n.side_max)
 		n.pitch = move_toward(n.pitch, want_p, g_rate)
@@ -133,24 +166,27 @@ func update(dt: float, com: Vector3) -> void:
 			n.puff = -1
 		else:
 			n.puff = 0
-		n.dir = thrust_dir(n.front, n.pitch + n.mis_pitch, n.side + n.mis_side)
+		n.dir = n.dir_of(n.pitch + n.mis_pitch, n.side + n.mis_side)
 		var mag := n.valve * avail * n.ground_gain
 		n.force = n.dir * mag
 		n.frost = clampf(n.frost + (n.valve * n.valve * dt) / 7.0 - dt / 26.0, 0.0, 1.0)
 		total_force += n.force
 		total_torque += (n.pos - com).cross(n.force)
 
-func max_front() -> float:
+func _max_of(list: Array[Nozzle]) -> float:
 	var s := 0.0
-	for n in front:
+	for n in list:
 		s += n.thrust_max * n.health * (1.0 if n.attached else 0.0)
 	return s
 
+func max_front() -> float:
+	return _max_of(front)
+
 func max_rear() -> float:
-	var s := 0.0
-	for n in rear:
-		s += n.thrust_max * n.health * (1.0 if n.attached else 0.0)
-	return s
+	return _max_of(rear)
+
+func max_side() -> float:
+	return _max_of(side)
 
 func clear() -> void:
 	for i in ax.size():
@@ -196,38 +232,38 @@ func _project(i: int, v: Vector3) -> Vector3:
 	var tl := lim_t[i]
 	if tl <= 0.0:
 		return Vector3.ZERO
-	var fr := all[i].front
+	var n: Nozzle = all[i]
 	var fx := v.x
-	var fy := v.y
-	var fz := -v.z if fr else v.z
-	var th := atan2(fy, fz)
+	var fa := v.y * n.a0y + v.z * n.a0z
+	var fb := v.y * n.a9y + v.z * n.a9z
+	var th := atan2(fb, fa)
 	var pmin := lim_pmin[i]
 	var pmax := lim_pmax[i]
 	if th < pmin or th > pmax:
-		var b0y := sin(pmin)
-		var b0z := cos(pmin)
-		var b1y := sin(pmax)
-		var b1z := cos(pmax)
-		var t0 := maxf(0.0, fy * b0y + fz * b0z)
-		var t1 := maxf(0.0, fy * b1y + fz * b1z)
-		var d0 := (fy - t0 * b0y) * (fy - t0 * b0y) + (fz - t0 * b0z) * (fz - t0 * b0z)
-		var d1 := (fy - t1 * b1y) * (fy - t1 * b1y) + (fz - t1 * b1z) * (fz - t1 * b1z)
+		var b0a := cos(pmin)
+		var b0b := sin(pmin)
+		var b1a := cos(pmax)
+		var b1b := sin(pmax)
+		var t0 := maxf(0.0, fa * b0a + fb * b0b)
+		var t1 := maxf(0.0, fa * b1a + fb * b1b)
+		var d0 := (fa - t0 * b0a) * (fa - t0 * b0a) + (fb - t0 * b0b) * (fb - t0 * b0b)
+		var d1 := (fa - t1 * b1a) * (fa - t1 * b1a) + (fb - t1 * b1b) * (fb - t1 * b1b)
 		if d0 <= d1:
-			fy = t0 * b0y
-			fz = t0 * b0z
+			fa = t0 * b0a
+			fb = t0 * b0b
 		else:
-			fy = t1 * b1y
-			fz = t1 * b1z
-	var m := sqrt(fy * fy + fz * fz)
+			fa = t1 * b1a
+			fb = t1 * b1b
+	var m := sqrt(fa * fa + fb * fb)
 	var lm := lim_smax[i] * m
 	fx = clampf(fx, -lm, lm)
-	var mag := sqrt(fx * fx + fy * fy + fz * fz)
+	var mag := sqrt(fx * fx + fa * fa + fb * fb)
 	if mag > tl:
 		var sc := tl / mag
 		fx *= sc
-		fy *= sc
-		fz *= sc
-	return Vector3(fx, fy, -fz if fr else fz)
+		fa *= sc
+		fb *= sc
+	return Vector3(fx, fa * n.a0y + fb * n.a9y, fa * n.a0z + fb * n.a9z)
 
 func _grad(x: Array[Vector3], g: Array[Vector3], wf: Vector3, wt: Vector3) -> void:
 	var cnt := x.size()
@@ -276,7 +312,7 @@ func solve(want_f: Vector3, want_t: Vector3, com: Vector3) -> void:
 	for i in cnt:
 		var n: Nozzle = all[i]
 		lim_r[i] = n.pos - com
-		lim_t[i] = n.available(deploy) * n.ground_gain
+		lim_t[i] = available(n) * n.ground_gain
 		lim_pmin[i] = n.pitch_min + n.mis_pitch
 		lim_pmax[i] = n.pitch_max + n.mis_pitch
 		lim_smax[i] = tan(n.side_max)
@@ -309,14 +345,14 @@ func solve(want_f: Vector3, want_t: Vector3, com: Vector3) -> void:
 		var n: Nozzle = all[i]
 		var x := ax[i]
 		var fx := x.x
-		var fy := x.y
-		var fz := -x.z if n.front else x.z
-		var mag := sqrt(fx * fx + fy * fy + fz * fz)
+		var fa := x.y * n.a0y + x.z * n.a0z
+		var fb := x.y * n.a9y + x.z * n.a9z
+		var mag := sqrt(fx * fx + fa * fa + fb * fb)
 		if lim_t[i] <= 0.0 or mag < lim_t[i] * 0.004:
 			n.cmd_valve = 0.0
 			continue
-		var m := sqrt(fy * fy + fz * fz)
-		n.cmd_pitch = atan2(fy, fz)
+		var m := sqrt(fa * fa + fb * fb)
+		n.cmd_pitch = atan2(fb, fa)
 		n.cmd_side = atan2(fx, m)
 		n.cmd_valve = clampf(mag / lim_t[i], 0.0, 1.0)
 
@@ -326,6 +362,9 @@ func reset_state() -> void:
 	deploy = 0.0
 	deploy_target = 0.0
 	front_last_use = -99.0
+	side_deploy = 0.0
+	side_target = 0.0
+	side_last_use = -99.0
 	flap = 0.0
 	extend = 0.0
 	for n in all:
@@ -338,3 +377,4 @@ func reset_state() -> void:
 		n.force = Vector3.ZERO
 		n.frost = 0.0
 		n.puff = 0
+		n.pos = n.base

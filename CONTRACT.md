@@ -31,7 +31,7 @@ Language: code, comments, docs in English. No comments in final code except a sh
 One root node `Roadster`. Every movable or detachable thing is its own node with its pivot where it rotates. Names are exact.
 
 **Body and panels** (each a mesh, all use material `Paint` where painted):
-`Body_Shell` (monocoque: sides, sills, rear clamshell, A-pillars, roof frame), `Hood`, `Frunk_Lid` (if separate), `Bumper_F`, `Bumper_R` (with diffuser), `Door_L`, `Door_R` (pivot on the hinge axis, opens by rotating about local Y), `Mirror_L`, `Mirror_R`, `Roof_Targa` (removable glass panel), `Flap_F` (front bumper flap, pivot on its hinge), `Wing` (static wing plus struts, hidden by default), `Underbody`.
+`Body_Shell` (monocoque: sides, sills, rear clamshell, A-pillars, roof frame), `Hood`, `Frunk_Lid` (if separate), `Bumper_F`, `Bumper_R` (with diffuser), `Door_L`, `Door_R` (pivot on the hinge axis, opens by rotating about local Y; on car v2 these are gullwing doors hinged on the roof rail), `Mirror_L`, `Mirror_R`, `Roof_Targa` (removable glass panel), `Flap_F` (front bumper flap, pivot on its hinge), `Wing` (wing plus struts, hidden by default; on car v2 the Rear wing toggle shows it and plays `wing_deploy`), `Underbody`.
 
 **Glass:** `Glass_Windshield`, `Glass_Rear`, `Glass_Door_L`, `Glass_Door_R`, `Glass_Quarter_L`, `Glass_Quarter_R`. Material `Glass_Tint` (dark, like the refs) or `Glass_Clear`.
 
@@ -40,6 +40,10 @@ One root node `Roadster`. Every movable or detachable thing is its own node with
 **Wheels:** `Wheel_FL`, `Wheel_FR`, `Wheel_RL`, `Wheel_RR` (pivot at hub centre; children `Tire_*`, `Rim_*`, spin about local X). `Brake_FL..RR` (disc + caliper, steer with the front wheels, do not spin). Front wheels steer about local Y of `Steer_FL`/`Steer_FR` empties that parent `Wheel_FL/FR` and `Brake_FL/FR`.
 
 **Nozzles:** rear `Nozzle_RL1`, `Nozzle_RL2`, `Nozzle_RR1`, `Nozzle_RR2` (L = left = +X, 1 = outer). Pivot at the gimbal centre; at rest the exhaust axis is local **-Z** (pointing aft, thrust pushes the car +Z). With right-handed rotations, rotating about local X by **-90°** points the exhaust down. Front `Nozzle_FL`, `Nozzle_FR` (x = ±0.13) under `NozzleMount_F` (an empty at (0, 0.30, 2.10) that slides +Z by `front.deploy_travel_m` to extend through the opened `Flap_F`). At rest their exhaust axis is local **+Z** (forward, thrust pushes the car -Z); rotating about local X by **+90°** points it down. Each nozzle has a child empty `Exhaust_<nozzle name>` at the nozzle exit. Always verify directions from the actual exhaust empty, not from this sentence.
+
+**Car v2 (current `assets/car/`, the 2026 body, Rocket trim):** the front nozzles sit at the front corners, x = ±0.40 (not ±0.13), and `NozzleMount_F` travels 0.13 m. Four more lift nozzles `Nozzle_SL1`, `Nozzle_SL2`, `Nozzle_SR1`, `Nozzle_SR2` sit under the sills at (±0.80, 0.165, +0.86 / -0.90) under `NozzleMount_S`, which drops 0.055 m to deploy them. At rest their exhaust axis is local **-Y** (thrust pushes the car up). The sim calls this group `thrusters.side` in `shared/tuning.json`: pitch is a ±30° fore/aft tilt (positive = thrust forward) and side is a ±30° sideways tilt. Both engines aim every nozzle the same way: they rotate it by the shortest arc from its rest exhaust axis (read from the exhaust empty) to the sim's exhaust direction (minus the thrust direction).
+
+**Animation clips (car v2):** `door_L_open`, `door_R_open`, `flap_open`, `front_nozzles_deploy`, `side_nozzles_deploy`, `wing_deploy`, `targa_remove` (plus `front_nozzles_down`, `rear_nozzles_down`, which the engines do not use because the gimbals are live). The first key is the rest pose and the last key is the end state, so engines sample a clip at normalised time t (0 to 1) to drive doors, flap, mounts, wing and targa. Skip tracks with a single key: the importers add rest-pose tracks of the other animated nodes to every clip.
 
 **Interior:** `Interior` (dash, seats, console, door cards, carpets), `SteeringWheel` (pivot on the column, rotates about its local Z), `Screen` (centre touchscreen mesh, UV 0..1 covering exactly the visible display, aspect 16:10, material `Screen`), `Cluster` (small display behind the wheel, UV 0..1, material `Cluster`).
 
@@ -54,6 +58,8 @@ One root node `Roadster`. Every movable or detachable thing is its own node with
 A lighter LOD with identical nodes ships as `assets/car/roadster_lod1.glb` (~310k tris vs ~720k): use it for the Low/Medium presets or as a distance LOD.
 
 Until the real car exists, engines build a placeholder with **the same node names and pivots** (boxes are fine) so swapping is a file replace.
+
+Car v2 effects: the cold-gas vapour flipbooks live in `assets/fx/` (8x8 WebP atlases, see `assets/fx/README.md`). Both engines draw each firing nozzle as a billboard along its exhaust axis with `vapour_jet.webp`, valve puffs with `vapour_puff.webp`, ground billows with `vapour_ground.webp` and a hover decal with `vapour_ground_ring.webp`.
 
 ## 4. Damage lattice (`shared/lattice.json`)
 ```json

@@ -81,17 +81,18 @@ results.brake60retro = b2.d; results.brake60retrog = b2.peakDecel;
   const y0 = s.car.comW.y;
   s.run(1.4, { ...IDLE, lift: true });
   s.run(6, IDLE);
-  let rear = 0, front = 0, thrust = 0, n = 0, vy = 0;
+  let rear = 0, front = 0, side = 0, thrust = 0, n = 0, vy = 0;
   s.run(2, (x) => {
     const th = x.car.thrusters;
     rear += th.rear.reduce((a, z) => a + z.valve, 0) / 4;
     front += th.front.reduce((a, z) => a + z.valve, 0) / 2;
+    side += th.side.length ? th.side.reduce((a, z) => a + z.valve, 0) / th.side.length : 0;
     thrust += th.totalForce.y; vy += Math.abs(x.car.vel.y); n++;
     return IDLE;
   });
-  results.hoverRear = rear / n; results.hoverFront = front / n;
+  results.hoverRear = rear / n; results.hoverFront = front / n; results.hoverSide = side / n;
   results.hoverTW = thrust / n / (tuning.car.mass * tuning.gravity);
-  results.hoverMaxRatio = (thrust / n) / (s.car.thrusters.maxRear() + s.car.thrusters.maxFront());
+  results.hoverMaxRatio = (thrust / n) / (s.car.thrusters.maxRear() + s.car.thrusters.maxFront() + s.car.thrusters.maxSide());
   results.hoverAlt = s.car.comW.y - y0; results.hoverVy = vy / n;
   results.hoverMode = s.car.flight.mode;
   s.run(2.5, { ...IDLE, steer: 1 });
@@ -138,7 +139,7 @@ const lines = [
   `| 60-0 mph, tyres + retro (S + Shift) | shorter | ${fmt(results.brake60retro, 1)} m (peak ${fmt(results.brake60retrog)} g) |`,
   `| Top speed, motors (70 s) | 250 mph | ${fmt(results.top, 1)} mph |`,
   `| Top speed, boost (40 s) | 250 mph | ${fmt(results.topBoost, 1)} mph |`,
-  `| Hover throttle, rear / front valve | (report) | ${fmt(results.hoverRear, 3)} / ${fmt(results.hoverFront, 3)} |`,
+  `| Hover throttle, rear / front / side valve | (report) | ${fmt(results.hoverRear, 3)} / ${fmt(results.hoverFront, 3)} / ${fmt(results.hoverSide, 3)} |`,
   `| Hover thrust / weight, thrust / max | 1.0 / (report) | ${fmt(results.hoverTW, 3)} / ${fmt(results.hoverMaxRatio, 3)} |`,
   `| Hop apex, 0.3 s Space (COM rise) | (report) | ${fmt(results.hop, 2)} m |`,
   `| Turn radius, 60 mph full lock | (report) | ${fmt(results.turnR, 1)} m at ${fmt(results.turnMph, 1)} mph, ${fmt(results.turnG)} g lateral |`,

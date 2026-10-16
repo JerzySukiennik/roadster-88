@@ -57,7 +57,7 @@ class Game {
     this.fx = new FX(this.gfx.scene, this.gfx.preset);
     progress(0.6, 'Roadster');
     this.mats = new CarMaterials();
-    this.settings = { assist: store.get('assist', true), wing: store.get('wing', false), roof: store.get('roof', true), paint: store.get('paint', 'red'), radio: store.get('radio', false) };
+    this.settings = { assist: store.get('assist', true), wing: store.get('wing', false), roof: store.get('roof', true), paint: store.get('paint', 'white'), radio: store.get('radio', false) };
     this.mats.setPaint(this.settings.paint);
     this.template = await loadRealCar(this.gfx.preset.carLod);
     this.latticeData = await this.loadLattice();
@@ -151,7 +151,9 @@ class Game {
 
   async prewarm() {
     const g = this.gfx, fx = this.fx, tf = this.timeFx, p = this.car.curr.pos;
-    for (const pool of [fx.alpha, fx.add]) { pool.spawn(p.x, p.y + 1, p.z + 4, 0, 0, 0, 0.05, 0.01, 0.01, 0, 0, 0, 0, 1, 0); pool.update(0.001); }
+    for (const pool of fx.pools) { pool.spawn(p.x, p.y + 1, p.z + 4, 0, 0, 0, 0.05, 0.01, 0.01, 0, 0, 0, 0, 1, 0); pool.update(0.001); }
+    fx.jets.begin(); fx.jets.add(new THREE.Vector3(p.x, p.y + 1, p.z + 4), new THREE.Vector3(0, 0, 1), 0.01, 0.01, 0, 0, 0, g.camera.position, 0); fx.jets.end();
+    fx.ring.mesh.visible = true; fx.ring.alpha.value = 0;
     tf.depart(p.clone().add(new THREE.Vector3(0, 0, 4)), this.car.curr.quat.clone(), { x: 0, y: 0, z: 1 }, true, [{ x: p.x, y: 0, z: p.z + 4 }]);
     tf.depart(p.clone().add(new THREE.Vector3(0, 0, 4)), this.car.curr.quat.clone(), { x: 0, y: 0, z: 1 }, false, []);
     tf.state.flash = 0; tf.arcs.geometry.setDrawRange(0, 2);
@@ -167,7 +169,8 @@ class Game {
     for (const t of tf.trails) g.scene.remove(t.mesh);
     tf.trails.length = 0; tf.implosion.visible = false; tf.arcs.geometry.setDrawRange(0, 0);
     this.damage.shards.mesh.count = 0; sk.setDrawRange(0, Infinity);
-    fx.alpha.clear(); fx.add.clear();
+    for (const pool of fx.pools) pool.clear();
+    fx.jets.begin(); fx.jets.end(); fx.ring.mesh.visible = false;
   }
 
   capture(car) {
@@ -300,6 +303,18 @@ class Game {
     return st;
   }
 
+  screenFocus() {
+    const sc = this.cockpit.screen; if (!sc) return null;
+    const f = this._focus || (this._focus = { p: new THREE.Vector3(), k: 0, on: false, e: new THREE.Vector3(), d: new THREE.Vector3(), g: new THREE.Vector3() });
+    sc.getWorldPosition(f.p);
+    this.car.view.eyeWorld(f.e);
+    f.d.subVectors(f.p, f.e).normalize();
+    const ang = Math.acos(Math.min(1, Math.max(-1, this.rig.gazeDir(f.g).dot(f.d))));
+    f.on = !this.paused && ang < (f.on ? 0.46 : 0.3);
+    f.k = f.on ? 1 : 0;
+    return f;
+  }
+
   nozzleWorld(n) {
     const v = this._nw || (this._nw = new THREE.Vector3());
     return v.set(n.pos.x, n.pos.y, n.pos.z).applyQuaternion(this.car.pose.quat).add(this.car.pose.pos);
@@ -335,8 +350,9 @@ class Game {
     const st = this.chaseState(fdt);
     if (this.pendingHold) { this.rig.hold = this.pendingHold; this.pendingHold = null; this.gfx.cut(); }
     if (this.rig.mode === 'chase') this.rig.updateChase(fdt, st, now / 1000, (o, d, l) => this.camRay(o, d, l));
-    else { this.car.view.root.updateMatrixWorld(true); this.rig.updateFpp(fdt, this.car.view.eyeWorld(new THREE.Vector3()), this.car.pose.quat, st); }
+    else { this.car.view.root.updateMatrixWorld(true); this.rig.updateFpp(fdt, this.car.view.eyeWorld(new THREE.Vector3()), this.car.pose.quat, st, this.screenFocus()); }
     const chase = this.rig.mode === 'chase';
+    if (this.cabinGlass !== !chase) { CarView.setCabinView(this.mats, !chase); this.cabinGlass = !chase; }
     const nightK = THREE.MathUtils.smoothstep(this.sky.state.night, 0.05, 0.6), on = this.car.view.root.visible ? 1 : 0;
     this.lamps.L.intensity = this.lamps.R.intensity = 260 * nightK * on;
     this.lamps.cabin.intensity = 0.35 * nightK * on;
@@ -363,7 +379,7 @@ class Game {
     this.plate.syncProps(this.phys);
     this.fx.setLight(this.sky.sun.color, this.sky.sun.intensity, night);
     if (!this.paused) {
-      if (this.car.view.root.visible && !params.has('noplume')) this.fx.thrusters(fdt, s, this.car.pose.quat, this.car.pose.pos);
+      if (this.car.view.root.visible && !params.has('noplume')) this.fx.thrusters(fdt, s, this.car.pose.quat, this.car.pose.pos, this.gfx.camera.position);
       for (const c of this.cars) this.fx.tyres(fdt, c.sim, c.pose.quat, c.pose.pos);
       this.damage.update(fdt);
       this.car.view.root.updateMatrixWorld(true);

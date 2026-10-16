@@ -27,6 +27,7 @@ var cur_boost := 0.0
 var prev_thrusting := false
 var prev_boost := false
 var prev_deploy := 0.0
+var prev_side := -1.0
 var prev_contact_v := [0.0, 0.0, 0.0, 0.0]
 var flux := 0.0
 var crackle_t := 0.0
@@ -341,9 +342,9 @@ func _process(dt: float) -> void:
 		tsum += t
 		if nz.front:
 			fsum += t
-		elif nz.pitch < 0.4:
+		elif nz.group == "rear" and nz.pitch < 0.4:
 			boost += t
-	m_thrust = clampf(tsum / 4.0, 0.0, 1.5) if vis else 0.0
+	m_thrust = clampf(tsum / 5.0, 0.0, 1.5) if vis else 0.0
 	m_boost = clampf(boost / 4.0, 0.0, 1.0) if vis else 0.0
 	m_front = clampf(fsum / 2.0, 0.0, 1.0)
 	m_pan = pan
@@ -364,6 +365,9 @@ func _process(dt: float) -> void:
 	if (th.deploy > 0.02 and prev_deploy <= 0.02) or (th.deploy < 0.98 and prev_deploy >= 0.98):
 		play("flap_servo", 0.6 * m_gain)
 	prev_deploy = th.deploy
+	if th.side_target != prev_side and prev_side >= 0.0:
+		play("flap_servo", 0.35 * m_gain)
+	prev_side = th.side_target
 	var spd := c.linear_velocity.length()
 	var on_ground := vs.contacts > 0
 	var skid := 0.0

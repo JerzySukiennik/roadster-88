@@ -76,7 +76,7 @@ export class AudioEngine {
     this.thrustBus = ctx.createGain(); this.thrustBus.gain.value = 1;
     this.thrustBus.connect(lp); lp.connect(hs); hs.connect(ls); ls.connect(this.outside);
     this.nozzleVoices = [];
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 10; i++) {
       const p = ctx.createPanner(); p.panningModel = 'equalpower'; p.distanceModel = 'inverse'; p.refDistance = 4; p.rolloffFactor = 0.6;
       p.connect(this.thrustBus);
       const body = this.noiseVoice('bandpass', 420, 0.7, p);
@@ -210,7 +210,7 @@ export class AudioEngine {
       if (V) {
         const wp = s.nozzleWorld(n);
         V.p.positionX.setTargetAtTime(wp.x, t, 0.02); V.p.positionY.setTargetAtTime(wp.y, t, 0.02); V.p.positionZ.setTargetAtTime(wp.z, t, 0.02);
-        const k = Math.sqrt(v) * (n.front ? 0.9 : 1);
+        const k = Math.sqrt(v) * (n.group === 'rear' ? 1 : n.group === 'front' ? 0.9 : 0.8);
         V.body.g.gain.setTargetAtTime(k * 0.2, t, 0.04); V.mid.g.gain.setTargetAtTime(k * 0.08, t, 0.04); V.hi.g.gain.setTargetAtTime(k * 0.01, t, 0.04);
         V.body.f.frequency.setTargetAtTime(340 + 160 * v, t, 0.08);
       }
@@ -230,6 +230,8 @@ export class AudioEngine {
     const dep = th.deployTarget;
     if (dep !== this.prevDeploy) this.play('flap_servo', { gain: 0.6, pos: s.carPos });
     this.prevDeploy = dep;
+    if (th.sideTarget !== this.prevSide && this.prevSide !== undefined) this.play('flap_servo', { gain: 0.35, pos: s.carPos, rate: 1.25 });
+    this.prevSide = th.sideTarget;
     this.setLoop('metal_scrape_loop', vol * Math.min(1, s.scrape || 0), 0.9 + Math.min(0.3, sp / 80), 0.05);
     const tcs = s.tc;
     this.setLoop('tc_flux_loop', tcs.armed ? 0.25 + 0.75 * tcs.charge : (tcs.state === 'departing' ? 1 : 0), 0.8 + tcs.charge * 0.6, 0.1);

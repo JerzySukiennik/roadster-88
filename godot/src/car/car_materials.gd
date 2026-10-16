@@ -21,7 +21,7 @@ var nozzle_mats: Dictionary = {}
 var converted: Dictionary = {}
 var all_shader_mats: Array[ShaderMaterial] = []
 var deform_tex: Texture3D = null
-var paint_name: String = "Red Multi-Coat"
+var paint_name: String = "Pearl White Multi-Coat"
 
 static func _shaders() -> void:
 	if _paint_shader == null:
@@ -66,14 +66,15 @@ func _init() -> void:
 	lens_t.set_shader_parameter("inside_alpha", 0.45)
 	_reg("Lens_Tail", lens_t)
 	mats["Tire"] = _std(Color(0.035, 0.035, 0.038), 0.82, 0.0)
-	mats["Rim"] = _std(Color(0.11, 0.115, 0.12), 0.32, 0.85)
+	mats["Rim"] = _std(Color(0.012, 0.012, 0.013), 0.22, 0.35)
+	mats["Rim"].clearcoat_enabled = true
 	mats["Rim"].cull_mode = BaseMaterial3D.CULL_DISABLED
 	mats["Brake_Disc"] = _std(Color(0.42, 0.42, 0.43), 0.38, 0.95)
-	mats["Caliper"] = _std(Color(0.7, 0.02, 0.02), 0.35, 0.0)
+	mats["Caliper"] = _std(Color(0.72, 0.54, 0.23), 0.32, 0.75)
 	mats["Caliper"].clearcoat_enabled = true
 	mats["Nozzle_Inner"] = _std(Color(0.015, 0.015, 0.016), 0.6, 0.6)
 	mats["Nozzle_Inner"].cull_mode = BaseMaterial3D.CULL_DISABLED
-	mats["Nozzle_Metal"] = _std(Color(0.62, 0.6, 0.58), 0.28, 1.0)
+	mats["Nozzle_Metal"] = _std(Color(0.78, 0.6, 0.33), 0.3, 1.0)
 
 func _reg(nm: String, m: Material) -> void:
 	mats[nm] = m

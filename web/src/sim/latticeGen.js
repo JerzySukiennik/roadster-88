@@ -90,5 +90,6 @@ export function generateLattice(tu) {
   const rn = ['Nozzle_RL1', 'Nozzle_RL2', 'Nozzle_RR2', 'Nozzle_RR1'];
   T.rear.positions.forEach((p, i) => { nozzles[rn[i]] = nearest(p, 2); });
   ['Nozzle_FL', 'Nozzle_FR'].forEach((nm, i) => { nozzles[nm] = nearest(T.front.positions[i], 2); });
+  if (T.side) ['Nozzle_SL1', 'Nozzle_SL2', 'Nozzle_SR1', 'Nozzle_SR2'].forEach((nm, i) => { nozzles[nm] = nearest(T.side.positions[i], 2); });
   return { version: 1, generated: 'web placeholder', nodes: nodes.map((n) => ({ id: n.id, p: n.p.map((v) => Math.round(v * 1000) / 1000), m: n.m, zone: n.zone })), beams, parts, wheels, nozzles };
 }

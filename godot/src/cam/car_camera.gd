@@ -22,6 +22,8 @@ var impact_kick := 0.0
 var frozen := false
 var initialized := false
 var fov_s := 60.0
+var focus_k := 0.0
+var focus_on := false
 var dist_s := 5.8
 var height_s := 1.55
 var _ray := PhysicsShapeQueryParameters3D.new()
@@ -86,12 +88,23 @@ func _fpp(cxf: Transform3D, dt: float) -> void:
 	var look := Basis(Vector3.UP, head_yaw) * Basis(Vector3.RIGHT, -head_pitch)
 	var cam_b := b * look * Basis(Vector3.UP, PI)
 	var p := cxf * eye
+	var sc_node: Node3D = car.rig.n.get("Screen") if car.rig else null
+	var fk_target := 0.0
+	var sp := p
+	if sc_node and CarModel.using_real:
+		sp = sc_node.global_position
+		var ang := acos(clampf((-cam_b.z).dot((sp - p).normalized()), -1.0, 1.0))
+		focus_on = ang < (0.46 if focus_on else 0.3)
+		fk_target = 1.0 if focus_on else 0.0
+	focus_k = lerpf(focus_k, fk_target, 1.0 - exp(-5.0 * dt))
+	var fk := focus_k * focus_k * (3.0 - 2.0 * focus_k)
+	p = p.lerp(sp, fk * 0.42)
 	shake_t += dt
 	var sh := _shake_amount() * 0.25
 	var off := Vector3(noise.get_noise_2d(shake_t * 18.0, 0.0), noise.get_noise_2d(0.0, shake_t * 18.0), 0.0) * sh * 0.02
 	global_transform = Transform3D(cam_b, p + cam_b * off)
 	var spd := car.linear_velocity.length() / MPH
-	fov = lerpf(fov, lerpf(72.0, 82.0, clampf(spd / 200.0, 0.0, 1.0)), 1.0 - exp(-3.0 * dt))
+	fov = lerpf(fov, lerpf(72.0, 82.0, clampf(spd / 200.0, 0.0, 1.0)) - 20.0 * fk, 1.0 - exp(-3.0 * dt))
 
 func _shake_amount() -> float:
 	var th := car.th

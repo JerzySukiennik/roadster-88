@@ -242,6 +242,10 @@ func suspension(dt: float, ray: Callable) -> void:
 			wh.collider = null
 		wh.length = clampf(rest - wh.compression, rest - travel - 0.05, rest)
 	clearance = min_clear
+	if contacts == 0:
+		var co := xf * com_local
+		var ch: Dictionary = ray.call(co, co + Vector3.DOWN * 80.0)
+		clearance = maxf(min_clear, co.distance_to(ch.position) - com_local.y) if not ch.is_empty() else 80.0
 	var forces := [0.0, 0.0, 0.0, 0.0]
 	var bump := float(s["damper_bump"])
 	var reb := float(s["damper_rebound"])
@@ -320,7 +324,7 @@ func powertrain(dt: float) -> void:
 	load = drive
 	grip_prepass()
 	var slide := absf(inp.steer) * (1.0 - smoothstep01(5.0, 16.0, sp))
-	var tck := 1.0 + 0.6 * slide
+	var tck := 1.0 + 0.15 * slide
 	var a_fwd := maxf(0.0, last_accel.dot(fwd))
 	var tcs := float(p["traction_control"])
 	for wh in wheels:

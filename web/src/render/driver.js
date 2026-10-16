@@ -34,7 +34,7 @@ export class Driver {
       if (!o.isMesh) return;
       o.frustumCulled = false; o.castShadow = false; o.receiveShadow = true;
       if (o.name === 'Body') this.body = o;
-      if (/^(Head|Lashes|Eye\.|Eyebrow|Hair)/.test(o.name)) this.headMeshes.push(o);
+      if (/^(Head|Lashes|Eye|Hair)/.test(o.name)) this.headMeshes.push(o);
       if (o.morphTargetInfluences) o.morphTargetInfluences.fill(0);
       for (const m of [].concat(o.material)) if (m && 'envMapIntensity' in m) m.envMapIntensity = 0.8;
     });

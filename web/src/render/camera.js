@@ -102,7 +102,7 @@ export class CameraRig {
     cam.fov = this.fov; cam.updateProjectionMatrix();
   }
 
-  updateFpp(dt, eyeWorld, carQuat, s) {
+  updateFpp(dt, eyeWorld, carQuat, s, focus) {
     const cam = this.cam;
     const qLook = tmpQ.setFromEuler(new THREE.Euler(this.fppPitch, this.fppYaw + Math.PI * 0, 0, 'YXZ'));
     const base = carQuat.clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI));
@@ -110,12 +110,15 @@ export class CameraRig {
     const lean = s.accelLocal ? s.accelLocal : new THREE.Vector3();
     const off = new THREE.Vector3(THREE.MathUtils.clamp(-lean.x * 0.0025, -0.03, 0.03), THREE.MathUtils.clamp(-lean.y * 0.0015, -0.02, 0.02), THREE.MathUtils.clamp(-lean.z * 0.003, -0.04, 0.04)).applyQuaternion(carQuat);
     cam.position.copy(eyeWorld).add(off);
+    this.focusK = (this.focusK || 0) + (((focus && focus.k) || 0) - (this.focusK || 0)) * Math.min(1, dt * 5);
+    const fk = this.focusK * this.focusK * (3 - 2 * this.focusK);
+    if (focus && fk > 0.001) cam.position.lerp(focus.p, fk * 0.42);
     this.t += dt;
     const amp = this.impact * 0.02 + s.boost * 0.002;
     cam.position.x += noise1(this.t * 9) * amp; cam.position.y += noise1(this.t * 9 + 7) * amp;
     this.impact = Math.max(0, this.impact - dt * 1.8);
     cam.near = 0.03;
-    const fovT = 72;
+    const fovT = 72 - 20 * fk;
     this.fov += (fovT - this.fov) * Math.min(1, dt * 4);
     cam.fov = this.fov; cam.updateProjectionMatrix();
   }

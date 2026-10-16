@@ -1,5 +1,6 @@
-// Roadster 88 HUD: rolling odometer-style speed digits, six nozzle dots laid out like the car seen from above, thin amber time-circuit arc with destination year, fade-out after quiet periods.
+// Roadster 88 HUD: rolling odometer-style speed digits, ten nozzle dots laid out like the car seen from above, thin amber time-circuit arc with destination year, fade-out after quiet periods.
 const DIGIT_H = 58;
+const LAYOUT = { Nozzle_FL: [-12, 4], Nozzle_FR: [12, 4], Nozzle_SL1: [-21, 20], Nozzle_SL2: [-21, 42], Nozzle_SR1: [21, 20], Nozzle_SR2: [21, 42], Nozzle_RL1: [-17, 59], Nozzle_RL2: [-6, 59], Nozzle_RR2: [6, 59], Nozzle_RR1: [17, 59] };
 
 export class Hud {
   constructor(root) {
@@ -13,9 +14,7 @@ export class Hud {
       d.appendChild(col); this.speedEl.appendChild(d); this.cols.push({ d, col });
     }
     this.dotsEl = root.querySelector('#dots');
-    this.dots = [];
-    const layout = [[-9, 6], [9, 6], [-18, 58], [-6, 58], [6, 58], [18, 58]];
-    for (const [x, y] of layout) { const i = document.createElement('i'); i.style.left = `${23 + x}px`; i.style.top = `${y}px`; this.dotsEl.appendChild(i); this.dots.push({ el: i, x, y }); }
+    this.dots = new Map();
     this.tc = root.querySelector('#tc'); this.arc = root.querySelector('#tcArc'); this.year = root.querySelector('#tcYear');
     this.shown = 0; this.quiet = 0; this.lastMph = 0; this.disp = 0; this.visible = true; this.mode = 'chase';
     this.arcLen = 2 * Math.PI * 19;
@@ -44,18 +43,22 @@ export class Hud {
       if (c.shown !== show[i]) { c.d.style.display = show[i] ? 'block' : 'none'; c.shown = show[i]; }
     }
     const th = d.thrusters;
-    const order = [th.front[0], th.front[1], th.rear[0], th.rear[1], th.rear[2], th.rear[3]];
     let thrusting = 0;
-    order.forEach((n, i) => {
-      const dot = this.dots[i];
+    for (const n of th.all) {
+      let dot = this.dots.get(n.name);
+      if (!dot) {
+        const [x, y] = LAYOUT[n.name] || [0, 32];
+        const el = document.createElement('i'); el.style.left = `${23 + x}px`; el.style.top = `${y}px`; this.dotsEl.appendChild(el);
+        dot = { el, a: -1 }; this.dots.set(n.name, dot);
+      }
       const a = n.attached ? n.valve : 0;
       thrusting = Math.max(thrusting, a);
-      const back = Math.cos(n.pitch) * (n.front ? -1 : 1);
-      const ox = -Math.sin(n.side) * 4, oy = back * 4 * a;
+      if (Math.abs(a - dot.a) < 0.004 && a < 0.02) continue;
+      dot.a = a;
       dot.el.style.opacity = (n.attached ? 0.16 : 0.04) + 0.84 * a;
-      dot.el.style.transform = `translate(${ox * a}px, ${oy}px)`;
+      dot.el.style.transform = `translate(${n.dir.x * 4 * a}px, ${n.dir.z * 4 * a}px) scale(${1 + 0.35 * a * Math.max(0, n.dir.y)})`;
       dot.el.style.boxShadow = a > 0.05 ? `0 0 ${4 + 6 * a}px rgba(255,255,255,${0.5 * a})` : 'none';
-    });
+    }
     const armed = d.tc.armed;
     this.tc.classList.toggle('on', armed);
     if (armed) {

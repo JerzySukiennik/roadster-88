@@ -69,6 +69,101 @@ const S = {
     await keys('Space'); await wait(1600); await shot('hover_climb'); await keys(); await wait(1500); await shot('hover_hold');
     await keys('KeyA'); await sample(6, 300, 'yaw'); await shot('hover_yaw'); await keys('Space', 'KeyW'); await wait(1200); await shot('hover_fwd'); await release();
   },
+  async v2() {
+    await wait(1500);
+    await R(() => window.__r88.orbit(2.3, 0.08)); await wait(400);
+    await tap('KeyF'); await wait(1900); await shot('v2_doors');
+    await R(() => window.__r88.orbit(-1.2, 0.25)); await wait(500); await shot('v2_doors_top');
+    await tap('KeyF'); await wait(1700);
+    await R(() => window.__r88.game.setWing(true)); await R(() => window.__r88.orbit(2.6, 0.1)); await wait(1600); await shot('v2_wing');
+    await R(() => window.__r88.game.setWing(false)); await wait(1400);
+    await R(() => { const g = window.__r88.game; g.rig.orbitYaw = 0; g.rig.orbitPitch = 0; g.rig.lastMouse = -99; });
+    await keys('Space'); await wait(700); await shot('v2_lift'); await wait(600); await keys(); await wait(1500); await shot('v2_hover');
+    await R(() => window.__r88.orbit(1.7, 0.05)); await wait(700); await shot('v2_hover_side');
+    console.log('nozzles', await R(() => window.__r88.game.car.sim.thrusters.all.map((n) => `${n.name.slice(7)}:${n.valve.toFixed(2)}/${(n.pitch * 57.3).toFixed(0)}`).join(' ') + ' side ' + window.__r88.game.car.sim.thrusters.sideDeploy.toFixed(2)));
+    await sample(3, 300, 'hover');
+    await R(() => window.__r88.orbit(0, 0.05)); await keys('ControlLeft'); await wait(2500); await keys(); await wait(1500);
+    await sample(2, 300, 'landed');
+  },
+  async v2b() {
+    await wait(1500);
+    await R(() => { const g = window.__r88.game; g.rig.orbitYaw = 0; g.rig.orbitPitch = 0; g.rig.lastMouse = -99; });
+    await keys('Space'); await wait(620); await keys(); await wait(200); await keys('Space'); await wait(180); await keys(); await wait(1600);
+    await sample(1, 10, 'low');
+    await R(() => window.__r88.orbit(2.2, 0.06)); await wait(900); await shot('v2_lowhover');
+    await R(() => window.__r88.orbit(0.6, 0.02)); await wait(900); await shot('v2_lowhover_b');
+    await keys('ControlLeft'); await wait(2500); await keys(); await wait(1500);
+    await R(() => { const g = window.__r88.game; g.rig.orbitYaw = 0; g.rig.orbitPitch = 0; g.rig.lastMouse = -99; });
+    await reset(); await keys('KeyW', 'ShiftLeft'); await wait(900); await shot('v2_boost_1'); await wait(1300); await shot('v2_boost_2'); await release(); await stats('boost');
+    await wait(1500);
+    await R(() => window.__r88.camera('fpp')); await wait(1500); await shot('v2_fpp');
+    await R(() => window.__r88.look(0.9, 0.05)); await wait(800); await shot('v2_fpp_side');
+    await R(() => window.__r88.look(-0.45, -0.3)); await wait(800); await shot('v2_fpp_screen');
+    await R(() => window.__r88.camera('chase'));
+    await R(() => window.__r88.setTime(22, 30)); await wait(1500);
+    await keys('Space'); await wait(700); await keys(); await wait(200); await keys('Space'); await wait(250); await keys(); await wait(1800);
+    await R(() => window.__r88.orbit(2.0, 0.08)); await wait(900); await shot('v2_night_hover'); await reset(); await wait(2000); await stats('night hover');
+  },
+  async v2c() {
+    await wait(1500);
+    await R(() => { const g = window.__r88.game; g.rig.orbitYaw = 0; g.rig.orbitPitch = 0; g.rig.lastMouse = -99; });
+    await keys('Space'); await wait(450); await keys(); await wait(150); await keys('Space'); await wait(150); await keys(); await wait(2500);
+    await sample(1, 10, 'low'); await reset(); await wait(4000); await stats('low hover');
+    console.log('fx', await R(() => { const f = window.__r88.game.fx; return `puffs ${f.puffs.n} billows ${f.billows.n} alpha ${f.alpha.n} jets ${f.jets.mesh.count} ring ${f.ring.a.toFixed(2)}`; }));
+    await R(() => window.__r88.orbit(2.2, 0.06)); await wait(900); await shot('v2_lowhover');
+    await keys('ControlLeft'); await wait(2500); await keys(); await wait(1500);
+    await R(() => { const g = window.__r88.game; g.rig.orbitYaw = 0; g.rig.orbitPitch = 0; g.rig.lastMouse = -99; });
+    await reset(); await keys('KeyW', 'ShiftLeft'); await wait(900); await shot('v2_boost_1'); await wait(1300); await shot('v2_boost_2'); await release(); await stats('boost');
+    console.log('fx', await R(() => { const f = window.__r88.game.fx; return `puffs ${f.puffs.n} billows ${f.billows.n}`; }));
+    await wait(1500);
+    await R(() => window.__r88.camera('fpp')); await wait(1500); await shot('v2_fpp');
+    await R(() => window.__r88.look(0.9, 0.05)); await wait(800); await shot('v2_fpp_side');
+    await R(() => window.__r88.camera('chase'));
+  },
+  async fxdbg() {
+    await wait(4000);
+    await keys('KeyW', 'ShiftLeft'); await wait(1500);
+    const vis = (j, p, a, b) => R((v) => { const f = window.__r88.game.fx; f.jets.mesh.visible = v[0]; f.puffs.sprite.visible = v[1]; f.alpha.sprite.visible = v[2]; f.billows.sprite.visible = v[3]; window.__r88.game.paused = true; }, [j, p, a, b]);
+    await vis(true, true, true, true); await wait(200); await shot('dbg_all');
+    await vis(false, true, true, true); await wait(200); await shot('dbg_nojets');
+    await vis(true, false, true, true); await wait(200); await shot('dbg_nopuffs');
+    await vis(true, true, false, true); await wait(200); await shot('dbg_noalpha');
+    console.log('fx', await R(() => { const f = window.__r88.game.fx; return `puffs ${f.puffs.n} billows ${f.billows.n} alpha ${f.alpha.n} jets ${f.jets.mesh.count} a ${Array.from(f.jets.iData.array.slice(0, 16)).map((x) => x.toFixed(2)).join(',')}`; }));
+    await release();
+  },
+  async v2boost() {
+    await wait(4000);
+    await keys('KeyW', 'ShiftLeft'); await wait(1300); await shot('vb_behind');
+    await R(() => window.__r88.orbit(1.5, 0.04)); await wait(900); await shot('vb_side');
+    await R(() => window.__r88.orbit(2.6, 0.1)); await wait(700); await shot('vb_front');
+    await release();
+  },
+  async spr() {
+    await wait(4000);
+    await R(() => { const g = window.__r88.game; g.paused = true; const p = g.car.curr.pos; const f = g.fx;
+      f.alpha.spawn(p.x - 1.5, p.y + 1.2, p.z - 3, 0, 0, 0, 100, 2.5, 2.5, 1, 1, 1, 0.9, 0, 0);
+      f.alpha.spawn(p.x + 1.5, p.y + 1.2, p.z - 3, 0, 0, 0, 100, 2.5, 2.5, 1, 0.2, 0.2, 0.9, 0, 0);
+      f.puffs.spawn(p.x, p.y + 2.8, p.z - 3, 0, 0, 0, 100, 2.5, 2.5, 1, 1, 1, 0.9, 0, 0);
+      for (let i = 0; i < 20; i++) { f.alpha.update(0.05); f.puffs.update(0.05); }
+      return JSON.stringify(g.fx.light.value); });
+    await wait(500); await shot('spr');
+    console.log('light', await R(() => JSON.stringify(window.__r88.game.fx.light.value)));
+  },
+  async scr2() {
+    await wait(2500);
+    await R(() => window.__r88.camera('fpp')); await wait(1200); await shot('scr2_ahead');
+    await R(() => window.__r88.look(-0.3, -0.12)); await wait(1500); await shot('scr2_focus');
+    console.log('hit', await R(() => { const c = window.__r88.game.cockpit; return JSON.stringify(c.hit ? { x: Math.round(c.hit.x), y: Math.round(c.hit.y), hover: c.hover } : null) + ' fk ' + window.__r88.game.rig.focusK.toFixed(2); }));
+    await R(() => window.__r88.look(-0.36, -0.2)); await wait(900); await shot('scr2_focus2');
+    console.log('hit2', await R(() => { const c = window.__r88.game.cockpit; return JSON.stringify(c.hit ? { x: Math.round(c.hit.x), y: Math.round(c.hit.y), hover: c.hover } : null); }));
+    await R(() => window.__r88.camera('chase')); await wait(800); await shot('scr2_chase');
+  },
+  async scr() {
+    await wait(2500);
+    await R(() => window.__r88.camera('fpp')); await wait(1200); await shot('scr_ahead');
+    for (const [y, p, nm] of [[-0.3, -0.14, 'a'], [0.3, -0.14, 'b']]) { await R((a) => window.__r88.look(a[0], a[1]), [y, p]); await wait(900); await shot('scr_' + nm); console.log(nm, await R(() => { const c = window.__r88.game.cockpit; return JSON.stringify(c.hit ? { x: Math.round(c.hit.x), y: Math.round(c.hit.y), hover: c.hover } : null); })); }
+    console.log('screen', await R(() => { const g = window.__r88.game, s = g.cockpit.screen, v = new g.constructor === Object ? null : null; const e = g.car.view.eyeWorld(new window.__r88.THREE.Vector3()); const p = s.getWorldPosition(new window.__r88.THREE.Vector3()); return JSON.stringify({ d: e.distanceTo(p).toFixed(2), sx: s.scale.x }); }));
+  },
   async night() { await R(() => window.__r88.setTime(22, 30)); await wait(2500); await shot('night'); await keys('KeyW'); await wait(2000); await shot('night_drive'); await release(); },
   async fpp() {
     await R(() => window.__r88.camera('fpp')); await wait(1500); await shot('fpp');

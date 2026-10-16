@@ -183,6 +183,11 @@ export class CarSim {
       w.length = clamp(S.rest_length - w.compression, S.rest_length - S.travel - 0.05, S.rest_length);
     }
     this.clearance = minClear;
+    if (this.contacts === 0) {
+      this.setRay(this.comW, this._f.set(0, -1, 0));
+      const hit = world.castRay(this.ray, 80, true, undefined, groups(GROUP.CAR, GROUP.STATIC), undefined, this.body);
+      this.clearance = hit ? Math.max(minClear, hit.timeOfImpact - this.comLocal.y) : 80;
+    }
     const forces = [0, 0, 0, 0];
     for (const w of this.wheels) {
       if (!w.contact) { forces[w.i] = 0; continue; }
