@@ -60,6 +60,7 @@ const chapter0 = {
           S.flags.clang = true;
           if (S.g.audio) { S.g.audio.play('impact_light', { inside: true, gain: 1 }); S.g.audio.play('tc_crackle', { inside: true, gain: 0.6 }); }
           if (S.g.rig) S.g.rig.addImpact(0.7);
+          S.loseNozzle();
           S.radio(L('c0_lost_r2'), 4);
           S.radio(L('c0_lost_r3'), 3.4);
           S.g.tc.setDestination({ ...S.g.tc.destination, year: 2026 });
@@ -144,15 +145,15 @@ const chapter1 = {
     {
       id: '1.race',
       enter(S) {
-        const A = S.st.anchors, w = A.wash, f = S.props.sets.get('forge');
-        const spot = S.props.findSpot(w.x + 18, w.z - 12, 0.4, 0.4, 0, 60);
+        const A = S.st.anchors, at = S.flags.lostAt || { x: A.wash.x + 18, z: A.wash.z - 12 }, f = S.props.sets.get('forge');
+        const spot = S.props.findSpot(at.x, at.z, 0.4, 0.4, 0, 60);
         S.partAt = { x: spot.x, y: spot.y, z: spot.z };
         if (!S.part || !S.g.interact.items.includes(S.part)) S.part = S.item('part', { x: spot.x, y: spot.y + 0.4, z: spot.z });
         S.hintAt = { x: spot.x + 22, z: spot.z - 16 };
         const start = () => S.npc.walkTo('kessler', spot.x, spot.z, 1.45, () => { S.flags.kesslerThere = true; });
         if (S.flags.helped) setTimeout(start, 25000); else start();
         void f;
-        S.objective('Find the fallen part in the dry wash before Kessler does', () => S.hintAt, 'Scanner');
+        S.objective('Find your nozzle where you arrived in 1885, before Kessler does', () => S.hintAt, 'Scanner');
       },
       update(S, dt) {
         const I = S.g.interact, held = S.heldItem();
@@ -238,7 +239,7 @@ const chapter1 = {
         const b = S.props.sets.get('ws_normal').spots.bench;
         S.spot({ radius: 2.2, holding: true, label: 'Put the nozzle on the bench', pos: () => b, enabled: () => !!(S.heldItem() && S.heldItem().story === 'part'), onUse: () => {
           const it = S.heldItem(); S.g.interact.held = null; S.g.interact.removeItem(it);
-          S.benchPart = S.item('part', { x: b.x, y: b.y + 0.17, z: b.z }); S.benchPart.body.setBodyType(S.g.R.RigidBodyType.Fixed, true); S.flags.benched = true;
+          S.benchPart = S.item('part', { x: b.x, y: b.y + 0.17, z: b.z }); S.benchPart.body.setBodyType(S.g.R.RigidBodyType.Fixed, true); S.flags.benched = true; S.repairNozzle();
         } });
         S.objective('Take the nozzle from the frunk and put it on Ida\'s bench', () => (S.heldItem() ? b : S.frontOfCar()));
       },

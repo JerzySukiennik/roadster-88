@@ -36,12 +36,12 @@
 "voice": "ida"
 },
 "c0_lost_r2": {
-"cps": 16.0,
-"dur": 5.619,
+"cps": 15.7,
+"dur": 7.514,
 "engine": "kokoro",
-"key": "abb7d10536a3",
-"mean": -17.7,
-"peak": -1.9,
+"key": "72a9910a31b3",
+"mean": -18.0,
+"peak": -2.0,
 "voice": "ida"
 },
 "c0_lost_r3": {
@@ -117,12 +117,12 @@
 "voice": "ida"
 },
 "c1_end_1": {
-"cps": 17.2,
-"dur": 4.658,
+"cps": 17.9,
+"dur": 5.81,
 "engine": "kokoro",
-"key": "8f10cdb46d17",
-"mean": -18.1,
-"peak": -2.0,
+"key": "a9f97cd286c9",
+"mean": -17.4,
+"peak": -1.9,
 "voice": "ida"
 },
 "c1_end_2": {
@@ -144,11 +144,11 @@
 "voice": "kessler"
 },
 "c1_forge_2": {
-"cps": 13.0,
-"dur": 10.059,
+"cps": 13.8,
+"dur": 12.748,
 "engine": "kokoro",
-"key": "8f3333b4504f",
-"mean": -18.0,
+"key": "a08de0c6ddda",
+"mean": -17.5,
 "peak": -1.7,
 "voice": "kessler"
 },
@@ -198,11 +198,11 @@
 "voice": "marta"
 },
 "c1_guide_2": {
-"cps": 17.1,
-"dur": 7.737,
+"cps": 17.9,
+"dur": 8.335,
 "engine": "kokoro",
-"key": "890d17dfb642",
-"mean": -18.0,
+"key": "febda6963c01",
+"mean": -18.4,
 "peak": -1.8,
 "voice": "marta"
 },
@@ -234,20 +234,20 @@
 "voice": "marta"
 },
 "c1_guide_c2": {
-"cps": 17.5,
-"dur": 1.255,
+"cps": 19.3,
+"dur": 1.244,
 "engine": "kokoro",
-"key": "03e0f510f746",
-"mean": -18.4,
-"peak": -2.2,
+"key": "4481ec6ef19b",
+"mean": -18.3,
+"peak": -3.3,
 "voice": "you"
 },
 "c1_guide_c2r": {
-"cps": 16.0,
-"dur": 4.12,
+"cps": 18.7,
+"dur": 5.123,
 "engine": "kokoro",
-"key": "8af8b15e0d0e",
-"mean": -17.7,
+"key": "76a45b7ea0fc",
+"mean": -18.1,
 "peak": -1.9,
 "voice": "marta"
 },
@@ -306,21 +306,21 @@
 "voice": "you"
 },
 "c1_ida_c2r": {
-"cps": 14.3,
-"dur": 1.965,
+"cps": 17.2,
+"dur": 3.724,
 "engine": "kokoro",
-"key": "949d8f958326",
-"mean": -17.3,
-"peak": -2.8,
+"key": "a9774f52293b",
+"mean": -17.5,
+"peak": -1.9,
 "voice": "ida"
 },
 "c1_plaque_1": {
-"cps": 14.0,
-"dur": 10.898,
+"cps": 14.1,
+"dur": 10.718,
 "engine": "kokoro",
-"key": "11ada5896aa4",
+"key": "0f787156ba21",
 "mean": -20.4,
-"peak": -2.1,
+"peak": -1.9,
 "voice": "thought"
 },
 "c1_plaque_2": {

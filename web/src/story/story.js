@@ -191,6 +191,38 @@ export class Story {
     }
   }
 
+  frontLeftNozzle(car) { const th = car.sim.thrusters; return th.all.find((n) => n.group === 'front' && n.base.x > 0) || th.all.find((n) => n.group === 'front'); }
+
+  loseNozzle() {
+    const g = this.g, car = g.car, n = car && this.frontLeftNozzle(car); if (!n) return;
+    const p = car.sim.pos, v = car.sim.vel, sp = Math.hypot(v.x, v.z) || 1;
+    this.flags.nozzle = n.name; this.flags.repaired = false;
+    this.flags.lostAt = { x: p.x - v.x / sp * 6, z: p.z - v.z / sp * 6 };
+    const node = car.view.n[n.name];
+    if (node && node.parent && g.damage) {
+      const clone = node.clone(true);
+      clone.traverse((o) => { if (o.isMesh) o.geometry = o.geometry.clone(); });
+      node.parent.add(clone); clone.position.copy(node.position); clone.quaternion.copy(node.quaternion); clone.scale.copy(node.scale);
+      car.view.n[n.name] = clone;
+      try { g.damage.detachNode(car, n.name, 3, 2.5e4); } catch (e) { clone.removeFromParent(); }
+      car.view.n[n.name] = node; car.view.lostParts.delete(n.name);
+    }
+    if (g.fx && g.fx.sparks) g.fx.sparks(new THREE.Vector3(p.x, p.y + 0.6, p.z), new THREE.Vector3(v.x * 0.3, 2, v.z * 0.3), new THREE.Vector3(0, 1, 0), 40);
+    this.enforceNozzle(); this.save();
+  }
+
+  enforceNozzle() {
+    const f = this.flags, car = this.g.car; if (!f.nozzle || !car || !car.sim) return;
+    const n = car.sim.thrusters.all.find((x) => x.name === f.nozzle), node = car.view.n[f.nozzle]; if (!n) return;
+    if (!f.repaired) { if (n.attached || n.health > 0) { n.attached = false; n.health = 0; } if (node && node.visible) node.visible = false; }
+    else if (f.repairCar !== car.sim.id) { f.repairCar = car.sim.id; n.attached = true; n.health = 1; if (node) node.visible = true; }
+  }
+
+  repairNozzle() {
+    this.flags.repaired = true; this.flags.repairCar = null; this.enforceNozzle(); this.save();
+    if (this.g.audio) this.g.audio.play('part_clunk', { inside: true, gain: 0.8 });
+  }
+
   item(kind, pos) { const it = this.g.interact.spawnItem(kind, pos); it.story = kind; return it; }
 
   emit(type, data) { this.events.push({ type, data }); }
@@ -250,7 +282,7 @@ export class Story {
     if (!this.g.started) return;
     if (this.pendingTitle) { const t = this.pendingTitle; this.pendingTitle = null; this.title(...t); }
     this.t += dt;
-    this.npc.update(dt); this.props.update(dt);
+    this.npc.update(dt); this.props.update(dt); this.enforceNozzle();
     if (this.earth()) { if (!this.away) { this.away = true; this.el.obj.classList.remove('on'); this.el.wp.classList.remove('on'); } return; }
     if (this.away) { this.away = false; if (this.el.text.textContent && !this.st.done) this.el.obj.classList.add('on'); }
     if (this.dlgOpen) {
