@@ -166,7 +166,7 @@ export class LifeSystem {
   }
 
   seed(key) {
-    key = key || null;
+    key = key ? String(key).replace(/_[a-z0-9]{2,8}$/, '') || String(key) : null;
     if (key === this.seedKey) return;
     this.seedKey = key;
     if (key && this.ready && this.eraId && this.spawnSeed !== key) this.setEra(this.eraId);

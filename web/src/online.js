@@ -562,7 +562,7 @@ export class Online {
 
   request(uid, a, extra = {}) {
     const F = this.F; if (!F || this.status !== 'online') return;
-    F.push(F.ref(this.db, `roadster88/req/${uid}`), { f: this.uid, a, t: Date.now(), ...extra }).catch(() => {});
+    F.push(F.ref(this.db, `roadster88/req/${uid}`), { f: this.uid, a, t: Math.round(Date.now() + this.offset), ...extra }).catch(() => {});
   }
 
   receiveReq(r) {
@@ -574,7 +574,8 @@ export class Online {
         this.request(r.f, 'given', { c: [r3(s.pos.x), r3(s.pos.y), r3(s.pos.z), r3(s.q.x), r3(s.q.y), r3(s.q.z), r3(s.q.w)] });
         g.giveCar(r.f);
       } else this.request(r.f, 'deny');
-    } else if (r.a === 'given' && Array.isArray(r.c)) g.takeGiven(r.c, r.f);
+    } else if (r.a === 'kill') { if (g.walker.active && !g.walker.dead && Date.now() + this.offset - (r.t || 0) < 4000) g.player.kill('dino'); }
+    else if (r.a === 'given' && Array.isArray(r.c)) g.takeGiven(r.c, r.f);
     else if (r.a === 'deny') g.hint('That Roadster is not free', 1.6);
   }
 

@@ -167,8 +167,10 @@ class Game {
       const emit = this.life.emit.bind(this.life);
       this.life.emit = (type, a) => {
         emit(type, a);
-        const w = this.walker;
-        if ((type === 'bite' || type === 'pounce') && a && w.active && !w.dead && Math.hypot(a.x - w.pos.x, a.z - w.pos.z) < 2.6 + ((a.K && a.K.meta && a.K.meta.length) || 2) * 0.35) this.player.kill('dino', a);
+        if ((type !== 'bite' && type !== 'pounce') || !a) return;
+        const w = this.walker, on = this.online, reach = 2.6 + ((a.K && a.K.meta && a.K.meta.length) || 2) * 0.35;
+        if (a.target && on && a.target !== on.uid) { if (on.remotes.has(a.target)) on.request(a.target, 'kill', { c: type }); return; }
+        if (w.active && !w.dead && Math.hypot(a.x - w.pos.x, a.z - w.pos.z) < reach) this.player.kill('dino', a);
       };
       if (this.life.setEra) this.life.setEra(this.eraId());
     } catch (e) { this.life = null; if (params.has('debug')) console.warn('life module not loaded:', e && e.message); }

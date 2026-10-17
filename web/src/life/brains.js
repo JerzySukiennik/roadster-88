@@ -106,7 +106,7 @@ export const BRAINS = {
           const lead = clamp(t.d / Math.max(run, 1), 0, 1.5);
           a.tx = S.x + S.vx * lead; a.tz = S.z + S.vz * lead; a.want = run;
           a.lost = t.d > 150 ? (a.lost || 0) + dt : 0;
-          if (t.d < 6.5 + K.meta.length * 0.35 && !a.action) { a.act('bite'); sys.emit('bite', a); a.want = run * 0.5; }
+          if (t.d < (S.onFoot ? 2 : 6.5) + K.meta.length * 0.35 && !a.action) { a.act('bite'); sys.emit('bite', a); a.want = run * 0.5; }
           if (S.hover > 0.1 && S.agl < 9 && t.d < 12 && !a.action) { a.act('bite'); sys.emit('bite', a); }
           if (a.lost > 7) { a.state = 'rest'; a.st = 0; a.timer = rnd(12, 20); a.act('roar'); sys.emit('roar', a); }
           break;
@@ -162,7 +162,7 @@ export const BRAINS = {
         a.want = dd > 12 ? runSpeed(K) * (0.92 + 0.08 * a.seed) : slow ? trotSpeed(K) * 0.8 : runSpeed(K);
         faceCar(sys, a, 0.9);
         a.cool = (a.cool || rnd(1, 3)) - dt;
-        if (t.d < 9 && a.cool < 0 && K.clips.pounce && !a.action) { a.act('pounce'); a.cool = rnd(2.5, 5); a.speed = Math.max(a.speed, 9); sys.emit('call', a); sys.emit('pounce', a); }
+        if (t.d < (S.onFoot ? 3.2 : 9) && a.cool < 0 && K.clips.pounce && !a.action) { a.act('pounce'); a.cool = rnd(2.5, 5); a.speed = Math.max(a.speed, 9); sys.emit('call', a); sys.emit('pounce', a); }
         if (Math.random() < dt * 0.15 && K.clips.roar && !a.action) { a.act('roar'); sys.emit('call', a); }
         steerGround(sys, a, dt, { turn: 3.2, accel: 9, arrive: 0.2 });
         return;
