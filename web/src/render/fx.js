@@ -1,7 +1,7 @@
 // Roadster 88 particle effects: cold-gas vapour from the Cycles flipbooks (axis-aligned jet billboards, valve puffs, ground billows, hover ring decal), pooled GPU sprites for tyre smoke, sparks, frost vapour and fire, plus tyre skid marks on the plate.
 import * as THREE from 'three/webgpu';
 import { instancedBufferAttribute, uv, float, vec2, vec3, uniform, attribute, texture } from 'three/tsl';
-import { softParticles } from 'three/addons/tsl/utils/SoftParticles.js';
+import { softParticles } from './soft.js';
 import { fxMaterial } from './gfx.js';
 
 const rnd = (a, b) => a + Math.random() * (b - a);
