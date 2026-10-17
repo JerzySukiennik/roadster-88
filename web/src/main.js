@@ -24,6 +24,8 @@ import { generateLattice } from './sim/latticeGen.js';
 import { TimeCircuits, ERAS, eraOf, formatYear } from './sim/timetravel.js';
 
 const params = new URLSearchParams(location.search);
+const SURFACE_GRIP = { asphalt: 1, rock: 0.9, dirt: 0.78, grass: 0.72, sand: 0.62, water: 0.35, lava: 0.6 };
+const MAP = params.get('map') === 'plate' ? 'plate' : 'valley';
 const $ = (id) => document.getElementById(id);
 const store = { get(k, d) { try { const v = localStorage.getItem('r88.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem('r88.' + k, JSON.stringify(v)); } catch (e) { /* storage blocked */ } } };
 
@@ -41,7 +43,9 @@ class Game {
     progress(0.25, 'Physics');
     await RAPIER.init();
     this.R = RAPIER;
-    this.layout = buildLayout();
+    this.mapName = this.mapId = MAP;
+    this.maps = [{ id: 'valley', name: 'Valley', desc: 'An invented California valley: highway, race loop, canyon, mesa, dunes and a dry lake', ready: true }, { id: 'plate', name: 'Test plate', desc: 'Ramps, ravines, towers, loop and crash zone', ready: true }];
+    this.layout = MAP === 'plate' ? buildLayout() : null;
     this.phys = new PhysicsWorld(RAPIER, this.tu, this.layout);
     progress(0.35, 'Sky');
     this.sky = new SkySystem(this.gfx, this.gfx.preset);
@@ -51,8 +55,15 @@ class Game {
     this.tc = new TimeCircuits(this.tu);
     this.tc.setDestination(ERAS[store.get('destEra', 1)].date);
     this.applyClock(true);
-    progress(0.45, 'Test plate');
-    this.plate = new PlateView(this.gfx, this.layout, this.sky);
+    if (this.layout) {
+      progress(0.45, 'Test plate');
+      this.plate = new PlateView(this.gfx, this.layout, this.sky);
+    } else {
+      progress(0.45, 'Valley');
+      const { createValley } = await import('./world/valley.js');
+      this.valley = await createValley(this, (f) => progress(0.45 + f * 0.12, 'Valley'));
+    }
+    this.map = this.valley || this.layout;
     if (params.has('noshadow')) this.sky.sun.castShadow = false;
     if (params.has('nodriverpose')) this.noDriverPose = true;
     this.fx = new FX(this.gfx.scene, this.gfx.preset);
@@ -71,7 +82,8 @@ class Game {
     this.lamps = { L: new THREE.SpotLight(0xf2f6ff, 0, 140, 0.42, 0.55, 1.6), R: new THREE.SpotLight(0xf2f6ff, 0, 140, 0.42, 0.55, 1.6), cabin: new THREE.PointLight(0x9fb8ff, 0, 1.6, 2) };
     for (const k of ['L', 'R']) { this.lamps[k].castShadow = false; this.gfx.scene.add(this.lamps[k], this.lamps[k].target); }
     this.gfx.scene.add(this.lamps.cabin);
-    this.spawn(this.layout.spawn.pos, this.layout.spawn.yaw);
+    this.spawn(this.map.spawn.pos, this.map.spawn.yaw);
+    if (this.valley) { await this.loadEras(); await this.loadLife(); }
     this.input = new Input($('view'));
     this.hud = new Hud($('hud'));
     this.rig = new CameraRig(this.gfx.camera, this.tu);
@@ -94,6 +106,7 @@ class Game {
     this.sky.update(0, this.car.sim.pos, true);
     this.rig.updateChase(0.016, this.chaseState(0), performance.now() / 1000, (o, d, l) => this.camRay(o, d, l));
     this.placeLamps();
+    if (this.valley) this.valley.update(0, this.gfx.camera.position, this.gfx.camera);
     if (params.has('noprewarm')) { try { await this.gfx.renderer.compileAsync(this.gfx.scene, this.gfx.camera); } catch (e) { /* ignore */ } } else await this.prewarm();
     progress(0.96, 'Shaders');
     this.gfx.renderer.setAnimationLoop(() => this.frame());
@@ -107,6 +120,38 @@ class Game {
   async loadLattice() {
     try { const r = await fetch('../shared/lattice.json', { cache: 'no-store' }); if (r.ok) { const d = await r.json(); if (d.nodes && d.beams) return d; } } catch (e) { /* placeholder below */ }
     return generateLattice(this.tu);
+  }
+
+  async loadEras() {
+    if (params.has('noeras')) { this.eras = null; this.applyEra(true); return; }
+    try {
+      const mod = await import('./eras/eras.js');
+      this.eras = new mod.EraSystem(this, this.valley);
+    } catch (e) { this.eras = null; if (params.has('debug')) console.warn('eras module not loaded:', e && e.message); }
+    this.applyEra(true);
+  }
+
+  async loadLife() {
+    if (params.has('nolife')) return;
+    try {
+      const mod = await import('./life/life.js');
+      this.life = new mod.LifeSystem(this, this.valley, this.eras);
+      if (this.life.setEra) this.life.setEra(this.eraId());
+    } catch (e) { this.life = null; if (params.has('debug')) console.warn('life module not loaded:', e && e.message); }
+  }
+
+  applyEra(instant) {
+    const id = this.eraId();
+    if (this.eras) { try { this.eras.apply(id, { instant }); return; } catch (e) { console.warn('eras.apply failed', e); } }
+    this.valley.setEraTerrain(id);
+  }
+
+  arriveValley() {
+    this.applyEra(false);
+    if (this.life && !this.lifeBroken) { try { this.life.setEra(this.eraId()); } catch (e) { this.lifeBroken = true; console.error('life.setEra failed', e); } }
+    const sim = this.car.sim, p = sim.pos;
+    const s = this.valley.safeSpawnAt(p.x, p.z, p.y, { body: sim.body, rot: sim.body.rotation() });
+    if (s[1] > p.y + 0.01 || s[0] !== p.x || s[2] !== p.z) { sim.body.setTranslation({ x: s[0], y: s[1], z: s[2] }, true); sim.readState(); this.capture(this.car); this.capture(this.car); }
   }
 
   yearLabel(y) { if (this._yl !== y) { this._yl = y; this._yls = formatYear(y); } return this._yls; }
@@ -191,6 +236,7 @@ class Game {
     const p = [old.sim.pos.x + ox, Math.max(0, old.sim.pos.y) + 0.6, old.sim.pos.z + oz];
     const g = this.groundHeight(p[0], p[2], p[1] + 5);
     if (g !== null) p[1] = g + 0.08;
+    if (this.valley) { const s = this.valley.safeSpawnAt(p[0], p[2], p[1]); p[0] = s[0]; p[1] = s[1]; p[2] = s[2]; }
     this.spawn(p, yaw);
     while (this.wrecks.length > this.tu.damage.max_wrecks) {
       const w = this.wrecks.shift();
@@ -239,9 +285,11 @@ class Game {
     const inp = this.input.controls(dt);
     const gone = this.tc.state === 'gone';
     for (const c of this.cars) {
+      this.applyEnv(c.sim);
       if (c === this.car && gone) { c.sim.readState(); continue; }
       c.sim.preStep(dt, c === this.car ? inp : null);
     }
+    if (this.valley) this.valley.preStep(dt, this.cars);
     this.phys.thrustOnProps(this.car.sim, dt);
     this.phys.step((a, b, f) => this.damage.onContact(a, b, f));
     for (const c of this.cars) { c.sim.postStep(dt); this.capture(c); }
@@ -249,6 +297,15 @@ class Game {
     this.tc.update(dt, this.car.sim.speed / MPH, { fpp: this.rig.mode !== 'chase' });
     this.handleTimeEvents();
     this.time += dt;
+  }
+
+  applyEnv(sim) {
+    const w = this.weather, e = sim.env;
+    e.grip = w ? 1 - 0.2 * (w.wet || 0) - 0.42 * (w.snow || 0) : 1;
+    const gust = w ? 1 + (w.gust || 0) * 0.6 : 1;
+    if (w && w.wind) e.wind.set(w.wind[0] * gust, 0, w.wind[1] * gust); else e.wind.set(0, 0, 0);
+    const v = this.valley;
+    e.surface = v && v.surfaceAt ? (this._surf || (this._surf = (x, z) => SURFACE_GRIP[v.surfaceAt(x, z)] ?? 1)) : null;
   }
 
   handleTimeEvents() {
@@ -284,6 +341,7 @@ class Game {
         this.timeFx.arrive();
         A.play('tc_arrive_zap', { pos: car.curr.pos, gain: 1 });
         A.setRadio(this.settings.radio, this.eraId());
+        if (this.valley) this.arriveValley();
         this.hint(`${eraOf(this.tc.present.year).label} · ${formatYear(this.tc.present.year)}`, 3);
       }
     }
@@ -379,7 +437,10 @@ class Game {
     if (this.sky.fpp !== !chase) { this.sky.fpp = !chase; this.sky.applyShadowPreset(this.gfx.preset); }
     this.gfx.updateSun(this.sky.sunDir, this.sky.sun.color, (1 - this.sky.state.night) * Math.min(1, this.sky.sun.intensity / 6) * (this.tc.state === 'gone' ? 0 : 1));
     this.sky.update(fdt, s.pos, false, this.viewDir || (this.viewDir = new THREE.Vector3()).set(0, 0, -1).applyQuaternion(this.gfx.camera.quaternion).setY(0).normalize());
-    this.plate.syncProps(this.phys);
+    if (this.plate) this.plate.syncProps(this.phys);
+    if (this.valley) this.valley.update(fdt, this.gfx.camera.position, this.gfx.camera);
+    if (this.eras && !this.erasBroken) { try { this.eras.update(fdt, this.gfx.camera.position); } catch (e) { this.erasBroken = true; console.error('eras.update failed', e); } }
+    if (this.life && !this.lifeBroken) { try { this.life.update(fdt, this.gfx.camera.position); } catch (e) { this.lifeBroken = true; console.error('life.update failed', e); } }
     this.fx.setLight(this.sky.sun.color, this.sky.sun.intensity, night);
     if (!this.paused) {
       if (this.car.view.root.visible && !params.has('noplume')) this.fx.thrusters(fdt, s, this.car.pose.quat, this.car.pose.pos, this.gfx.camera.position);
@@ -394,7 +455,7 @@ class Game {
     }
     this.hud.update(fdt, { view: this.rig.mode, hidden: this.paused || !this.started, mph: s.speed / MPH, thrusters: s.thrusters, tc: { armed: this.tc.armed, trigger: this.tu.time_travel.trigger_mph, yearLabel: this.yearLabel(this.tc.destination.year) }, input: this.input.down.size > 0 });
     this.audio.listener(this.gfx.camera);
-    this.audio.update(fdt, { sim: s, powertrain: this.tu.powertrain, fpp: !chase, gone: this.tc.state === 'gone', nozzleWorld: (n) => this.nozzleWorld(n), carPos: this.car.pose.pos, scrape: this.damage.scrape, tc: this.tc });
+    this.audio.update(fdt, { sim: s, powertrain: this.tu.powertrain, fpp: !chase, gone: this.tc.state === 'gone', nozzleWorld: (n) => this.nozzleWorld(n), carPos: this.car.pose.pos, scrape: this.damage.scrape, tc: this.tc, weather: this.weather, ambient: this.eras && this.eras.ambient });
     if (this.started) this.gfx.updateDynRes(fdt);
     const tr = performance.now();
     this.gfx.render();
@@ -440,6 +501,9 @@ class Game {
       orbit(yaw, pitch) { g.rig.orbitYaw = yaw; g.rig.orbitPitch = pitch; g.rig.lastMouse = performance.now() / 1000 + 1e6; },
       arm(era) { if (era !== undefined) g.tc.setDestination(ERAS[era].date); if (!g.tc.armed) g.toggleArm(); },
       respawn() { g.respawn(); },
+      tg(x, z, yaw = 0, v = 0, up = 0.15) { const y = g.valley ? g.valley.heightAt(x, z) + up : up; this.teleport(x, y, z, yaw, v); return y; },
+      valley() { const v = g.valley; if (!v) return null; const s = v.view.stats; return { chunks: s.chunks, tris: s.tris, built: s.built, cache: v.view.cache.size, era: v.era, surface: v.surfaceAt(g.car.sim.pos.x, g.car.sim.pos.z), region: (v.regionAt(g.car.sim.pos.x, g.car.sim.pos.z) || {}).id || null, h: v.heightAt(g.car.sim.pos.x, g.car.sim.pos.z), eras: !!g.eras }; },
+      era(id) { if (g.eras) g.eras.apply(id, { instant: true }); else if (g.valley) g.valley.setEraTerrain(id); if (g.life) g.life.setEra(id); },
       click() { g.input.clicks++; },
     };
   }

@@ -35,5 +35,15 @@
   "music_2026": {"files": ["music_2026.ogg", "music_2026.mp3"], "loop": true, "gain": 0.5, "licence": "CC-BY 4.0", "source": "https://incompetech.com/music/royalty-free/index.html (Kevin MacLeod, incompetech.com, \"Tech Live\")"},
   "music_2080": {"files": ["music_2080.ogg", "music_2080.mp3"], "loop": true, "gain": 0.5, "licence": "CC-BY 4.0", "source": "https://incompetech.com/music/royalty-free/index.html (Kevin MacLeod, incompetech.com, \"Neon Laser Horizon\")"},
   "music_ruins": {"files": ["music_ruins.ogg", "music_ruins.mp3"], "loop": true, "gain": 0.5, "licence": "CC-BY 4.0", "source": "https://incompetech.com/music/royalty-free/index.html (Kevin MacLeod, incompetech.com, \"Ancient Rite\")"},
-  "music_scifi": {"files": ["music_scifi.ogg", "music_scifi.mp3"], "loop": true, "gain": 0.5, "licence": "CC-BY 4.0", "source": "https://incompetech.com/music/royalty-free/index.html (Kevin MacLeod, incompetech.com, \"Mesmerizing Galaxy Loop\")"}
+  "music_scifi": {"files": ["music_scifi.ogg", "music_scifi.mp3"], "loop": true, "gain": 0.5, "licence": "CC-BY 4.0", "source": "https://incompetech.com/music/royalty-free/index.html (Kevin MacLeod, incompetech.com, \"Mesmerizing Galaxy Loop\")"},
+  "amb_hadean": {"files": ["amb_hadean.ogg", "amb_hadean.mp3"], "loop": true, "gain": 0.35, "licence": "CC0", "source": "https://freesound.org/people/morganpurkis/sounds/385098/ + https://freesound.org/people/Fission9/sounds/474849/"},
+  "amb_dino": {"files": ["amb_dino.ogg", "amb_dino.mp3"], "loop": true, "gain": 0.55, "licence": "CC0", "source": "https://freesound.org/people/craigsmith/sounds/479573/"},
+  "amb_1885": {"files": ["amb_1885.ogg", "amb_1885.mp3"], "loop": true, "gain": 0.55, "licence": "CC0", "source": "https://freesound.org/people/NickTayloe/sounds/830253/"},
+  "amb_2026": {"files": ["amb_2026.ogg", "amb_2026.mp3"], "loop": true, "gain": 0.5, "licence": "CC0", "source": "https://freesound.org/people/craigsmith/sounds/479544/"},
+  "amb_2080": {"files": ["amb_2080.ogg", "amb_2080.mp3"], "loop": true, "gain": 0.45, "licence": "CC0", "source": "https://freesound.org/people/njlyczko/sounds/580646/"},
+  "amb_ruins": {"files": ["amb_ruins.ogg", "amb_ruins.mp3"], "loop": true, "gain": 0.45, "licence": "CC0", "source": "https://freesound.org/people/Nox_Sound/sounds/570492/"},
+  "amb_scifi": {"files": ["amb_scifi.ogg", "amb_scifi.mp3"], "loop": true, "gain": 0.5, "licence": "CC0", "source": "https://freesound.org/people/LookIMadeAThing/sounds/534020/ + https://freesound.org/people/2887679652/sounds/167304/"},
+  "rain_loop": {"files": ["rain_loop.ogg", "rain_loop.mp3"], "loop": true, "gain": 0.6, "licence": "CC0", "source": "https://freesound.org/people/unfa/sounds/177479/"},
+  "wind_storm_loop": {"files": ["wind_storm_loop.ogg", "wind_storm_loop.mp3"], "loop": true, "gain": 0.55, "licence": "CC0", "source": "https://freesound.org/people/Fission9/sounds/521736/"},
+  "thunder": {"files": ["thunder_1.ogg", "thunder_1.mp3", "thunder_2.ogg", "thunder_2.mp3", "thunder_3.ogg", "thunder_3.mp3"], "variants": 3, "gain": 0.9, "licence": "CC0", "source": "https://freesound.org/people/SholeColtis/sounds/683420/ ; https://freesound.org/people/Fission9/sounds/534023/ ; https://freesound.org/people/bastipictures/sounds/243782/"}
 }

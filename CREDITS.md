@@ -74,3 +74,19 @@ No third-party licence. Made with numpy/scipy during this project.
 |---|---|
 | tc_arm, tc_disarm | Synthesised arm/disarm tones (sine chime plus filtered hum) |
 | music_hadean | Synthesised ambient volcanic drone, stereo, seamless loop |
+
+## Era ambience (Agent B, 2026-10-16)
+Seamless 25-40 s mono loops cut, crossfaded and loudness-normalised from freesound previews (all CC0, no attribution required).
+
+| key | content | source | licence |
+|---|---|---|---|
+| amb_hadean | volcano rumble with bubbling lava | https://freesound.org/people/morganpurkis/sounds/385098/ + https://freesound.org/people/Fission9/sounds/474849/ | CC0 |
+| amb_dino | big jungle ambience | https://freesound.org/people/craigsmith/sounds/479573/ | CC0 |
+| amb_1885 | quiet woods and birds | https://freesound.org/people/NickTayloe/sounds/830253/ | CC0 |
+| amb_2026 | suburban ambience | https://freesound.org/people/craigsmith/sounds/479544/ | CC0 |
+| amb_2080 | urban ambience, soft | https://freesound.org/people/njlyczko/sounds/580646/ | CC0 |
+| amb_ruins | forest birds and wind | https://freesound.org/people/Nox_Sound/sounds/570492/ | CC0 |
+| amb_scifi | sci-fi drone with night crickets | https://freesound.org/people/LookIMadeAThing/sounds/534020/ + https://freesound.org/people/2887679652/sounds/167304/ | CC0 |
+| rain_loop | steady outdoor rain, 30 s loop | https://freesound.org/people/unfa/sounds/177479/ | CC0 |
+| wind_storm_loop | howling storm wind, 30 s loop | https://freesound.org/people/Fission9/sounds/521736/ | CC0 |
+| thunder (3 variants) | deep thunder, thunderclap, distant peal | https://freesound.org/people/SholeColtis/sounds/683420/ ; https://freesound.org/people/Fission9/sounds/534023/ ; https://freesound.org/people/bastipictures/sounds/243782/ | CC0 |

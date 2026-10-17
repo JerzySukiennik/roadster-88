@@ -1,4 +1,4 @@
-// Roadster 88 physics world: Rapier statics and dynamic props built from the layout, fixed stepping with contact-force events, and thrust plume pushes on light props. Pure JS, Rapier injected.
+// Roadster 88 physics world: Rapier world with fixed stepping and contact-force events, statics and dynamic props built from the test plate layout (the valley adds its own heightfield tiles), and thrust plume pushes on light props. Pure JS, Rapier injected.
 import { V3, Quat } from './math.js';
 import { GROUP, groups } from './car.js';
 import { groundRects } from './layout.js';
@@ -17,6 +17,14 @@ export class PhysicsWorld {
     this.world.timestep = 1 / tuning.physics_hz;
     this.eq = new R.EventQueue(true);
     this.statics = [];
+    this.props = [];
+    this.contactHandlers = [];
+    this._o = new V3(); this._d = new V3(); this._r = new V3(); this._g = new V3();
+    if (layout) this.buildLayout(layout);
+  }
+
+  buildLayout(layout) {
+    const R = this.R;
     const sg = groups(GROUP.STATIC, 0xffff);
     for (const [x0, z0, x1, z1] of groundRects(layout)) {
       const d = R.ColliderDesc.cuboid((x1 - x0) / 2, 2, (z1 - z0) / 2).setTranslation((x0 + x1) / 2, -2, (z0 + z1) / 2).setFriction(0.9).setCollisionGroups(sg);
@@ -35,7 +43,6 @@ export class PhysicsWorld {
       d.setFriction(s.tag === 'loop' || s.tag === 'halfpipe' || s.tag === 'bank' ? 1.0 : 0.75).setCollisionGroups(sg);
       this.addStatic(d, { kind: s.kind, tag: s.tag, r: s.r, mat: s.mat });
     }
-    this.props = [];
     for (const p of layout.props) {
       const def = PROP[p.type];
       q.setFromYaw(p.rotY || 0);
@@ -44,8 +51,6 @@ export class PhysicsWorld {
       c.userData = { kind: 'prop', type: p.type };
       this.props.push({ type: p.type, body: b, collider: c, mass: def.mass, home: p });
     }
-    this.contactHandlers = [];
-    this._o = new V3(); this._d = new V3(); this._r = new V3(); this._g = new V3();
   }
 
   addStatic(desc, data) {

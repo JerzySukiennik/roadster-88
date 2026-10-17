@@ -294,6 +294,69 @@ export class Cockpit {
   }
 
   drawMap(g) {
+    if (this.g.valley) this.drawValleyMap(g); else this.drawPlateMap(g);
+  }
+
+  drawValleyMap(g) {
+    const V = this.g.valley, s = this.g.car.sim, img = V.mapImage();
+    const mx = 40, my = 70, mh = H - 96 - 90, ms = mh, ext = V.extent, org = V.origin;
+    const toO = (x, z) => [mx + (1 - (x - org) / ext) * ms, my + (1 - (z - org) / ext) * ms];
+    g.save(); rr(g, mx, my, ms, ms, 18); g.clip();
+    g.drawImage(img, mx, my, ms, ms);
+    for (const c of this.g.wrecks) { const [a, b] = toO(c.sim.pos.x, c.sim.pos.z); g.fillStyle = 'rgba(255,255,255,0.45)'; g.beginPath(); g.arc(a, b, 3.5, 0, Math.PI * 2); g.fill(); }
+    const [ox, oy] = toO(s.pos.x, s.pos.z), yaw = s.yaw();
+    const R = 450, lw = W - 40 - (mx + ms + 20), lx = mx + ms + 20, sc = Math.min(lw, mh) / (2 * R);
+    g.strokeStyle = 'rgba(62,139,255,0.7)'; g.lineWidth = 1.5; g.strokeRect(ox - R * ms / ext, oy - R * ms / ext, 2 * R * ms / ext, 2 * R * ms / ext);
+    g.save(); g.translate(ox, oy); g.rotate(-yaw);
+    g.fillStyle = C.blue; g.beginPath(); g.moveTo(0, -11); g.lineTo(7, 8); g.lineTo(0, 4); g.lineTo(-7, 8); g.closePath(); g.fill();
+    g.restore(); g.restore();
+    const cx = lx + lw / 2, cy = my + mh / 2;
+    g.fillStyle = '#0f1114'; rr(g, lx, my, lw, mh, 18); g.fill();
+    g.save(); rr(g, lx, my, lw, mh, 18); g.clip();
+    g.translate(cx, cy); g.rotate(yaw); g.scale(sc, sc);
+    const ip = img.width / ext;
+    g.globalAlpha = 0.85; g.imageSmoothingEnabled = true;
+    g.drawImage(img, (1 - (s.pos.x + R * 1.5 - org) / ext) * img.width, (1 - (s.pos.z + R * 1.5 - org) / ext) * img.height, 3 * R * ip, 3 * R * ip, -1.5 * R, -1.5 * R, 3 * R, 3 * R);
+    g.globalAlpha = 1;
+    const loc = (x, z) => [s.pos.x - x, s.pos.z - z];
+    const U = V.view.U, natural = V.T.natural;
+    if (!natural) {
+      for (const r of V.roads) {
+        const vis = r.type === 'loop' || r.type === 'link' ? U.rLoop.value : r.type === 'track' ? U.rTrack.value : r.type === 'rail' ? 0 : U.rMain.value;
+        if (vis < 0.3) continue;
+        g.beginPath(); let pen = false;
+        const pts = r.pts, n = pts.length;
+        for (let i = 0; i <= n; i++) {
+          if (i === n && !r.closed) break;
+          const p = pts[i % n], dx = p[0] - s.pos.x, dz = p[1] - s.pos.z;
+          if (dx * dx + dz * dz > R * R * 2.4) { pen = false; continue; }
+          const [a, b] = loc(p[0], p[1]);
+          if (pen) g.lineTo(a, b); else { g.moveTo(a, b); pen = true; }
+        }
+        g.lineCap = 'round'; g.lineJoin = 'round';
+        g.lineWidth = Math.max(r.width, 6 / sc);
+        g.strokeStyle = r.type === 'track' ? 'rgba(170,150,120,0.55)' : r.type === 'loop' ? 'rgba(150,160,175,0.85)' : 'rgba(205,208,214,0.9)';
+        g.stroke();
+      }
+    }
+    g.font = `600 ${15 / sc}px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    for (const l of V.landmarks) {
+      const dx = l.x - s.pos.x, dz = l.z - s.pos.z; if (dx * dx + dz * dz > R * R * 2) continue;
+      const [a, b] = loc(l.x, l.z);
+      g.save(); g.translate(a, b); g.rotate(-yaw); g.fillStyle = 'rgba(242,243,245,0.75)'; g.fillText(l.label, 0, 0); g.restore();
+    }
+    g.restore();
+    g.fillStyle = C.blue; g.beginPath(); g.moveTo(cx, cy - 15); g.lineTo(cx + 10, cy + 11); g.lineTo(cx, cy + 5); g.lineTo(cx - 10, cy + 11); g.closePath(); g.fill();
+    g.strokeStyle = 'rgba(255,255,255,0.9)'; g.lineWidth = 2; g.stroke();
+    const reg = V.regionAt(s.pos.x, s.pos.z);
+    g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+    g.font = `600 13px ${FONT}`; g.fillStyle = C.faint; g.fillText('VALLEY', mx + 18, my + 28);
+    g.font = `500 22px ${FONT}`; g.fillStyle = C.ink; g.fillText(reg ? reg.name : 'Open desert', lx + 22, my + 38);
+    g.font = `400 15px ${FONT}`; g.fillStyle = C.dim; g.fillText(`${Math.round(s.pos.y)} m · ${V.surfaceAt(s.pos.x, s.pos.z)}`, lx + 22, my + 62);
+    g.textAlign = 'right'; g.fillText('4 × 4 km', mx + ms - 16, my + ms - 14); g.textAlign = 'left';
+  }
+
+  drawPlateMap(g) {
     const L = this.g.layout, P = L.plate;
     const mx = 40, my = 70, mw = W - 80, mh = H - 96 - 90;
     g.fillStyle = '#101215'; rr(g, mx, my, mw, mh, 18); g.fill();
@@ -310,7 +373,7 @@ export class Cockpit {
     for (const p of L.props) { const [a, b] = map(p.pos[0], p.pos[2]); g.fillRect(a - 1, b - 1, 2, 2); }
     for (const c of this.g.wrecks) { const [a, b] = map(c.sim.pos.x, c.sim.pos.z); g.fillStyle = 'rgba(255,255,255,0.4)'; g.beginPath(); g.arc(a, b, 4, 0, Math.PI * 2); g.fill(); }
     const s = this.g.car.sim, [ax, ay] = map(s.pos.x, s.pos.z), yaw = s.yaw();
-    g.save(); g.translate(ax, ay); g.rotate(-yaw + Math.PI);
+    g.save(); g.translate(ax, ay); g.rotate(-yaw);
     g.fillStyle = C.blue; g.beginPath(); g.moveTo(0, -14); g.lineTo(9, 10); g.lineTo(0, 5); g.lineTo(-9, 10); g.closePath(); g.fill();
     g.restore();
     g.restore();
