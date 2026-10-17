@@ -418,11 +418,12 @@ export class Cockpit {
   }
 
   drawRadio(g) {
-    const era = eraOf(this.g.tc.present.year).id, on = this.g.settings.radio;
+    const now = eraOf(this.g.tc.present.year), era = now.id, on = this.g.settings.radio;
     g.fillStyle = C.panel; rr(g, 40, 80, 560, 380, 20); g.fill();
     g.font = `600 13px ${FONT}`; g.fillStyle = C.faint; g.fillText('NOW PLAYING', 70, 120);
-    const e = ERAS.find((x) => x.id === era);
-    g.font = `300 52px ${FONT}`; g.fillStyle = C.ink; g.fillText(`${e.label} FM`, 70, 196);
+    const label = `${now.label} FM`; let fs = 52;
+    do { g.font = `300 ${fs}px ${FONT}`; fs -= 2; } while (fs > 24 && g.measureText(label).width > 500);
+    g.fillStyle = C.ink; g.fillText(label, 70, 196);
     g.font = `400 18px ${FONT}`; g.fillStyle = C.dim; g.fillText(`Follows the present era · ${formatYear(this.g.tc.present.year)}`, 70, 232);
     const hot = this.btn('radio', 70, 300, 200, 70, () => this.g.setRadio(!this.g.settings.radio));
     g.fillStyle = on ? C.blue : hot ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.08)'; rr(g, 70, 300, 200, 70, 35); g.fill();
