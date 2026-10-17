@@ -16,6 +16,7 @@ import { Walker } from './walker.js';
 import { Online } from './online.js';
 import { YearInput } from './yearInput.js';
 import { Interact } from './interact.js';
+import { Story } from './story/story.js';
 import { AudioEngine } from './audio.js';
 import { DamageSystem } from './damage.js';
 import { Cockpit } from './render/cockpit.js';
@@ -99,6 +100,7 @@ class Game {
     this.spawn(sp, sy);
     if (this.valley) { await this.loadEras(); await this.loadLife(); }
     await this.loadSpace();
+    if (this.valley && this.life && !params.has('nostory')) { try { this.story = new Story(this); } catch (e) { this.story = null; console.error('story failed', e); } }
     this.input = new Input($('view'));
     this.hud = new Hud($('hud'));
     this.rig = new CameraRig(this.gfx.camera, this.tu);
@@ -637,6 +639,7 @@ class Game {
         if (this.valley) this.arriveValley();
         this.hint(`${eraOf(this.tc.present.year).label} · ${formatYear(this.tc.present.year)}`, 3);
       }
+      if (this.story && (e === 'depart' || e === 'arrive')) this.story.onTime(e);
     }
   }
 
@@ -701,6 +704,7 @@ class Game {
     if (this.walker.active) this.walker.interpolate(alpha);
     this.online.update(fdt);
     if (this.space && !this.spaceBroken) { try { this.space.update(fdt); } catch (e) { this.spaceBroken = true; console.error('space.update failed', e); } }
+    if (this.story && !this.storyBroken) { try { this.story.update(fdt); } catch (e) { this.storyBroken = true; console.error('story.update failed', e); } }
     let rideR = null, rs = null;
     if (this.ride) {
       rideR = this.online.remotes.get(this.ride) || null;
@@ -833,6 +837,7 @@ class Game {
       valley() { const v = g.valley; if (!v) return null; const s = v.view.stats; return { chunks: s.chunks, tris: s.tris, built: s.built, cache: v.view.cache.size, era: v.era, surface: v.surfaceAt(g.car.sim.pos.x, g.car.sim.pos.z), region: (v.regionAt(g.car.sim.pos.x, g.car.sim.pos.z) || {}).id || null, h: v.heightAt(g.car.sim.pos.x, g.car.sim.pos.z), eras: !!g.eras }; },
       era(id) { if (g.eras) g.eras.apply(id, { instant: true }); else if (g.valley) g.valley.setEraTerrain(id); if (g.life) g.life.setEra(id); },
       click() { g.input.clicks++; },
+      story: { goto(id) { g.story.jump(id); }, reset() { g.story.reset(); }, state() { return JSON.stringify({ step: g.story.st.step, flags: g.story.st.flags, frunk: g.story.st.frunk, anchors: g.story.st.anchors }); } },
       item(kind = 'crate') { const w = g.walker, p = w.active ? w.pos : g.car.sim.pos, f = w.active ? { x: Math.sin(w.yaw), z: Math.cos(w.yaw) } : { x: 0, z: 3 }; return g.interact.spawnItem(kind, { x: p.x + f.x * 1.6, y: p.y + 0.6, z: p.z + f.z * 1.6 }); },
       kill(cause = 'fall') { g.player.kill(cause); },
     };

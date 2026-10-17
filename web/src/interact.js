@@ -50,15 +50,16 @@ export class Interact {
       const b = col.parent(), ud = col.userData || {};
       if (!b || !b.isDynamic() || ud.life || ud.kind === 'car' || ud.kind === 'remote' || ud.kind === 'walker' || b.mass() > MAX_MASS) return true;
       const t = b.translation(), d = Math.hypot(t.x - c.x, t.z - c.z) + Math.abs(t.y - c.y) * 0.5;
-      if (d < bd) { bd = d; best = { body: b, col, label: (ud.item && ud.item.label) || ud.label || (b.mass() > 30 ? 'heavy object' : 'object') }; }
+      if (d < bd) { const ex = t.x - w.pos.x, ez = t.z - w.pos.z, dw = Math.hypot(ex, ez); bd = d; best = { body: b, col, d: dw - ((ex * fx + ez * fz) / (dw || 1)) * 0.6, label: (ud.item && ud.item.label) || ud.label || (b.mass() > 30 ? 'heavy object' : 'object') }; }
       return true;
     }, undefined, groups(GROUP.WALKER, GROUP.PROP | GROUP.DEBRIS));
     return best;
   }
 
-  nearestSpot(w) {
+  nearestSpot(w, holding = false) {
     let best = null, bd = 1e9;
     for (const s of this.spots) {
+      if (holding && !s.holding) continue;
       if (s.enabled && !s.enabled()) continue;
       const p = typeof s.pos === 'function' ? s.pos() : s.pos; if (!p) continue;
       const dx = p.x - w.pos.x, dz = p.z - w.pos.z, d = Math.hypot(dx, dz);
@@ -67,14 +68,16 @@ export class Interact {
       const score = d - front * 0.6;
       if (score < bd) { bd = score; best = s; }
     }
+    this.spotScore = bd;
     return best;
   }
 
   use() {
     const g = this.g, w = g.walker;
     if (!w.active || w.dead) return;
-    if (this.held) { this.drop(); return; }
-    const f = this.focus; if (!f) return;
+    const f = this.focus;
+    if (this.held && !(f && f.spot)) { this.drop(); return; }
+    if (!f) return;
     if (f.spot) { f.spot.onUse && f.spot.onUse(g.player, f.spot); return; }
     if (f.body) this.pick(f.body, f.col);
   }
@@ -144,11 +147,14 @@ export class Interact {
     let label = null;
     this.focus = null;
     if (w.active && !w.dead && !g.paused) {
-      if (this.held) label = this.pending !== null ? null : 'Drop · Click to throw';
+      if (this.held) {
+        const s = this.pending === null ? this.nearestSpot(w, true) : null;
+        if (s) { this.focus = { spot: s }; label = s.label; } else label = this.pending !== null ? null : 'Drop · Click to throw';
+      }
       else {
-        const s = this.nearestSpot(w);
-        if (s) { this.focus = { spot: s }; label = s.label; }
-        else { const b = this.nearestBody(w); if (b) { this.focus = b; label = 'Pick up ' + b.label; } }
+        const s = this.nearestSpot(w), sd = this.spotScore, b = this.nearestBody(w);
+        if (s && (!b || sd <= b.d + 0.25)) { this.focus = { spot: s }; label = s.label; }
+        else if (b) { this.focus = b; label = 'Pick up ' + b.label; }
       }
     }
     if (label !== this.shown) {
