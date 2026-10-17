@@ -99,22 +99,32 @@ export class Weather {
     sys.game.weather = api;
   }
 
+  sharedRng() {
+    const g = this.sys.game, on = g.online;
+    if (!on || on.status !== 'online' || this.override) return null;
+    const slot = Math.floor((Date.now() + (on.offset || 0)) / 300000), key = on.roomId() + ':' + slot;
+    let h = 2166136261; for (let i = 0; i < key.length; i++) { h ^= key.charCodeAt(i); h = Math.imul(h, 16777619); }
+    this.slot = slot;
+    return () => { h = Math.imul(h ^ (h >>> 15), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); h ^= h >>> 16; return (h >>> 0) / 4294967296; };
+  }
+
   roll(eraId, opts = {}) {
     const g = this.sys.game, month = g.tc ? g.tc.present.month : 10;
+    const R = this.sharedRng() || Math.random;
     this.eraId = eraId; this.month = month;
     const season = seasonOf(month), kinds = kindsFor(eraId);
     this.api.kinds = kinds; this.api.season = eraId === 'hadean' ? 'none' : season;
     let kind = this.override && kinds.includes(this.override) ? this.override : null;
     if (!kind) {
-      const T = table(eraId, season); let r = Math.random(), acc = 0; kind = 'clear';
+      const T = table(eraId, season); let r = R(), acc = 0; kind = 'clear';
       for (const [k, p] of Object.entries(T)) { acc += p; if (r < acc) { kind = k; break; } }
       if (opts.kind && kinds.includes(opts.kind)) kind = opts.kind;
     }
     this.setTarget(kind, opts.instant !== false);
-    this.windDir = Math.random() * Math.PI * 2;
-    this.drift = 150 + Math.random() * 180;
+    this.windDir = R() * Math.PI * 2;
+    this.drift = 150 + R() * 180;
     const P = this.target;
-    this.wet = P.rain > 0 ? 0.9 : kind === 'fog' ? 0.35 : season === 'winter' && Math.random() < 0.4 ? 0.4 : 0;
+    this.wet = P.rain > 0 ? 0.9 : kind === 'fog' ? 0.35 : season === 'winter' && R() < 0.4 ? 0.4 : 0;
     this.snowCover = P.snow > 0 ? 0.75 : 0;
     this.pushNow();
   }
@@ -143,7 +153,11 @@ export class Weather {
     for (const n of NUM) C[n] += (T[n] - C[n]) * k;
     C.haze = T.haze;
     if (this.rate > 0.06 && Math.abs(C.clouds - T.clouds) < 0.02) this.rate = 0.06;
-    if (!this.override) {
+    const on = g.online && g.online.status === 'online';
+    if (on && !this.override) {
+      const slot = Math.floor((Date.now() + (g.online.offset || 0)) / 300000);
+      if (slot !== this.slot || g.online.roomId() !== this.sharedRoom) { this.sharedRoom = g.online.roomId(); this.roll(this.eraId, { instant: this.slot === undefined }); }
+    } else if (!this.override) {
       this.drift -= dt;
       if (this.drift <= 0) { const opts = NEXT[this.kind].filter((x) => this.api.kinds.includes(x)); if (opts.length && Math.random() < 0.6) this.setTarget(opts[Math.floor(Math.random() * opts.length)], false); this.drift = 120 + Math.random() * 200; }
     }

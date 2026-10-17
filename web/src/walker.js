@@ -105,8 +105,9 @@ export class Walker {
   }
 
   knock() {
-    for (const c of this.g.cars) {
-      const s = c.sim; if (!s.enabled) continue;
+    const list = this.g.cars.map((c) => (c.sim.enabled ? c.sim : null)).filter(Boolean);
+    if (this.g.online) list.push(...this.g.online.carStates());
+    for (const s of list) {
       const dx = this.pos.x - s.pos.x, dy = this.pos.y + 0.9 - (s.pos.y + 0.6), dz = this.pos.z - s.pos.z;
       if (Math.abs(dy) > 1.6) continue;
       const lx = dx * s.left.x + dz * s.left.z, lz = dx * s.fwd.x + dz * s.fwd.z;

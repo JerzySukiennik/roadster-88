@@ -59,7 +59,8 @@ export class Menu {
     this.setFocus(start, false);
     this.renderPanel();
     const car = g.car && g.car.view && !g.car.view.placeholder ? 'Roadster 2026' : 'placeholder car';
-    this.foot.textContent = `${g.gfx.backend} · ${car}`;
+    const on = g.online && g.online.status === 'online' ? ` · ${g.online.count} online` : '';
+    this.foot.textContent = `${g.gfx.backend} · ${car}${on}`;
   }
 
   setFocus(i, sound) {
@@ -123,6 +124,14 @@ export class Menu {
       P.appendChild(this.row('Quality', this.seg(Object.entries(PRESETS).map(([k, v]) => [k, v.label]), () => g.gfx.presetName, (k) => { g.gfx.setPreset(k); g.store.set('quality', k); })));
       P.appendChild(this.row('Flight assist', this.seg([['on', 'On'], ['off', 'Off']], () => (g.settings.assist ? 'on' : 'off'), (k) => g.setAssist(k === 'on'))));
       P.appendChild(this.row('Radio', this.seg([['on', 'On'], ['off', 'Off']], () => (g.settings.radio ? 'on' : 'off'), (k) => g.setRadio(k === 'on'))));
+      if (g.online) {
+        P.appendChild(this.row('Online', this.seg([['on', 'On'], ['off', 'Off']], () => (g.online.enabled ? 'on' : 'off'), (k) => { g.online.setEnabled(k === 'on'); this.renderPanel(); })));
+        const inp = el('input', 'name-input'); inp.value = g.online.name; inp.maxLength = 20; inp.spellcheck = false;
+        inp.onkeydown = (e) => { e.stopPropagation(); if (e.key === 'Enter') inp.blur(); };
+        inp.onchange = () => { g.online.setName(inp.value); inp.value = g.online.name; };
+        P.appendChild(this.row('Name', inp));
+        P.appendChild(el('div', 'panel-note', g.online.status === 'online' ? `${g.online.count} online in this era` : g.online.status === 'connecting' ? 'Connecting...' : g.online.enabled ? 'Offline' : 'Single player'));
+      }
       const W = g.weather;
       if (W && Array.isArray(W.kinds) && W.set) P.appendChild(this.row('Weather', this.seg([['auto', 'Auto'], ...W.kinds.map((k) => [k, k[0].toUpperCase() + k.slice(1)])], () => W.override || 'auto', (k) => W.set(k === 'auto' ? null : k))));
       P.appendChild(el('div', 'panel-note', `${g.gfx.backend} · ${Math.round(g.gfx.scale * 100)}% resolution`));

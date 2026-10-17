@@ -52,6 +52,7 @@ export class DamageSystem {
     this.shards = new Shards(game.gfx.scene);
     this.scrape = 0; this.scrapeT = 0;
     this.lastImpact = new Map();
+    this.lastRemote = new Map();
     this._v = new V3();
   }
 
@@ -94,6 +95,7 @@ export class DamageSystem {
     let mOther = Infinity;
     if (otherDyn) { const lv = otherBody.linvel(); vOther.set(lv.x, lv.y, lv.z); mOther = otherBody.mass(); }
     if (od.kind === 'car') { const os = od.car; vOther.set(os.prevVel.x, os.prevVel.y, os.prevVel.z); mOther = os.mass; }
+    if (od.kind === 'remote') { vOther.set(od.vel.x, od.vel.y, od.vel.z); mOther = od.mass; }
     const rel = vCar.clone().sub(vOther);
     if (rel.dot(nrm) < 0) nrm.negate();
     const vn = rel.dot(nrm);
@@ -110,6 +112,13 @@ export class DamageSystem {
     this.lastImpact.set(key, now);
     const J = mu * vn * 1.1;
     const E = 0.5 * mu * vn * vn * 0.99;
+    if (od.kind === 'remote' && car === this.g.car) { this.lastRemote.set(od.uid, now); if (this.g.online) this.g.online.sendHit(od.uid, J, nrm, pt); }
+    this.impactAt(car, pt, nrm, vn, J, E, rel, od);
+  }
+
+  recentRemote(car, uid) { return car === this.g.car && this.g.time - (this.lastRemote.get(uid) || -9) < 0.5; }
+
+  impactAt(car, pt, nrm, vn, J, E, rel, od) {
     const q = car.curr.quat.clone().invert();
     const pL = pt.clone().sub(car.curr.pos).applyQuaternion(q);
     const nL = nrm.clone().applyQuaternion(q);

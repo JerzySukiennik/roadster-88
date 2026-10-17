@@ -13,6 +13,7 @@ import { Input } from './input.js';
 import { Hud } from './hud.js';
 import { Menu } from './menu.js';
 import { Walker } from './walker.js';
+import { Online } from './online.js';
 import { AudioEngine } from './audio.js';
 import { DamageSystem } from './damage.js';
 import { Cockpit } from './render/cockpit.js';
@@ -84,7 +85,14 @@ class Game {
     this.lamps = { L: new THREE.SpotLight(0xf2f6ff, 0, 140, 0.42, 0.55, 1.6), R: new THREE.SpotLight(0xf2f6ff, 0, 140, 0.42, 0.55, 1.6), cabin: new THREE.PointLight(0x9fb8ff, 0, 1.6, 2) };
     for (const k of ['L', 'R']) { this.lamps[k].castShadow = false; this.gfx.scene.add(this.lamps[k], this.lamps[k].target); }
     this.gfx.scene.add(this.lamps.cabin);
-    this.spawn(this.map.spawn.pos, this.map.spawn.yaw);
+    const sp = this.map.spawn.pos.slice(), sy = this.map.spawn.yaw;
+    if (store.get('online', true) && !params.has('offline') && (!params.has('debug') || params.has('jitter'))) {
+      const along = (Math.random() * 2 - 1) * 55, lane = Math.round(Math.random() * 2 - 1) * 3.6;
+      sp[0] += Math.sin(sy) * along + Math.cos(sy) * lane; sp[2] += Math.cos(sy) * along - Math.sin(sy) * lane;
+      this.rayObj = this.rayObj || new RAPIER.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: 1, z: 0 });
+      const gy = this.groundHeight(sp[0], sp[2], sp[1] + 20); if (gy !== null) sp[1] = gy + 0.05;
+    }
+    this.spawn(sp, sy);
     if (this.valley) { await this.loadEras(); await this.loadLife(); }
     this.input = new Input($('view'));
     this.hud = new Hud($('hud'));
@@ -93,6 +101,7 @@ class Game {
     this.acc = 0; this.last = performance.now(); this.paused = false; this.time = 0;
     this.frames = []; this.spikes = 0; this.frameCount = 0; this.warm = 0; this.prof = { sim: 0, mid: 0, render: 0 };
     this.menu = new Menu(this);
+    this.online = new Online(this);
     this.harness = params.has('debug');
     this.input.onLockChange = (locked) => { if (!locked && !this.paused && this.started && !this.harness) this.setPaused(true); };
     const unlock = () => { this.audio.unlock().then(() => this.audio.setRadio(this.settings.radio, this.eraId())); };
@@ -115,6 +124,7 @@ class Game {
     const tw = performance.now();
     await new Promise((res) => { const chk = () => (this.stable >= 20 || performance.now() - tw > 25000 ? res() : setTimeout(chk, 50)); chk(); });
     progress(1, ''); $('loading').classList.add('done'); this.started = true;
+    this.online.start();
     if (this.harness || params.has('nomenu')) this.hint('Click to drive. Esc for the menu.', 4);
     else { this.paused = true; this.menu.showTitle(); }
   }
@@ -342,6 +352,7 @@ class Game {
       c.sim.preStep(dt, c === this.car && !this.walker.active ? inp : this.walker.parked);
     }
     if (this.walker.active) this.walker.step(dt, this.input, this.rig.footYaw);
+    this.online.preStep(dt);
     if (this.valley) this.valley.preStep(dt, this.cars);
     this.phys.thrustOnProps(this.car.sim, dt);
     this.phys.step((a, b, f) => this.damage.onContact(a, b, f));
@@ -458,6 +469,7 @@ class Game {
       c.view.sync(fdt, c.sim, c.pose, c.sim.wreck ? 0 : night);
     }
     if (this.walker.active) this.walker.interpolate(alpha);
+    this.online.update(fdt);
     const [mx, my] = this.input.consumeMouse();
     this.rig.mouse(mx, my, now / 1000);
     const s = this.car.sim;
