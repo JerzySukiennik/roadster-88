@@ -3,7 +3,7 @@ import { V3, Quat, clamp, smoothstep, moveTowards, DEG, MPH, yawOf } from './mat
 import { Thrusters } from './thrusters.js';
 import { FlightComputer } from './flight.js';
 
-export const GROUP = { STATIC: 0x0001, CAR: 0x0002, PROP: 0x0004, DEBRIS: 0x0008 };
+export const GROUP = { STATIC: 0x0001, CAR: 0x0002, PROP: 0x0004, DEBRIS: 0x0008, WALKER: 0x0010 };
 export const groups = (member, filter) => ((member & 0xffff) << 16) | (filter & 0xffff);
 export const WHEEL_NAMES = ['Wheel_FL', 'Wheel_FR', 'Wheel_RL', 'Wheel_RR'];
 
@@ -237,7 +237,9 @@ export class CarSim {
     const v = this.fwdSpeed, grounded = this.contacts > 0;
     const still = Math.abs(v) < 0.6;
     let drive = 0, brake = 0;
-    if (this.gear === 'D') {
+    if (inp.park) {
+      this.gear = 'D'; this.reverseHold = 0; brake = inp.brake;
+    } else if (this.gear === 'D') {
       drive = inp.throttle; brake = inp.brake;
       if (inp.brake && !inp.throttle && still && !inp.boost) { this.reverseHold += dt; if (this.reverseHold > 0.18) { this.gear = 'R'; this.reverseHold = 0; } } else this.reverseHold = 0;
     } else {
@@ -455,4 +457,4 @@ export function tyreCurve(Ty, sx, sy) {
   return CURVE;
 }
 
-const WRECK_INPUT = { throttle: 0, brake: 1, steer: 0, boost: false, lift: false, descend: false, pitch: 0, roll: 0 };
+const WRECK_INPUT = { throttle: 0, brake: 1, steer: 0, boost: false, lift: false, descend: false, pitch: 0, roll: 0, park: true };

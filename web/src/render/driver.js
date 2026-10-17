@@ -1,4 +1,4 @@
-// Roadster 88 driver: Jurek's avatar seated at Seat_Driver with garments rebound to the body skeleton by bone name (Cloth_* bones kept), body regions masked under clothes, two-bone IK legs and arms to the pedals and yoke grips, finger curl, head look and a right-hand reach to the touchscreen.
+// Roadster 88 driver: Jurek's avatar seated at Seat_Driver with garments rebound to the body skeleton by bone name (Cloth_* bones kept), body regions masked under clothes, two-bone IK legs and arms to the pedals and yoke grips, finger curl, head look and a right-hand reach to the touchscreen; on foot a procedural walk, run, jump and tumble with feet planted on the ground.
 import * as THREE from 'three/webgpu';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
@@ -50,6 +50,8 @@ export class Driver {
     for (const s of ['Left', 'Right']) this.len[s] = { leg1: d(s + 'UpLeg', s + 'Leg'), leg2: d(s + 'Leg', s + 'Foot'), arm1: d(s + 'Arm', s + 'ForeArm'), arm2: d(s + 'ForeArm', s + 'Hand') };
     this.restWorldQ = new Map();
     for (const [n, b] of this.bones) this.restWorldQ.set(n, b.getWorldQuaternion(Q()));
+    this.hipRest = this.bones.get('Hips').getWorldPosition(V());
+    this.ankleH = Math.max(0.05, this.bones.get('LeftFoot').getWorldPosition(V()).y);
     await this.setOutfit(outfitIndex);
     this.ready = true;
     return this.root;
@@ -230,4 +232,74 @@ export class Driver {
   }
 
   touch(point) { this.reachTarget.copy(point); this.reach = 1; }
+
+  attach(parent, onFoot) {
+    if (!this.root) return;
+    parent.add(this.root);
+    if (!onFoot) { this.root.position.set(0, 0, 0); this.root.quaternion.identity(); }
+  }
+
+  walkPose(w, dt, opt) {
+    if (!this.ready) return;
+    const root = this.root, sp = w.speed, run = Math.min(1, Math.max(0, (sp - 2.2) / 3.5)), amp = Math.min(1, sp / 0.9);
+    root.position.set(w.pose.x, w.pose.y, w.pose.z);
+    this.spin = w.tumble > 0 && !w.grounded ? (this.spin || 0) + dt * 7 : (this.spin || 0) * Math.max(0, 1 - dt * 10);
+    const rq = Q().setFromAxisAngle(Y, w.yaw).multiply(Q().setFromAxisAngle(X, this.spin));
+    root.quaternion.copy(rq);
+    root.updateMatrixWorld(true);
+    this.resetPose();
+    root.updateMatrixWorld(true);
+    const fwd = Z.clone().applyQuaternion(rq), side = X.clone().applyQuaternion(rq), up = Y.clone().applyQuaternion(rq);
+    const stride = 0.5 + 0.2 * sp;
+    if (w.grounded) w.phase = (w.phase + dt * Math.PI * sp / stride) % (Math.PI * 2);
+    const ph = w.phase;
+    const bob = w.grounded ? -Math.abs(Math.cos(ph)) * (0.025 + 0.05 * run) * amp : 0;
+    const crouch = w.tumble > 0 ? 0.25 : 0.03 + 0.07 * run;
+    const hips = this.bones.get('Hips');
+    const hp = root.position.clone().addScaledVector(up, this.hipRest.y - crouch + bob).addScaledVector(fwd, run * 0.1).addScaledVector(side, Math.sin(ph) * 0.025 * amp);
+    const lean = run * 0.22 + (w.grounded ? 0 : -0.1);
+    this.setWorldQuat(hips, rq.clone().multiply(Q().setFromAxisAngle(Y, Math.sin(ph) * 0.12 * amp)).multiply(Q().setFromAxisAngle(X, lean)).multiply(this.restWorldQ.get('Hips')));
+    hips.position.copy(hips.parent.worldToLocal(hp.clone()));
+    hips.updateWorldMatrix(true, false);
+    for (const [n, k] of [['Spine', 0.4], ['Spine1', 0.6]]) { const b = this.bones.get(n); if (b) this.rotateWorld(b, up, -Math.sin(ph) * 0.16 * amp * k); }
+    const neck = this.bones.get('Neck'), head = this.bones.get('Head');
+    if (neck && head) {
+      let hy = (opt.camYaw || 0) - w.yaw; hy = Math.atan2(Math.sin(hy), Math.cos(hy)); hy = Math.max(-1, Math.min(1, hy));
+      this.rotateWorld(neck, up, hy * 0.35); this.rotateWorld(head, up, hy * 0.45);
+      this.rotateWorld(head, side, -lean * 0.6);
+    }
+    const ground = opt.ground || (() => root.position.y);
+    const L0 = this.len.Left.leg1 + this.len.Left.leg2;
+    for (const s of ['Left', 'Right']) {
+      const L = this.len[s], sx = s === 'Left' ? 1 : -1;
+      const u = (((ph + (s === 'Left' ? 0 : Math.PI)) / (Math.PI * 2)) % 1 + 1) % 1;
+      let fo, lift = 0, toe = 0;
+      if (u < 0.6) fo = stride * (0.5 - u / 0.6);
+      else { const t = (u - 0.6) / 0.4; fo = stride * (-0.5 + t); lift = Math.sin(Math.PI * t) * (0.1 + 0.08 * run); toe = -Math.sin(Math.PI * t) * 0.5; }
+      fo *= amp; lift *= amp; toe *= amp;
+      let target;
+      if (!w.grounded || w.tumble > 0) {
+        target = hp.clone().addScaledVector(up, -L0 * (w.tumble > 0 ? 0.55 : 0.78)).addScaledVector(fwd, sx * 0.12 + 0.1).addScaledVector(side, sx * 0.13);
+      } else {
+        target = root.position.clone().addScaledVector(fwd, fo + (amp < 0.3 ? sx * 0.04 : 0)).addScaledVector(side, sx * 0.1);
+        const gy = Math.max(root.position.y - 0.35, Math.min(root.position.y + 0.35, ground(target.x, target.z)));
+        target.y = gy + this.ankleH + lift;
+      }
+      this.twoBone(this.bones.get(s + 'UpLeg'), this.bones.get(s + 'Leg'), this.bones.get(s + 'Foot'), target, fwd.clone().add(up.clone().multiplyScalar(0.15)), L.leg1, L.leg2);
+      const foot = this.bones.get(s + 'Foot');
+      if (foot) this.setWorldQuat(foot, rq.clone().multiply(Q().setFromAxisAngle(X, toe)).multiply(this.restWorldQ.get(s + 'Foot')));
+    }
+    for (const s of ['Left', 'Right']) {
+      const sx = s === 'Left' ? 1 : -1;
+      const swing = Math.sin(ph + (s === 'Left' ? Math.PI : 0)) * (0.35 + 0.55 * run) * amp;
+      const arm = this.bones.get(s + 'Arm'), fore = this.bones.get(s + 'ForeArm'), hand = this.bones.get(s + 'Hand');
+      if (!arm || !fore || !hand) continue;
+      const flail = w.tumble > 0 ? 1 : (w.grounded ? 0 : 0.35);
+      const upper = up.clone().multiplyScalar(-1 + flail * 1.5).addScaledVector(fwd, Math.sin(swing) * 1.1 + flail * 0.2).addScaledVector(side, sx * (0.16 + flail * 0.8));
+      this.aim(arm, fore, upper.normalize());
+      const lower = up.clone().multiplyScalar(-0.75 + run * 0.6 + flail).addScaledVector(fwd, 0.3 + run * 0.7 + Math.max(0, Math.sin(swing)) * 0.4).addScaledVector(side, sx * 0.05);
+      this.aim(fore, hand, lower.normalize());
+      this.curl(s, 0.35 + run * 0.5);
+    }
+  }
 }

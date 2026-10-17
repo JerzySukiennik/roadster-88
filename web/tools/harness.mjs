@@ -222,6 +222,22 @@ const S = {
     console.log('after', await probe());
     await release();
   },
+  async foot() {
+    await wait(2500);
+    await tap('KeyF'); await wait(1500); await shot('foot_exit');
+    console.log('walker', await R(() => { const w = window.__r88.game.walker; return JSON.stringify({ active: w.active, pos: w.pos, grounded: w.grounded }); }));
+    await keys('KeyW'); await wait(1500); await shot('foot_walk');
+    await keys('KeyW', 'ShiftLeft'); await wait(1500); await shot('foot_run');
+    console.log('walker run', await R(() => { const w = window.__r88.game.walker; return JSON.stringify({ speed: w.speed.toFixed(2), pos: [w.pos.x.toFixed(1), w.pos.y.toFixed(2), w.pos.z.toFixed(1)], grounded: w.grounded }); }));
+    await keys('KeyW', 'ShiftLeft', 'Space'); await wait(250); await shot('foot_jump'); await keys('KeyW', 'ShiftLeft'); await wait(800);
+    await R(() => window.__r88.game.rig.footYaw += Math.PI); await keys(); await wait(600); await shot('foot_turn');
+    await R(() => { const g = window.__r88.game, w = g.walker, c = g.car.sim; g.rig.footYaw = Math.atan2(c.pos.x - w.pos.x, c.pos.z - w.pos.z); });
+    await keys('KeyW', 'ShiftLeft');
+    for (let i = 0; i < 40; i++) { await wait(150); if (await R(() => !!window.__r88.game.walker.nearestCar())) break; await R(() => { const g = window.__r88.game, w = g.walker, c = g.car.sim; g.rig.footYaw = Math.atan2(c.pos.x - w.pos.x, c.pos.z - w.pos.z); }); }
+    await keys(); await wait(400); await shot('foot_near');
+    await tap('KeyF'); await wait(1500); await shot('foot_enter');
+    console.log('after enter', await R(() => { const g = window.__r88.game; return JSON.stringify({ active: g.walker.active, mode: g.rig.mode }); }));
+  },
   async night() { await R(() => window.__r88.setTime(22, 30)); await wait(2500); await shot('night'); await keys('KeyW'); await wait(2000); await shot('night_drive'); await release(); },
   async fpp() {
     await R(() => window.__r88.camera('fpp')); await wait(1500); await shot('fpp');

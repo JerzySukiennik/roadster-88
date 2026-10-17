@@ -1,4 +1,4 @@
-// Roadster 88 cameras: spring-damped chase camera in the car's moving frame (orbit, recentre, look-ahead, speed FOV, shake, wall/ground avoidance) and the driver-eye FPP camera with head look.
+// Roadster 88 cameras: spring-damped chase camera in the car's moving frame (orbit, recentre, look-ahead, speed FOV, shake, wall/ground avoidance), the driver-eye FPP camera with head look, and an over-the-shoulder orbit camera on foot.
 import * as THREE from 'three/webgpu';
 
 const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3(), tmpQ = new THREE.Quaternion();
@@ -16,11 +16,16 @@ export class CameraRig {
     this.fppYaw = 0; this.fppPitch = 0;
     this.hold = null; this.lag = new THREE.Vector3(); this.lagVel = new THREE.Vector3();
     this.initialized = false; this.heightAdj = 0;
+    this.footYaw = 0; this.footPitch = 0.25; this.footPos = new THREE.Vector3(); this.footInit = false;
   }
 
   addImpact(k) { this.impact = Math.min(1.5, this.impact + k); }
 
   mouse(dx, dy, now) {
+    if (this.mode === 'foot') {
+      this.footYaw -= dx * 0.0028; this.footPitch = THREE.MathUtils.clamp(this.footPitch + dy * 0.0022, -0.45, 1.15);
+      return;
+    }
     if (this.mode === 'chase') {
       this.orbitYaw -= dx * 0.0032; this.orbitPitch = THREE.MathUtils.clamp(this.orbitPitch + dy * 0.0024, -0.35, 0.9);
       if (dx || dy) this.lastMouse = now;
@@ -130,6 +135,29 @@ export class CameraRig {
     const fovT = 72 - 20 * fk;
     this.fov += (fovT - this.fov) * Math.min(1, dt * 4);
     cam.fov = this.fov; cam.updateProjectionMatrix();
+  }
+
+  updateFoot(dt, p, raycast) {
+    const cam = this.cam, yaw = this.footYaw, pitch = this.footPitch;
+    this.t += dt;
+    const right = tmpV.set(-Math.cos(yaw), 0, Math.sin(yaw));
+    const pivot = new THREE.Vector3(p.x, p.y + 1.55, p.z).addScaledVector(right, 0.42);
+    const dir = tmpV2.set(-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch));
+    const dist = 3.3 + Math.max(0, pitch) * 1.2;
+    const hit = raycast ? raycast(pivot, dir, dist + 0.3) : null;
+    const len = hit !== null && hit < dist + 0.3 ? Math.max(0.6, hit - 0.25) : dist;
+    const want = pivot.clone().addScaledVector(dir, len);
+    if (!this.footInit) { this.footPos.copy(want); this.footInit = true; }
+    this.footPos.lerp(want, Math.min(1, dt * 14));
+    if (this.footPos.distanceTo(want) > 0.8) this.footPos.copy(want);
+    cam.position.copy(this.footPos);
+    const amp = this.impact * 0.1;
+    cam.position.x += noise1(this.t * 6) * amp; cam.position.y += noise1(this.t * 6 + 17) * amp;
+    cam.lookAt(pivot.x + Math.sin(yaw) * 2, pivot.y - 0.1, pivot.z + Math.cos(yaw) * 2);
+    this.impact = Math.max(0, this.impact - dt * 1.8);
+    this.fov += (62 - this.fov) * Math.min(1, dt * 4);
+    cam.near = 0.1; cam.fov = this.fov; cam.updateProjectionMatrix();
+    this.heading = yaw;
   }
 
   gazeDir(out) { return out.set(0, 0, -1).applyQuaternion(this.cam.quaternion); }
