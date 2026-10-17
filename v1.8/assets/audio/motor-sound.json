@@ -1,0 +1,30 @@
+{
+ "name": "Jurek",
+ "tones": [
+  [
+   515.118885362368,
+   0.305
+  ],
+  [
+   282.5455829795911,
+   0.26
+  ]
+ ],
+ "wave": 0,
+ "detune": 0,
+ "cutoff": 331.8235917958316,
+ "q": 1.2,
+ "echo": 0,
+ "feedback": 0,
+ "shimmer": 0,
+ "shimmerHz": 0.05,
+ "noise": 0,
+ "noiseTone": 150,
+ "idle": 0.05,
+ "top": 0.14,
+ "topSpeed": 45,
+ "throttle": 0.06,
+ "pitch": 0.23,
+ "airMute": true,
+ "gain": 1.2
+}
