@@ -48,7 +48,10 @@ class Remote {
 
   get hidden() { return !!(this.flags & 512) || performance.now() < (this.hideUntil || 0); }
 
-  clock() { return (Date.now() + this.on.offset) / 1000 - LEAD; }
+  clock() {
+    const ml = this.minLat === undefined ? 0 : this.minLat, fix = ml < -0.02 || ml > 0.5 ? ml - 0.06 : 0;
+    return (Date.now() + this.on.offset) / 1000 - fix - LEAD;
+  }
 
   push(d, now) {
     if (!d || !d.c) return;
@@ -58,12 +61,15 @@ class Remote {
     if ((fl & 256) && !(was & 256)) { this.departed = false; this.vanished = false; this.pendingFx = 'arrive'; }
     if (!(fl & 128) && this.departed && !(fl & 256)) { this.departed = false; this.vanished = false; }
     this.lastFl = fl;
-    const at = typeof d.t === 'number' ? d.t / 1000 : (Date.now() + this.on.offset) / 1000;
-    const prev = this.buf[this.buf.length - 1];
+    const srv = (Date.now() + this.on.offset) / 1000, at = typeof d.t === 'number' ? d.t / 1000 : srv, lat = srv - at;
+    let prev = this.buf[this.buf.length - 1];
+    if (prev && at < prev.at - 0.4) { this.buf.length = 0; this.minLat = undefined; this.lats = []; this.corrP.set(0, 0, 0); this.corrQ.identity(); prev = null; }
     if (prev && Math.hypot(prev.c[0] - d.c[0], prev.c[1] - d.c[1], prev.c[2] - d.c[2]) > 25) { this.buf.length = 0; this.setSolid(false); this.corrP.set(0, 0, 0); this.corrQ.identity(); }
     if (prev && at <= prev.at) return;
     const had = this.buf.length > 0;
     if (had) this.poseAt(this.clock(), this._p0, this._q0, this._v0);
+    const L = this.lats || (this.lats = []); L.push(lat); if (L.length > 30) L.shift();
+    this.minLat = Math.min(...L);
     this.buf.push({ at, c: d.c, k: d.k || [0, 0], z: d.z || '', f: d.f || null });
     if (this.buf.length > 12) this.buf.shift();
     if (had) {
