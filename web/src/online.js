@@ -5,6 +5,7 @@ import { CarMaterials, PAINTS } from './render/carMaterials.js';
 import { Driver } from './render/driver.js';
 import { Thrusters, thrustDir } from './sim/thrusters.js';
 import { carHull, GROUP, groups } from './sim/car.js';
+import { eraOf } from './sim/timetravel.js';
 
 const SDK = 'https://www.gstatic.com/firebasejs/10.12.5';
 const CONFIG = {
@@ -27,6 +28,15 @@ function pack(th) {
     s += B36[Math.max(0, Math.min(35, Math.round((n.pitch + 0.6) / 2.3 * 35)))];
   }
   return s;
+}
+
+function packI16(a) { const u = new Uint8Array(new Int16Array(a).buffer); let s = ''; for (let i = 0; i < u.length; i += 8192) s += String.fromCharCode.apply(null, u.subarray(i, i + 8192)); return btoa(s); }
+function unpackI16(b) { try { const s = atob(b), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return new Int16Array(u.buffer, 0, u.length >> 1); } catch (e) { return new Int16Array(0); } }
+
+function staticGhost(g) {
+  const sc = g.car.sim.wheels.map((w) => w.staticCompression), rest = g.tu.suspension.rest_length;
+  return { thrusters: new Thrusters(g.tu), vel: new THREE.Vector3(), speed: 0, contacts: 4, steerAngle: 0, brakeOn: 1,
+    wheels: g.car.sim.wheels.map((w, i) => ({ name: w.name, i, front: w.front, left: w.left, r: w.r, lost: false, staticCompression: sc[i], length: rest - sc[i], hub: { x: 0, y: 0, z: 0 }, steer: 0, spin: 0, toe: 0, camber: 0 })) };
 }
 
 class Remote {
@@ -55,6 +65,9 @@ class Remote {
 
   push(d, now) {
     if (!d || !d.c) return;
+    if (d.ck) { this.ck = d.ck; this.ckT = (d.t || 0) / 1000; this.j = d.j || 0; }
+    if (d.dg) this.dgPending = d.dg;
+    if (d.xc !== undefined) this.xcPending = d.xc || [];
     this.name = String(d.n || '').slice(0, 20); this.outfit = d.o | 0; this.last = now; this.paint = PAINTS[d.p] ? d.p : 'white'; this.ride = d.r || null; this.dy = typeof d.dy === 'number' ? d.dy : null;
     const fl = (d.k && d.k[1]) || 0, was = this.lastFl === undefined ? 0 : this.lastFl;
     if ((fl & 128) && !(was & 128) && this.lastFl !== undefined) { this.departed = true; this.pendingFx = 'depart'; }
@@ -213,6 +226,9 @@ class Remote {
     const g = this.g, gh = this.ghost;
     if (!this.view) return;
     if (this.paint && this.paint !== this.viewPaint) this.makeView();
+    if (this.dgPending || (this.dm && this.dm.view !== this.view && this.lastDg)) { this.applyDamage(this.dgPending || this.lastDg); this.dgPending = null; }
+    if (this.dm) this.dm.binding.stepNormals(1);
+    if (this.xcPending) { this.applyExtras(this.xcPending, night); this.xcPending = null; }
     const v = this.view;
     if (this.pendingFx) { const k = this.pendingFx; this.pendingFx = null; if (k === 'depart') { this.departFx(); if (g.ride === this.uid && this.dy !== null) g.followJump(this.dy); } else this.arriveFx(); }
     if (this.vanished) {
@@ -311,8 +327,47 @@ class Remote {
     if (g.audio) g.audio.play('tc_arrive_zap', { pos: { x: p.x, y: p.y, z: p.z }, gain: 1 });
   }
 
+  applyDamage(dg) {
+    const g = this.g; if (!g.latticeData || !this.view || !dg) return;
+    this.lastDg = dg;
+    if (!this.dm || this.dm.view !== this.view || this.dm.c !== dg.c) { const o = { view: this.view }; g.damage.attach(o, g.latticeData); o.c = dg.c; o.hidden = new Set(); this.dm = o; if (this.ghost) for (const w of this.ghost.wheels) w.lost = false; }
+    const L = this.dm.lattice, a = unpackI16(dg.v || '');
+    L.x.set(L.rest);
+    for (let k = 0; k + 3 < a.length; k += 4) { const i = a[k] & 0xffff; if (i >= L.n) continue; L.x[i * 3] += a[k + 1] / 1000; L.x[i * 3 + 1] += a[k + 2] / 1000; L.x[i * 3 + 2] += a[k + 3] / 1000; }
+    L.version = (L.version || 0) + 1;
+    this.dm.binding.update(); this.dm.binding.queueNormals();
+    for (const nm of [...(dg.p || []), ...(dg.w || [])]) {
+      if (this.dm.hidden.has(nm)) continue;
+      this.dm.hidden.add(nm);
+      const n = this.view.n[nm]; if (n) n.visible = false;
+      if (nm.startsWith('Wheel_')) { const b = this.view.n['Brake_' + nm.slice(6)]; if (b) b.visible = false; if (this.ghost) { const w = this.ghost.wheels.find((x) => x.name === nm); if (w) w.lost = true; } }
+    }
+    for (const nm of dg.g || []) { const gl = this.dm.glass.get(nm); if (gl && gl.state < 2) { gl.state = 2; gl.mesh.visible = false; } }
+  }
+
+  applyExtras(list, night) {
+    const g = this.g, R = g.R, world = g.phys.world, seen = new Set();
+    this.extras = this.extras || new Map();
+    for (const e of list) {
+      const [id, x, y, z, qx, qy, qz, qw, paint] = e; seen.add(id);
+      let X = this.extras.get(id);
+      if (!X) {
+        const view = new CarView(g.tu, this.on.matsFor(PAINTS[paint] ? paint : 'white'), g.template); view.root.name = 'RemoteParked_' + id; g.gfx.scene.add(view.root);
+        const body = world.createRigidBody(R.RigidBodyDesc.kinematicPositionBased().setTranslation(x, y, z));
+        const h = carHull(g.tu, null), ud = { kind: 'remote', uid: this.uid, vel: new THREE.Vector3(), mass: g.tu.car.mass };
+        for (const pts of [h.body, h.cabin]) { const d = R.ColliderDesc.convexHull(pts); if (!d) continue; d.setCollisionGroups(groups(GROUP.CAR, GROUP.CAR | GROUP.PROP | GROUP.DEBRIS | GROUP.WALKER)); world.createCollider(d, body).userData = ud; }
+        X = { view, body, ghost: staticGhost(g) }; this.extras.set(id, X);
+      }
+      const pos = new THREE.Vector3(x, y, z), quat = new THREE.Quaternion(qx, qy, qz, qw).normalize();
+      X.body.setNextKinematicTranslation({ x, y, z }); X.body.setNextKinematicRotation({ x: quat.x, y: quat.y, z: quat.z, w: quat.w });
+      X.view.sync(0.016, X.ghost, { pos, quat }, night || 0);
+    }
+    for (const [id, X] of this.extras) if (!seen.has(id)) { g.gfx.scene.remove(X.view.root); world.removeRigidBody(X.body); this.extras.delete(id); }
+  }
+
   dispose(flash) {
     const g = this.g;
+    if (this.extras) { for (const X of this.extras.values()) { g.gfx.scene.remove(X.view.root); g.phys.world.removeRigidBody(X.body); } this.extras.clear(); }
     if (flash && !this.departed && this.vel.length() > 30 && g.fx) {
       g.fx.sparks(this.pos, this.vel.clone().multiplyScalar(0.2), new THREE.Vector3(0, 1, 0), 60);
       for (let i = 0; i < 24; i++) g.fx.add.spawn(this.pos.x, this.pos.y + 0.6, this.pos.z, (Math.random() - 0.5) * 8, Math.random() * 4, (Math.random() - 0.5) * 8, 0.5, 1.5, 4, 0.6, 0.8, 1.6, 1, 2, 0);
@@ -400,7 +455,7 @@ export class Online {
     const F = this.F, id = this.roomId();
     if (id === this.room) return;
     this.leaveRoom(false);
-    this.room = id;
+    this.room = id; this.joinAt = Math.round(Date.now() + this.offset);
     const ref = F.ref(this.db, `roadster88/world/${id}`);
     this.me = F.child(ref, this.uid);
     F.onDisconnect(this.me).remove();
@@ -435,8 +490,51 @@ export class Online {
     if (g.ride) d.r = g.ride;
     if (g.tc.armed || g.tc.state === 'departing') d.dy = g.tc.destination.year;
     if (g.car.given) d.k[1] |= 512;
+    const P = g.tc.present; d.j = this.joinAt; d.ck = [P.year, P.month, P.day, P.hour, P.minute];
+    const dg = this.damageNet(nowMs); if (dg) d.dg = dg;
+    if (nowMs - (this.xcAt || 0) > 1000) { this.xcAt = nowMs; d.xc = this.extrasNet(); }
     if (gone) return;
     F.set(this.me, d).catch(() => {});
+  }
+
+  damageNet(nowMs) {
+    const c = this.g.car, L = c.lattice; if (!L) return null;
+    const parts = L.parts.filter((p) => p.detached).map((p) => p.name), wheels = [...(c.lost || [])], glass = [...c.glass].filter(([, v]) => v.state >= 2).map(([k]) => k);
+    const key = c.sim.id + ':' + L.version + ':' + parts.length + ':' + wheels.length + ':' + glass.length;
+    const changed = key !== this.dgKey;
+    if (!changed && nowMs - (this.dgAt || 0) < 3000) return null;
+    if (changed && nowMs - (this.dgAt || 0) < 500) return null;
+    const a = [];
+    for (let i = 0; i < L.n; i++) {
+      const dx = L.x[i * 3] - L.rest[i * 3], dy = L.x[i * 3 + 1] - L.rest[i * 3 + 1], dz = L.x[i * 3 + 2] - L.rest[i * 3 + 2];
+      if (dx * dx + dy * dy + dz * dz > 0.000016) a.push(i, Math.round(dx * 1000), Math.round(dy * 1000), Math.round(dz * 1000));
+    }
+    if (!a.length && !parts.length && !wheels.length && !glass.length && !this.dgSent) return null;
+    this.dgKey = key; this.dgAt = nowMs; this.dgSent = true;
+    return { c: c.sim.id, v: packI16(a), p: parts, w: wheels, g: glass };
+  }
+
+  extrasNet() {
+    const g = this.g, me = g.car.sim.pos, out = [];
+    for (const c of g.cars) {
+      if (c === g.car || c.given || !c.sim.enabled) continue;
+      const s = c.sim; if (Math.hypot(s.pos.x - me.x, s.pos.z - me.z) > 600) continue;
+      out.push([s.id, r3(s.pos.x), r3(s.pos.y), r3(s.pos.z), r3(s.q.x), r3(s.q.y), r3(s.q.z), r3(s.q.w), c.paint || g.settings.paint]);
+      if (out.length >= 3) break;
+    }
+    return out.length ? out : 0;
+  }
+
+  syncClock() {
+    const g = this.g, p = g.tc.present; if (g.tc.busy || !this.joinAt) return;
+    let L = null; for (const r of this.remotes.values()) if (r.ck && r.j && r.j < this.joinAt && (!L || r.j < L.j)) L = r;
+    if (!L || eraOf(L.ck[0]).id !== g.eraId()) return;
+    const age = Math.max(0, Math.min(30, (Date.now() + this.offset) / 1000 - L.ckT)) / 60, ck = L.ck;
+    const mine = p.month * 44640 + p.day * 1440 + p.hour * 60 + p.minute, theirs = ck[1] * 44640 + ck[2] * 1440 + ck[3] * 60 + ck[4] + age;
+    if (p.year === ck[0] && Math.abs(mine - theirs) <= 2) return;
+    const m = ck[3] * 60 + ck[4] + age;
+    p.year = ck[0]; p.month = ck[1]; p.day = ck[2]; p.hour = Math.floor(m / 60) % 24; p.minute = Math.floor(m % 60);
+    g.applyClock(true);
   }
 
   request(uid, a, extra = {}) {
@@ -509,6 +607,7 @@ export class Online {
     if (this.roomId() !== this.room) this.join();
     this.sendT += dt;
     if (this.sendT >= RATE) { this.sendT = 0; this.send(); }
+    this.clockT = (this.clockT || 0) + dt; if (this.clockT > 1) { this.clockT = 0; this.syncClock(); }
     const g = this.g, now = performance.now() / 1000, cam = g.gfx.camera.position, night = g.sky ? g.sky.state.night : 0;
     for (const [uid, r] of this.remotes) {
       if (now - r.last > STALE / 1000) { r.dispose(false); this.remotes.delete(uid); continue; }

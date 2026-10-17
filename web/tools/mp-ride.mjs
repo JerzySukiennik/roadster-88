@@ -13,7 +13,7 @@ const map = opt('map', 'valley');
 fs.mkdirSync(out, { recursive: true });
 const exe = '/Users/jurek/Library/Caches/ms-playwright/chromium-1234/chrome-mac-x64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';
 const browser = await chromium.launch({ headless: false, executablePath: exe, args: ['--use-angle=metal', '--ignore-gpu-blocklist', '--enable-unsafe-webgpu', '--window-size=1100,760', '--window-position=3000,3000', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows'] });
-const url = `http://localhost:8788/web/?debug&jitter&q=medium&map=${map}`;
+const url = `http://localhost:8788/web/?debug&jitter&nostory&nospace&q=medium&map=${map}`;
 const open = async (tag) => {
   const ctx = await browser.newContext({ viewport: { width: 1100, height: 680 } });
   const page = await ctx.newPage();
