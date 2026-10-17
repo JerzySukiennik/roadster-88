@@ -510,6 +510,7 @@ async function crash(mph, name) {
 Object.assign(S, (await import('./eras-scenarios.mjs')).erasScenarios({ page, R, wait, shot, stats, reset, tele, keys, release, tap, state, sample }));
 if (fs.existsSync(path.join(here, 'life-scenarios.mjs'))) Object.assign(S, (await import('./life-scenarios.mjs')).lifeScenarios({ page, R, wait, shot, stats, reset, tele, keys, release, tap, state, sample, fmt, out, errors }));
 if (fs.existsSync(path.join(here, 'years-scenarios.mjs'))) Object.assign(S, (await import('./years-scenarios.mjs')).yearsScenarios({ page, R, wait, shot, stats, reset, tele, keys, release, tap, state, sample, fmt, out, errors }));
+if (fs.existsSync(path.join(here, 'city-scenarios.mjs'))) Object.assign(S, (await import('./city-scenarios.mjs')).cityScenarios({ page, R, wait, shot, stats, reset, tele, keys, release, tap, state, sample, fmt, out, errors }));
 for (const sc of scenarios) { if (!S[sc]) { console.log('unknown scenario', sc); continue; } console.log('== ' + sc); await S[sc](); }
 if (errors.length) console.log('ERRORS:\n' + [...new Set(errors)].slice(0, 30).join('\n'));
 if (flag('logs')) console.log(logs.slice(0, 40).join('\n'));

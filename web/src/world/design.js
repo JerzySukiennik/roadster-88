@@ -6,7 +6,7 @@ export const SPACING = 4;
 
 const D2R = Math.PI / 180;
 
-function turtle(x, z, headingDeg) {
+export function turtle(x, z, headingDeg) {
   const pts = [];
   let h = headingDeg * D2R;
   const push = () => pts.push([x, z]);
@@ -29,7 +29,7 @@ function turtle(x, z, headingDeg) {
   };
 }
 
-function catmull(ctrl, closed, extra = []) {
+export function catmull(ctrl, closed, extra = []) {
   const P = ctrl, n = P.length, out = [];
   const get = (i) => (closed ? P[(i + n) % n] : P[Math.max(0, Math.min(n - 1, i))]);
   const segs = closed ? n : n - 1;
@@ -89,7 +89,7 @@ function tangents(pts, closed) {
   return { tx, tz, kap };
 }
 
-function road(id, opt) {
+export function road(id, opt) {
   const r = { id, closed: false, shoulder: 1.5, sigma: 40, maxGrade: 0.08, bankMax: 0, bankK: 0, cutK: 0.9, fillK: 0.7, infl: 40, crests: [], markings: [], mask: 'main', surface: 'asphalt', ...opt };
   const t = tangents(r.pts, r.closed);
   r.tx = t.tx; r.tz = t.tz; r.kap = t.kap;

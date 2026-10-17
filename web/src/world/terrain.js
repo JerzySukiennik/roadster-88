@@ -1,9 +1,10 @@
-// Roadster 88 valley terrain: deterministic height grid (2 m, Rapier triangulation), surface and road masks (4 m), canyon, wash, town and road stamping with cut and fill, era toggles between natural and built ground, and normals. Pure JS for the main thread, workers and Node.
+// Roadster 88 terrain data: deterministic height grids with the Rapier triangulation (the 2 m valley grid and, through the same class, the 4 m mega grid), surface and road masks at twice the cell, canyon, wash, town and road stamping with cut and fill, era toggles between natural and built ground, seams between grids and normals. Pure JS for the main thread, workers and Node.
 import { makeSimplex, fbm, ridged, clamp, lerp, smooth, smoothMax, smoothMin } from './noise.js';
 import { SPACING } from './design.js';
 
 export const N = 2049, CELL = 2, ORIGIN = -2048, EXTENT = 4096;
 export const TN = 1025, TCELL = 4;
+export const INNER = { N, CELL, ORIGIN, EXTENT, TN, TCELL };
 
 const nA = makeSimplex(88), nB = makeSimplex(1885), nC = makeSimplex(2026), nD = makeSimplex(2080), nE = makeSimplex(12000);
 
@@ -121,27 +122,38 @@ export function generateRows(D, iz0, iz1) {
 }
 
 export class TerrainData {
-  constructor(D) {
-    this.D = D;
+  constructor(D, spec = INNER) {
+    this.D = D; this.spec = spec;
+    this.N = spec.N; this.CELL = spec.CELL; this.ORIGIN = spec.ORIGIN; this.EXTENT = spec.EXTENT; this.TN = spec.TN; this.TCELL = spec.TCELL;
+    const N = this.N, TN = this.TN;
     this.H = new Float32Array(N * N);
     this.S = new Uint8Array(TN * TN * 4);
     this.R = new Uint8Array(TN * TN * 4);
     this.NRM = new Uint8Array(TN * TN * 2);
+    this.outside = null;
     this.bumps = null; this.bumpKey = '[]';
     this.natural = false;
     this.version = 0;
   }
 
   addRows(r) {
-    this.H.set(r.H, r.iz0 * N);
-    if (r.S.length) this.S.set(r.S, (r.t0 >> 1) * TN * 4);
+    this.H.set(r.H, r.iz0 * this.N);
+    if (r.S.length) this.S.set(r.S, (r.t0 >> 1) * this.TN * 4);
   }
 
   finish() {
-    const D = this.D;
+    const N = this.N;
     this.touched = new Uint8Array(N * N);
     this.delta = { idx: [], nat: [] };
     this.locked = new Uint8Array(N * N);
+    this.build();
+    this.touched = null; this.locked = null;
+    this.seam();
+    this.computeNormals(0, 0, this.TN - 1, this.TN - 1);
+  }
+
+  build() {
+    const D = this.D;
     this.carve(D.canyon, (e) => (e < 46 ? 3.3 * e : e < 74 ? 151.8 + 0.35 * (e - 46) : 161.6 + 2.4 * (e - 74)), 260, 1.0, 9, 4, true);
     this.carve(D.wash, (e) => Math.min(1.5 * e, 3.2 + 0.08 * e), 24, 0.25, 0, 0, false);
     this.recordStart();
@@ -152,12 +164,24 @@ export class TerrainData {
     for (const r of D.roads) if (r.kind === 'link' || r.kind === 'street') this.stampRoad(r);
     this.stampRoad(byId.rail);
     for (const r of D.roads) if (r.kind === 'track') this.stampRoad(r);
+    for (const r of D.roads) if (r.kind === 'connector') this.stampRoad(r);
     this.recordEnd();
-    this.touched = null; this.locked = null;
-    this.computeNormals(0, 0, TN - 1, TN - 1);
+  }
+
+  seam() {
+    if (!this.seamEdges) return;
+    const N = this.N, H = this.H;
+    for (const e of this.seamEdges) {
+      for (let k = 1; k < N - 1; k += 2) {
+        const o = e === 'z0' ? k : e === 'z1' ? (N - 1) * N + k : e === 'x0' ? k * N : k * N + N - 1;
+        const st = e === 'z0' || e === 'z1' ? 1 : N;
+        H[o] = (H[o - st] + H[o + st]) / 2;
+      }
+    }
   }
 
   hAt(x, z) {
+    const N = this.N, CELL = this.CELL, ORIGIN = this.ORIGIN;
     const fx = (x - ORIGIN) / CELL, fz = (z - ORIGIN) / CELL;
     let j = Math.floor(fx), i = Math.floor(fz);
     if (j < 0) j = 0; else if (j > N - 2) j = N - 2;
@@ -168,7 +192,8 @@ export class TerrainData {
   }
 
   heightAt(x, z) {
-    if (x < ORIGIN || z < ORIGIN || x > -ORIGIN || z > -ORIGIN) return farHeight(x, z, this.D);
+    const O = this.ORIGIN;
+    if (x < O || z < O || x > -O || z > -O) return this.outside ? this.outside(x, z) : farHeight(x, z, this.D);
     return this.hAt(x, z);
   }
 
@@ -182,6 +207,7 @@ export class TerrainData {
   }
 
   tex(arr, x, z, ch, stride = 4) {
+    const TN = this.TN, TCELL = this.TCELL, ORIGIN = this.ORIGIN;
     const fx = clamp((x - ORIGIN) / TCELL, 0, TN - 1.001), fz = clamp((z - ORIGIN) / TCELL, 0, TN - 1.001);
     const j = Math.floor(fx), i = Math.floor(fz), u = fx - j, v = fz - i, o = (i * TN + j) * stride + ch, r = TN * stride;
     return ((arr[o] * (1 - u) + arr[o + stride] * u) * (1 - v) + (arr[o + r] * (1 - u) + arr[o + r + stride] * u) * v) / 255;
@@ -198,7 +224,7 @@ export class TerrainData {
     this.deltaIdx = Int32Array.from(d.idx); this.deltaNat = Float32Array.from(d.nat); this.deltaBuilt = new Float32Array(n);
     for (let i = 0; i < n; i++) this.deltaBuilt[i] = this.H[this.deltaIdx[i]];
     this.delta = null;
-    this.deltaBox = [0, 0, N - 1, N - 1];
+    this.deltaBox = [0, 0, this.N - 1, this.N - 1];
   }
 
   setEra(natural, bumps) {
@@ -213,7 +239,9 @@ export class TerrainData {
     }
     this.bumpKey = key;
     if (bumps && bumps.length) this.bumps = this.stampBumps(bumps);
-    this.computeNormals(0, 0, TN - 1, TN - 1);
+    this.seam();
+    if (this.afterEra) this.afterEra();
+    this.computeNormals(0, 0, this.TN - 1, this.TN - 1);
     this.version++;
     return true;
   }
@@ -221,6 +249,7 @@ export class TerrainData {
   setNatural(on) { return this.setEra(on, JSON.parse(this.bumpKey)); }
 
   stampBumps(list) {
+    const N = this.N, CELL = this.CELL, ORIGIN = this.ORIGIN;
     const H = this.H, idx = [], dh = [];
     for (const b of list) {
       const r = b.r, h = b.h;
@@ -242,13 +271,14 @@ export class TerrainData {
     return { idx: Int32Array.from(idx), dh: Float32Array.from(dh) };
   }
 
-  lowRes() {
-    const out = new Float32Array(TN * TN), H = this.H;
-    for (let i = 0; i < TN; i++) for (let j = 0; j < TN; j++) out[i * TN + j] = H[i * 2 * N + j * 2];
+  lowRes(f = 2) {
+    const N = this.N, n = (N - 1) / f + 1, out = new Float32Array(n * n), H = this.H;
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) out[i * n + j] = H[i * f * N + j * f];
     return out;
   }
 
   carve(path, wall, reach, floorCurve, jag, jag2, canyon) {
+    const N = this.N, CELL = this.CELL, ORIGIN = this.ORIGIN, TN = this.TN;
     const H = this.H, S = this.S;
     const n = path.length;
     for (let k = 0; k < n - 1; k++) {
@@ -285,6 +315,7 @@ export class TerrainData {
   }
 
   townPad(T) {
+    const N = this.N, CELL = this.CELL, ORIGIN = this.ORIGIN, TN = this.TN;
     const H = this.H, R = this.R;
     let sum = 0, cnt = 0;
     for (let z = T.z0; z <= T.z1; z += 20) for (let x = T.x0; x <= T.x1; x += 20) { sum += this.hAt(x, z); cnt++; }
@@ -317,6 +348,7 @@ export class TerrainData {
   }
 
   profile(r) {
+    const N = this.N, CELL = this.CELL, ORIGIN = this.ORIGIN;
     const n = r.pts.length, e = new Float64Array(n), pin = new Uint8Array(n), flatPin = new Uint8Array(n);
     const hw = r.width / 2, fw = hw + r.shoulder + 1;
     const lockedAt = (x, z) => { const ci = Math.round((z - ORIGIN) / CELL), cj = Math.round((x - ORIGIN) / CELL); return ci >= 0 && cj >= 0 && ci < N && cj < N && this.locked[ci * N + cj]; };
@@ -326,6 +358,8 @@ export class TerrainData {
       if (lockedAt(x, z)) { e[k] = this.hAt(x, z); pin[k] = 1; continue; }
       e[k] = (this.hAt(x, z) * 2 + this.hAt(x + nx * hw * 0.7, z + nz * hw * 0.7) + this.hAt(x - nx * hw * 0.7, z - nz * hw * 0.7)) / 4;
     }
+    if (r.pinStart !== undefined) { e[0] = r.pinStart; pin[0] = 1; for (let k = 1; k < Math.min(n, 6); k++) { e[k] = r.pinStart; pin[k] = 1; } }
+    if (r.pinEnd !== undefined) { for (let k = Math.max(0, n - 6); k < n; k++) { e[k] = r.pinEnd; pin[k] = 1; } }
     const pinned = Float64Array.from(e);
     const rad = Math.max(1, Math.round(r.sigma / SPACING * 0.9));
     const tmp = new Float64Array(n);
@@ -366,6 +400,7 @@ export class TerrainData {
   }
 
   stampRoad(r) {
+    const N = this.N, CELL = this.CELL, ORIGIN = this.ORIGIN, TN = this.TN;
     this.profile(r);
     const H = this.H, Rm = this.R, L = this.locked;
     const ch = r.mask === 'main' ? 0 : r.mask === 'loop' ? 1 : r.mask === 'track' ? 2 : -1;
@@ -415,6 +450,7 @@ export class TerrainData {
   }
 
   computeNormals(ti0, tj0, ti1, tj1) {
+    const N = this.N, CELL = this.CELL, TN = this.TN;
     const H = this.H, out = this.NRM;
     for (let ti = ti0; ti <= ti1; ti++) {
       const i = ti * 2, im = Math.max(0, i - 1), ip = Math.min(N - 1, i + 1);

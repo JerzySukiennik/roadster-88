@@ -1,9 +1,8 @@
-// Roadster 88 valley renderer: quadtree chunked LOD terrain with vertex geomorphing and skirts, a layered TSL terrain material driven by the era palette (floor, grass, rock, high ground, wash and lakebed, roads, tracks, snow, wetness, glowing cracks) with baked AO and terrain sun shadows, the far mountain ring, road markings and the low-detail reflection proxy.
+// Roadster 88 terrain renderer: quadtree chunked LOD terrain over any height grid (the 2 m valley and the 4 m mega grid around it, which skips the valley square) with vertex geomorphing and skirts, a layered TSL terrain material driven by the era palette (floor, grass, rock, high ground, wash and lakebed, roads, tracks, snow, wetness, glowing cracks) with baked AO and terrain sun shadows, cut-outs for tunnel trenches, the far mountain ring, road markings and the low-detail reflection proxy.
 import * as THREE from 'three/webgpu';
-import { Fn, uniform, texture, vec2, vec3, float, positionLocal, positionWorld, positionView, attribute, smoothstep, mix, max, sqrt, fract, sin, abs, fwidth, dFdx, dFdy, transformNormalToView, faceDirection, length, normalize, clamp, vertexColor } from 'three/tsl';
-import { N, CELL, ORIGIN, EXTENT, TN, TCELL } from './terrain.js';
+import { Fn, uniform, texture, vec2, vec3, vec4, float, positionLocal, positionWorld, positionView, attribute, smoothstep, mix, max, sqrt, fract, sin, abs, fwidth, dFdx, dFdy, transformNormalToView, faceDirection, length, normalize, clamp, vertexColor, uniformArray, Loop, int, If, Discard } from 'three/tsl';
 
-const C = 64, LEVELS = 6, ROOT = LEVELS - 1;
+const C = 64;
 
 export const DEFAULT_PALETTE = {
   layers: {
@@ -45,8 +44,8 @@ function noiseTexture(size = 256) {
   return t;
 }
 
-function dataTex(arr, format, mips) {
-  const t = new THREE.DataTexture(arr, TN, TN, format, THREE.UnsignedByteType);
+function dataTex(arr, n, format, mips) {
+  const t = new THREE.DataTexture(arr, n, n, format, THREE.UnsignedByteType);
   t.magFilter = THREE.LinearFilter; t.minFilter = mips ? THREE.LinearMipmapLinearFilter : THREE.LinearFilter; t.generateMipmaps = !!mips;
   t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; t.anisotropy = 4; t.unpackAlignment = 1; t.needsUpdate = true;
   return t;
@@ -55,7 +54,12 @@ function dataTex(arr, format, mips) {
 export class TerrainView {
   constructor(gfx, T, sky, opts = {}) {
     this.gfx = gfx; this.T = T; this.D = T.D;
-    this.root = new THREE.Group(); this.root.name = 'Valley';
+    this.C = opts.chunk || C;
+    this.N = T.N; this.CELL = T.CELL; this.ORIGIN = T.ORIGIN; this.EXTENT = T.EXTENT; this.TN = T.TN; this.TCELL = T.TCELL;
+    this.LEVELS = Math.round(Math.log2(T.EXTENT / (this.C * T.CELL))) + 1; this.ROOT = this.LEVELS - 1;
+    this.exclude = opts.exclude || null; this.rangeBase = opts.rangeBase || 200; this.roads = opts.roads || this.D.roads;
+    this.lightF = opts.lightF || 2; this.lightN = (T.N - 1) / this.lightF + 1; this.lightCell = T.CELL * this.lightF;
+    this.root = new THREE.Group(); this.root.name = opts.name || 'Valley';
     gfx.scene.add(this.root);
     this.uCam = uniform(new THREE.Vector3());
     this.camPos = new THREE.Vector3();
@@ -69,21 +73,23 @@ export class TerrainView {
     this.frustum = new THREE.Frustum(); this.projScreen = new THREE.Matrix4();
     this.stats = { chunks: 0, tris: 0, built: 0 };
     this.buildMinMax();
-    this.nrmTex = dataTex(T.NRM, THREE.RGFormat, true);
-    this.surfTex = dataTex(T.S, THREE.RGBAFormat, true);
-    this.roadTex = dataTex(T.R, THREE.RGBAFormat, false);
-    this.light = new Uint8Array(TN * TN * 2).fill(255);
-    this.lightTex = dataTex(this.light, THREE.RGFormat, true);
-    this.noise = noiseTexture();
-    this.U = this.makeUniforms();
+    this.nrmTex = dataTex(T.NRM, this.TN, THREE.RGFormat, true);
+    this.surfTex = dataTex(T.S, this.TN, THREE.RGBAFormat, true);
+    this.roadTex = dataTex(T.R, this.TN, THREE.RGBAFormat, false);
+    this.light = new Uint8Array(this.lightN * this.lightN * 2).fill(255);
+    this.lightTex = dataTex(this.light, this.lightN, THREE.RGFormat, true);
+    this.noise = opts.noise || noiseTexture();
+    this.U = opts.U || this.makeUniforms();
+    this.cuts = opts.cuts || null; this.waterCut = !!opts.waterCut;
     this.quality = opts.quality || 'high';
     this.mat = this.makeMaterial(this.quality);
     this.farMat = this.makeFarMaterial();
-    this.buildFarRing();
+    this.farRing = opts.farRing !== false;
+    if (this.farRing) this.buildFarRing(opts.farOut || 6200);
     this.markings = this.buildMarkings();
-    this.proxy = this.buildProxy();
-    sky.addEnvProxy(this.proxy);
-    for (let L = ROOT; L >= ROOT - 2; L--) { const n = 1 << (ROOT - L); for (let z = 0; z < n; z++) for (let x = 0; x < n; x++) this.get(L, x, z, true); }
+    if (opts.proxy !== false) { this.proxy = this.buildProxy(); sky.addEnvProxy(this.proxy); }
+    const ROOT = this.ROOT;
+    for (let L = ROOT; L >= Math.max(0, ROOT - 2); L--) { const n = 1 << (ROOT - L); for (let z = 0; z < n; z++) for (let x = 0; x < n; x++) if (!this.excluded(L, x, z)) this.get(L, x, z, true); }
     this.roadMode = { loop: 1, track: 1 };
     this.setPalette(DEFAULT_PALETTE);
   }
@@ -96,32 +102,41 @@ export class TerrainView {
     for (const e of this.cache.values()) e.mesh.material = this.mat;
   }
 
-  setRanges() { this.R = []; for (let L = 0; L < LEVELS; L++) this.R.push(200 * this.lodScale * (1 << L)); }
+  setRanges() { this.R = []; for (let L = 0; L < this.LEVELS; L++) this.R.push(this.rangeBase * this.lodScale * (1 << L)); }
+
+  overlap(L, cx, cz) {
+    const E = this.exclude; if (!E) return 0;
+    const size = (this.C * this.CELL) << L, x0 = this.ORIGIN + cx * size, z0 = this.ORIGIN + cz * size, x1 = x0 + size, z1 = z0 + size;
+    if (x1 <= E[0] || x0 >= E[2] || z1 <= E[1] || z0 >= E[3]) return 0;
+    return x0 >= E[0] && x1 <= E[2] && z0 >= E[1] && z1 <= E[3] ? 2 : 1;
+  }
+
+  excluded(L, cx, cz) { return this.overlap(L, cx, cz) === 2; }
   setLodScale(s) { if (s === this.lodScale) return; this.lodScale = s; this.setRanges(); this.invalidate(); }
 
   buildIndex() {
-    const idx = [], V = C + 1;
-    for (let i = 0; i < C; i++) for (let j = 0; j < C; j++) { const a = i * V + j, b = a + 1, c = a + V, d = c + 1; idx.push(a, c, b, b, c, d); }
+    const idx = [], V = this.C + 1;
+    for (let i = 0; i < this.C; i++) for (let j = 0; j < this.C; j++) { const a = i * V + j, b = a + 1, c = a + V, d = c + 1; idx.push(a, c, b, b, c, d); }
     const base = V * V;
-    const edges = [(k) => k, (k) => C * V + k, (k) => k * V, (k) => k * V + C];
+    const edges = [(k) => k, (k) => this.C * V + k, (k) => k * V, (k) => k * V + this.C];
     edges.forEach((f, e) => {
-      for (let k = 0; k < C; k++) { const a = f(k), b = f(k + 1), sa = base + e * V + k, sb = sa + 1; idx.push(a, sa, b, b, sa, sb, a, b, sa, b, sb, sa); }
+      for (let k = 0; k < this.C; k++) { const a = f(k), b = f(k + 1), sa = base + e * V + k, sb = sa + 1; idx.push(a, sa, b, b, sa, sb, a, b, sa, b, sb, sa); }
     });
     this.vertCount = base + 4 * V;
     return new THREE.BufferAttribute(new Uint16Array(idx), 1);
   }
 
   buildMinMax() {
-    const H = this.T.H, n0 = 1 << ROOT;
+    const H = this.T.H, ROOT = this.ROOT, N = this.N, n0 = 1 << ROOT;
     this.mm = [];
     const a0 = new Float32Array(n0 * n0 * 2);
     for (let cz = 0; cz < n0; cz++) for (let cx = 0; cx < n0; cx++) {
       let mn = 1e9, mx = -1e9;
-      for (let i = cz * C; i <= cz * C + C; i++) for (let j = cx * C; j <= cx * C + C; j++) { const v = H[i * N + j]; if (v < mn) mn = v; if (v > mx) mx = v; }
+      for (let i = cz * this.C; i <= cz * this.C + this.C; i++) for (let j = cx * this.C; j <= cx * this.C + this.C; j++) { const v = H[i * N + j]; if (v < mn) mn = v; if (v > mx) mx = v; }
       a0[(cz * n0 + cx) * 2] = mn; a0[(cz * n0 + cx) * 2 + 1] = mx;
     }
     this.mm[0] = a0;
-    for (let L = 1; L < LEVELS; L++) {
+    for (let L = 1; L < this.LEVELS; L++) {
       const n = 1 << (ROOT - L), prev = this.mm[L - 1], pn = n * 2, a = new Float32Array(n * n * 2);
       for (let cz = 0; cz < n; cz++) for (let cx = 0; cx < n; cx++) {
         let mn = 1e9, mx = -1e9;
@@ -133,21 +148,21 @@ export class TerrainView {
   }
 
   box(L, cx, cz, out) {
-    const size = 128 << L, n = 1 << (ROOT - L), o = (cz * n + cx) * 2;
-    out.min.set(ORIGIN + cx * size, this.mm[L][o] - 6 - size / 64, ORIGIN + cz * size);
-    out.max.set(ORIGIN + (cx + 1) * size, this.mm[L][o + 1] + 1, ORIGIN + (cz + 1) * size);
+    const size = (this.C * this.CELL) << L, n = 1 << (this.ROOT - L), o = (cz * n + cx) * 2, O = this.ORIGIN;
+    out.min.set(O + cx * size, this.mm[L][o] - 6 - size / 64, O + cz * size);
+    out.max.set(O + (cx + 1) * size, this.mm[L][o + 1] + 1, O + (cz + 1) * size);
     return out;
   }
 
   buildChunk(L, cx, cz) {
-    const H = this.T.H, V = C + 1, g = 1 << L, size = 128 << L, step = size / C;
-    const i0 = cz * C * g, j0 = cx * C * g;
+    const H = this.T.H, N = this.N, CELL = this.CELL, ORIGIN = this.ORIGIN, ROOT = this.ROOT, V = this.C + 1, g = 1 << L, size = (this.C * CELL) << L, step = size / this.C;
+    const i0 = cz * this.C * g, j0 = cx * this.C * g;
     const pos = new Float32Array(this.vertCount * 3), mo = new Float32Array(this.vertCount * 3);
     const r1 = this.R[L] * 0.97, r0 = this.R[L] * 0.68;
     const hAt = (i, j) => H[(i0 + i * g) * N + j0 + j * g];
     const skirt = 4 + step * 0.6;
-    for (let i = 0; i <= C; i++) {
-      for (let j = 0; j <= C; j++) {
+    for (let i = 0; i <= this.C; i++) {
+      for (let j = 0; j <= this.C; j++) {
         const h = hAt(i, j);
         let hc = h;
         if (L < ROOT) {
@@ -162,9 +177,9 @@ export class TerrainView {
       }
     }
     const base = V * V;
-    const edges = [(k) => k, (k) => C * V + k, (k) => k * V, (k) => k * V + C];
+    const edges = [(k) => k, (k) => this.C * V + k, (k) => k * V, (k) => k * V + this.C];
     edges.forEach((f, e) => {
-      for (let k = 0; k <= C; k++) {
+      for (let k = 0; k <= this.C; k++) {
         const s = f(k), d = base + e * V + k;
         pos[d * 3] = pos[s * 3]; pos[d * 3 + 1] = pos[s * 3 + 1] - skirt; pos[d * 3 + 2] = pos[s * 3 + 2];
         mo[d * 3] = mo[s * 3]; mo[d * 3 + 1] = r0; mo[d * 3 + 2] = r1;
@@ -197,7 +212,7 @@ export class TerrainView {
   invalidate() {
     for (const [k, e] of this.cache) {
       this.root.remove(e.mesh); e.mesh.geometry.dispose();
-      if (e.L >= ROOT - 2) e.mesh = this.buildChunk(e.L, k & 1023, (k >> 10) & 1023); else this.cache.delete(k);
+      if (e.L >= this.ROOT - 2) e.mesh = this.buildChunk(e.L, k & 1023, (k >> 10) & 1023); else this.cache.delete(k);
     }
     this.drawn.clear(); this.queue.clear(); this.urgent = true;
   }
@@ -208,13 +223,13 @@ export class TerrainView {
     this.invalidate();
     this.rebuildMarkings();
     this.refreshFar();
-    this.colorProxy();
+    if (this.proxyMesh) this.colorProxy();
   }
 
   setLight(ao, sun) {
-    const L = this.light;
-    if (ao) for (let i = 0, n = TN * TN; i < n; i++) L[i * 2] = ao[i];
-    if (sun) for (let i = 0, n = TN * TN; i < n; i++) L[i * 2 + 1] = sun[i];
+    const L = this.light, nn = this.lightN * this.lightN;
+    if (ao) for (let i = 0; i < nn; i++) L[i * 2] = ao[i];
+    if (sun) for (let i = 0; i < nn; i++) L[i * 2 + 1] = sun[i];
     this.lightTex.needsUpdate = true;
   }
 
@@ -229,7 +244,7 @@ export class TerrainView {
     const t0 = performance.now();
     for (let pass = 0; pass < (this.urgent ? 8 : 1); pass++) {
       list = []; this.queue.clear();
-      this.collect(ROOT, 0, 0, list);
+      this.collect(this.ROOT, 0, 0, list);
       if (!this.queue.size) break;
       const want = [...this.queue.values()].sort((a, b) => a.d - b.d);
       for (let i = 0; i < want.length; i++) {
@@ -237,33 +252,37 @@ export class TerrainView {
         this.get(want[i].L, want[i].cx, want[i].cz, true);
       }
     }
-    if (this.urgent) { this.urgent = false; list = []; this.queue.clear(); this.collect(ROOT, 0, 0, list); }
+    if (this.urgent) { this.urgent = false; list = []; this.queue.clear(); this.collect(this.ROOT, 0, 0, list); }
     const now = new Set();
     for (const e of list) { now.add(e); e.used = this.frame; e.mesh.visible = true; }
     for (const e of this.drawn) if (!now.has(e)) e.mesh.visible = false;
     this.drawn = now;
-    this.stats.chunks = list.length; this.stats.tris = list.length * C * C * 2;
+    this.stats.chunks = list.length; this.stats.tris = list.length * this.C * this.C * 2;
     if (this.cache.size > 260) {
-      const old = [...this.cache.entries()].filter(([, e]) => e.L < ROOT - 2 && e.used < this.frame - 120).sort((a, b) => a[1].used - b[1].used);
+      const old = [...this.cache.entries()].filter(([, e]) => e.L < this.ROOT - 2 && e.used < this.frame - 120).sort((a, b) => a[1].used - b[1].used);
       for (let i = 0; i < old.length && this.cache.size > 200; i++) { const [k, e] = old[i]; this.root.remove(e.mesh); e.mesh.geometry.dispose(); this.cache.delete(k); }
     }
     this.queue.clear();
   }
 
   collect(L, cx, cz, out) {
+    const ov = this.overlap(L, cx, cz);
+    if (ov === 2) return;
     const b = this.box(L, cx, cz, this._b);
     const d = b.distanceToPoint(this.camPos);
     if (d > 160 && !this.frustum.intersectsBox(b)) return;
-    const node = this.get(L, cx, cz, false);
-    if (L > 0 && d < this.R[L - 1]) {
+    const node = ov ? null : this.get(L, cx, cz, false);
+    if (L > 0 && (d < this.R[L - 1] || ov)) {
       let ready = true;
       const kids = [];
       for (let dz = 0; dz < 2; dz++) for (let dx = 0; dx < 2; dx++) {
         const kx = cx * 2 + dx, kz = cz * 2 + dz;
         const kb = this.box(L - 1, kx, kz, this._kb || (this._kb = new THREE.Box3()));
         const kd = kb.distanceToPoint(this.camPos);
+        if (this.overlap(L - 1, kx, kz) === 2) continue;
         if (kd > 160 && !this.frustum.intersectsBox(kb)) continue;
         kids.push([kx, kz]);
+        if (this.overlap(L - 1, kx, kz) === 1) continue;
         if (!this.cache.has(this.key(L - 1, kx, kz))) { ready = false; this.queue.set(this.key(L - 1, kx, kz), { L: L - 1, cx: kx, cz: kz, d: kd }); }
       }
       if (ready || !node) { for (const [kx, kz] of kids) if (this.cache.has(this.key(L - 1, kx, kz))) this.collect(L - 1, kx, kz, out); return; }
@@ -314,8 +333,8 @@ export class TerrainView {
     const k = smoothstep(mo.y, mo.z, length(positionLocal.sub(this.uCam)));
     m.positionNode = positionLocal.add(vec3(0, mo.x.mul(k), 0));
     const wxz = positionWorld.xz, wy = positionWorld.y;
-    const tuv = wxz.sub(ORIGIN).div(TCELL).add(0.5).div(TN);
-    const nt = texture(this.nrmTex, tuv), lt = texture(this.lightTex, tuv);
+    const tuv = wxz.sub(this.ORIGIN).div(this.TCELL).add(0.5).div(this.TN), luv = wxz.sub(this.ORIGIN).div(this.lightCell).add(0.5).div(this.lightN);
+    const nt = texture(this.nrmTex, tuv), lt = texture(this.lightTex, luv);
     const nx = nt.r.mul(2).sub(1), nz = nt.g.mul(2).sub(1);
     const ny = sqrt(max(float(0.0004), float(1).sub(nx.mul(nx)).sub(nz.mul(nz))));
     const sf = texture(this.surfTex, tuv), rd = texture(this.roadTex, tuv);
@@ -395,6 +414,20 @@ export class TerrainView {
     m.aoNode = lt.r.mul(0.6).add(0.4);
     const sunVis = lt.g;
     m.receivedShadowNode = Fn(([s]) => s.mul(sunVis));
+    const waterKeep = this.waterCut ? sf.a.lessThan(0.92).or(wy.lessThan(-0.4)) : null;
+    if (this.cuts && this.cuts.count) {
+      const cuts = this.cuts;
+      m.maskNode = Fn(() => {
+        const keep = float(1).toVar();
+        Loop({ start: int(0), end: int(cuts.count), type: 'int', condition: '<' }, ({ i }) => {
+          const a = cuts.a.element(i), b = cuts.b.element(i);
+          const d = wxz.sub(a.xy), u = d.dot(a.zw), v = d.dot(vec2(a.w.negate(), a.z));
+          const inside = u.greaterThan(0).and(u.lessThan(b.x)).and(v.abs().lessThan(b.y)).and(wy.lessThan(b.z));
+          keep.assign(mix(keep, float(0), inside.select(float(1), float(0))));
+        });
+        return waterKeep ? keep.greaterThan(0.5).and(waterKeep) : keep.greaterThan(0.5);
+      })();
+    } else if (waterKeep) m.maskNode = waterKeep;
     return m;
   }
 
@@ -419,8 +452,8 @@ export class TerrainView {
     return m;
   }
 
-  buildFarRing() {
-    const T = this.T, half = -ORIGIN, rOut = 6200, M = 512, K = 48;
+  buildFarRing(rOut = 6200) {
+    const T = this.T, half = -this.ORIGIN, M = 512, K = 48, rimStart = half + (rOut - half) * 0.3;
     const pts = [];
     for (let s = 0; s < M; s++) {
       const u = (s / M) * 4, side = Math.floor(u), f = u - side, e = -half + f * 2 * half;
@@ -432,7 +465,7 @@ export class TerrainView {
       for (let k = 0; k <= K; k++) {
         const t = Math.pow(k / K, 1.7), r = l0 + (rOut - l0) * t;
         const x = k === 0 ? x0 : Math.cos(a) * r, z = k === 0 ? z0 : Math.sin(a) * r;
-        const rim = 180 * Math.pow(Math.max(0, (r - 4300) / (rOut - 4300)), 1.5);
+        const rim = 180 * Math.pow(Math.max(0, (r - rimStart) / (rOut - rimStart)), 1.5);
         pos.push(x, k === 0 ? T.hAt(x, z) : T.heightAt(x, z) + rim, z);
       }
     }
@@ -455,7 +488,8 @@ export class TerrainView {
     const T = this.T, pos = [], col = [], idx = [];
     const Y = [0.95, 0.66, 0.1], W = [0.9, 0.9, 0.88];
     const skip = (r, x) => r.kind === 'street' && x > -916;
-    for (const r of this.D.roads) {
+    const lim = -this.ORIGIN - 2, E = this.exclude;
+    for (const r of this.roads) {
       if (!r.markings.length) continue;
       const n = r.pts.length, segN = r.closed ? n : n - 1, total = segN * 4;
       for (const mk of r.markings) {
@@ -468,7 +502,7 @@ export class TerrainView {
           const tx = r.tx[k] + (r.tx[k1] - r.tx[k]) * t, tz = r.tz[k] + (r.tz[k1] - r.tz[k]) * t, tl = Math.hypot(tx, tz) || 1;
           const nx = tz / tl, nz = -tx / tl;
           const px = x + nx * mk.off, pz = z + nz * mk.off;
-          const on = (!dash || (s % (dash[0] + dash[1])) < dash[0]) && !skip(r, px) && Math.abs(px) < 2046 && Math.abs(pz) < 2046;
+          const on = (!dash || (s % (dash[0] + dash[1])) < dash[0]) && !skip(r, px) && Math.abs(px) < lim && Math.abs(pz) < lim && !(E && px > E[0] && px < E[2] && pz > E[1] && pz < E[3]);
           if (!on) { prev = null; continue; }
           const hw = mk.w / 2, v = pos.length / 3;
           for (const sgn of [-1, 1]) { const qx = px + nx * hw * sgn, qz = pz + nz * hw * sgn; pos.push(qx, T.hAt(qx, qz) + 0.03, qz); col.push(...c); }
@@ -499,8 +533,8 @@ export class TerrainView {
   }
 
   buildProxy() {
-    const T = this.T, n = 96, step = EXTENT / n, pos = [], idx = [];
-    for (let i = 0; i <= n; i++) for (let j = 0; j <= n; j++) { const x = ORIGIN + j * step, z = ORIGIN + i * step; pos.push(x, T.hAt(x, z), z); }
+    const T = this.T, n = 96, step = this.EXTENT / n, pos = [], idx = [];
+    for (let i = 0; i <= n; i++) for (let j = 0; j <= n; j++) { const x = this.ORIGIN + j * step, z = this.ORIGIN + i * step; pos.push(x, T.hAt(x, z), z); }
     for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { const a = i * (n + 1) + j, b = a + 1, c = a + n + 1, d = c + 1; idx.push(a, c, b, b, c, d); }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -509,10 +543,13 @@ export class TerrainView {
     const grp = new THREE.Group();
     const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 });
     this.proxyMesh = new THREE.Mesh(g, m);
-    const fg = this.farGeo.clone();
-    fg.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(fg.attributes.position.count * 3), 3));
-    this.proxyFar = new THREE.Mesh(fg, m);
-    grp.add(this.proxyMesh, this.proxyFar);
+    grp.add(this.proxyMesh);
+    if (this.farGeo) {
+      const fg = this.farGeo.clone();
+      fg.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(fg.attributes.position.count * 3), 3));
+      this.proxyFar = new THREE.Mesh(fg, m);
+      grp.add(this.proxyFar);
+    }
     return grp;
   }
 
@@ -526,7 +563,7 @@ export class TerrainView {
         const x = p.getX(i), y = p.getY(i), z = p.getZ(i), ny = nrm.getY(i);
         tmp.copy(c1);
         tmp.lerp(high, Math.min(1, Math.max(0, (y - 70) / 140)));
-        if (masks && Math.abs(x) < 2046 && Math.abs(z) < 2046) {
+        if (masks && Math.abs(x) < -this.ORIGIN - 2 && Math.abs(z) < -this.ORIGIN - 2) {
           tmp.lerp(sand, T.tex(T.S, x, z, 0)); tmp.lerp(lake, T.tex(T.S, x, z, 1));
           if (!T.natural && Math.max(T.tex(T.R, x, z, 0), T.tex(T.R, x, z, 1)) > 0.5) tmp.lerp(road, 0.6 * rm);
         }
@@ -537,14 +574,17 @@ export class TerrainView {
       c.needsUpdate = true;
     };
     paint(this.proxyMesh.geometry, true);
-    paint(this.proxyFar.geometry, false);
+    if (this.proxyFar) paint(this.proxyFar.geometry, false);
   }
 
   refreshFar() {
-    const T = this.T, p = this.farGeo.attributes.position, R = this.farR, M = this.farM;
-    for (let s = 0; s < M; s++) { const i = s * R; p.setY(i, T.hAt(p.getX(i), p.getZ(i))); }
-    p.needsUpdate = true;
-    const g = this.proxyMesh.geometry.attributes.position;
+    if (this.farGeo) {
+      const T = this.T, p = this.farGeo.attributes.position, R = this.farR, M = this.farM;
+      for (let s = 0; s < M; s++) { const i = s * R; p.setY(i, T.hAt(p.getX(i), p.getZ(i))); }
+      p.needsUpdate = true;
+    }
+    if (!this.proxyMesh) return;
+    const T = this.T, g = this.proxyMesh.geometry.attributes.position;
     for (let i = 0; i < g.count; i++) g.setY(i, T.hAt(g.getX(i), g.getZ(i)));
     g.needsUpdate = true;
   }
