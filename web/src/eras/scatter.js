@@ -428,8 +428,10 @@ export class Scatter {
       const lat = Math.abs(dx * v.z - dz * v.x) / sp;
       if (lat > o.def.trunk * it.s + 1.15) continue;
       if (Math.abs(s.pos.y - it.y) > o.def.h * it.sy * 0.6) continue;
-      if (sp < o.def.breakV * Math.sqrt(it.s)) continue;
+      const vb = o.def.breakV * Math.pow(it.s, 1.5);
+      if (sp < vb) continue;
       this.fell(k, o, v);
+      if (g.damage) g.damage.breakThrough(car, new THREE.Vector3(v.x / sp, 0, v.z / sp), sp, vb, { kind: 'tree', tag: 'pole', r: o.def.trunk * it.s });
     }
   }
 

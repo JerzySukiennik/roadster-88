@@ -113,7 +113,20 @@ export class DamageSystem {
     const J = mu * vn * 1.1;
     const E = 0.5 * mu * vn * vn * 0.99;
     if (od.kind === 'remote' && car === this.g.car) { this.lastRemote.set(od.uid, now); if (this.g.online) { this.g.online.sendHit(od.uid, J, nrm, pt); this.g.online.soften(od.uid); } }
+    if (od.kind === 'era' && od.key && this.g.eras && this.g.eras.structures) this.g.eras.structures.chip(od.key, pt, nrm, vn);
     this.impactAt(car, pt, nrm, vn, J, E, rel, od);
+  }
+
+  breakThrough(car, dir, vn, vb, od = {}) {
+    const s = car.sim, L = car.lattice, used = Math.min(vn, vb), dv = vn - Math.sqrt(Math.max(0, vn * vn - used * used));
+    const v0 = new THREE.Vector3(s.vel.x, s.vel.y, s.vel.z), nv = v0.clone().addScaledVector(dir, -dv);
+    s.body.setLinvel({ x: nv.x, y: nv.y, z: nv.z }, true); s.vel.set(nv.x, nv.y, nv.z);
+    if (dv < 1.2 || !L) return;
+    const q = car.curr.quat, d = dir.clone().applyQuaternion(q.clone().invert());
+    let best = -1e9, bi = 0;
+    for (let i = 0; i < L.n; i++) { const t = L.x[i * 3] * d.x + L.x[i * 3 + 1] * d.y + L.x[i * 3 + 2] * d.z; if (t > best) { best = t; bi = i; } }
+    const pt = new THREE.Vector3(L.x[bi * 3], L.x[bi * 3 + 1], L.x[bi * 3 + 2]).applyQuaternion(q).add(car.curr.pos);
+    this.impactAt(car, pt, dir.clone(), dv, s.mass * dv * 1.1, 0.25 * s.mass * used * used, v0, od);
   }
 
   recentRemote(car, uid) { return car === this.g.car && this.g.time - (this.lastRemote.get(uid) || -9) < 0.5; }

@@ -12,6 +12,20 @@ const MATS = ['wood', 'masonry', 'plaster', 'roof', 'metal', 'glass', 'light', '
 const BUILD = { falseFront: B.falseFront, hotel: B.hotel, bank: B.bank, church: B.church, barn: B.barn, cabin: B.cabin, depot: B.depot, waterTower: B.waterTower, windmill: B.windmill, locomotive: B.locomotive, railcar: B.railcar, ranch: B.ranch, gasStation: B.gasStation, stripMall: B.stripMall, streetLight: B.streetLight, powerPole: B.powerPole, telegraphPole: B.telegraphPole, billboard: B.billboard, hwSign: B.hwSign, midrise: B.midrise, evHub: B.evHub, ruinShell: B.ruinShell, rubblePile: B.rubblePile, foundation: B.foundation, spire: B.spire, arch: B.arch, floatPad: B.floatPad, basaltColumns: B.basaltColumns, turbineTower: B.turbineTower, prop: B.prop, ...B2 };
 const DEBRIS = { wood: { density: 520, size: [2.4, 0.22, 0.06], tint: [0.45, 0.35, 0.25], mat: 'wood', aux: [2, 0.5, 1, 0] }, brick: { density: 1800, size: [0.7, 0.4, 0.5], tint: [0.42, 0.18, 0.11], mat: 'masonry', aux: [0, 0, 0, 0] }, stucco: { density: 1600, size: [0.9, 0.5, 0.7], tint: [0.65, 0.6, 0.52], mat: 'plaster', aux: [0, 0, 0, 0] }, concrete: { density: 2200, size: [1.2, 0.6, 1.0], tint: [0.55, 0.55, 0.53], mat: 'plaster', aux: [1, 0, 0, 0] }, steel: { density: 900, size: [1.6, 0.08, 1.0], tint: [0.4, 0.41, 0.42], mat: 'metal', aux: [0, 0.5, 0.7, 0.3] }, pole: { density: 600, size: [1.8, 0.25, 0.25], tint: [0.3, 0.3, 0.3], mat: 'metal', aux: [0, 0.5, 0.6, 0.2] } };
 const PI = Math.PI;
+const REF_MASS = 1950;
+const TOUGH = { wood: 7000, stucco: 10000, brick: 30000, concrete: 60000, steel: 30000, pole: 0 };
+const TOUGH_TYPE = { ruinShell: 12000 };
+const DEBRIS_CAP = 220;
+const CHIP = { wood: [0.9, 0.05, 0.03], stucco: [0.32, 0.04, 0.24], brick: [0.22, 0.07, 0.11], concrete: [0.3, 0.07, 0.24], steel: [0.4, 0.02, 0.3] };
+
+function breakEnergy(m, V) {
+  const bv = m.info.breakV || 999;
+  if (bv >= 999) return Infinity;
+  const base = 0.5 * REF_MASS * bv * bv;
+  if (m.info.small) return base;
+  const t = TOUGH_TYPE[m.site.type] ?? TOUGH[m.info.cls];
+  return t === undefined ? Infinity : Math.max(base, V * t);
+}
 
 export class Structures {
   constructor(sys) {
@@ -284,6 +298,7 @@ export class Structures {
       this.colliders.push(rec);
       if (c.id) { let l = this.byKey.get(c.id); if (!l) this.byKey.set(c.id, (l = [])); l.push(rec); }
     }
+    for (const [key, recs] of this.byKey) { const m = B0.meta.get(key); if (!m || m.eb !== undefined) continue; let V = 0; for (const r of recs) V += 8 * r.def.hx * r.def.hy * r.def.hz; m.eb = breakEnergy(m, V); }
     this.setupRotors(B0.extra.rotors);
     this.plantFlora(eraId);
     this.buildRubble();
@@ -318,7 +333,7 @@ export class Structures {
     this.colliders = [];
     for (const d of this.debris) if (d.body) w.removeRigidBody(d.body);
     this.debris = [];
-    for (const [, D] of this.debrisMesh) { D.mesh.count = 0; D.n = 0; }
+    for (const [, D] of this.debrisMesh) { D.mesh.count = 0; D.n = 0; D.next = 0; D.slots = []; }
     this.buildRubble();
   }
 
@@ -359,37 +374,52 @@ export class Structures {
     g.setAttribute('tint', new THREE.BufferAttribute(new Float32Array(n * 3).fill(1), 3));
     const aux = new Float32Array(n * 4); for (let i = 0; i < n; i++) aux.set(cls.aux, i * 4);
     g.setAttribute('aux', new THREE.BufferAttribute(aux, 4));
-    const mesh = new THREE.InstancedMesh(g, this.mat(cls.mat), 220);
+    const mesh = new THREE.InstancedMesh(g, this.mat(cls.mat), DEBRIS_CAP);
     mesh.count = 0; mesh.castShadow = true; mesh.receiveShadow = true; mesh.frustumCulled = false; mesh.userData.k = 'debris_' + clsName;
-    mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(220 * 3).fill(1), 3);
+    mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(DEBRIS_CAP * 3).fill(1), 3);
     this.group.add(mesh);
-    D = { mesh, n: 0, cls };
+    D = { mesh, n: 0, next: 0, slots: [], cls };
     this.debrisMesh.set(clsName, D);
     return D;
   }
 
-  spawnDebris(cls, clsName, box, vel, n, hit) {
+  spawnDebris(cls, clsName, box, vel, n, hit, dims = null) {
     const g = this.sys.game, R = g.R, w = g.phys.world, D = this.debrisFor(clsName);
     const size = box.getSize(new THREE.Vector3());
     const sp = Math.hypot(vel.x, vel.z) || 1;
     for (let i = 0; i < n; i++) {
       if (this.debris.length > 150) { const old = this.debris.shift(); if (old.body) { w.removeRigidBody(old.body); old.body = null; } }
-      if (D.n >= 220) break;
-      const sx = cls.size[0] * (0.5 + Math.random()), sy = cls.size[1] * (0.6 + Math.random() * 0.8), sz = cls.size[2] * (0.6 + Math.random() * 0.8);
-      const p = new THREE.Vector3(box.min.x + Math.random() * size.x, box.min.y + 0.3 + Math.random() * Math.max(0.5, size.y * 0.7), box.min.z + Math.random() * size.z);
+      let slot;
+      if (D.n < DEBRIS_CAP) slot = D.n++;
+      else { slot = D.next; D.next = (D.next + 1) % DEBRIS_CAP; const old = D.slots[slot]; if (old && old.body) { w.removeRigidBody(old.body); old.body = null; } }
+      const ds = dims || cls.size, sx = ds[0] * (0.5 + Math.random()), sy = ds[1] * (0.6 + Math.random() * 0.8), sz = ds[2] * (0.6 + Math.random() * 0.8);
+      const p = new THREE.Vector3(box.min.x + Math.random() * size.x, box.min.y + (dims ? 0 : 0.3) + Math.random() * Math.max(dims ? 0 : 0.5, size.y * 0.7), box.min.z + Math.random() * size.z);
       const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.random() * 3, Math.random() * 3, Math.random() * 3));
       const body = w.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(p.x, p.y, p.z).setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }).setLinearDamping(0.15).setAngularDamping(0.4).setCcdEnabled(sp > 30));
-      const mass = Math.max(4, sx * sy * sz * cls.density);
+      const mass = Math.max(dims ? 0.3 : 4, sx * sy * sz * cls.density);
       w.createCollider(R.ColliderDesc.cuboid(sx / 2, sy / 2, sz / 2).setMass(mass).setFriction(0.8).setRestitution(0.15).setCollisionGroups(groups(GROUP.DEBRIS, GROUP.STATIC | GROUP.CAR | GROUP.DEBRIS)), body);
       const near = Math.max(0, 1 - p.distanceTo(hit) / 10);
       const k = 0.25 + near * 0.6;
       body.setLinvel({ x: vel.x * k + (Math.random() - 0.5) * 6, y: 1 + Math.random() * 5 * (0.4 + near), z: vel.z * k + (Math.random() - 0.5) * 6 }, true);
       body.setAngvel({ x: (Math.random() - 0.5) * 8, y: (Math.random() - 0.5) * 8, z: (Math.random() - 0.5) * 8 }, true);
-      const i3 = D.n * 3, t = cls.tint, v = 0.8 + Math.random() * 0.4;
+      const i3 = slot * 3, t = cls.tint, v = 0.8 + Math.random() * 0.4;
       D.mesh.instanceColor.array.set([t[0] * v, t[1] * v, t[2] * v], i3); D.mesh.instanceColor.needsUpdate = true;
-      this.debris.push({ body, D, i: D.n++, s: new THREE.Vector3(sx, sy, sz), t: 0 });
+      const d = { body, D, i: slot, s: new THREE.Vector3(sx, sy, sz), t: 0 };
+      D.slots[slot] = d; this.debris.push(d);
     }
     D.mesh.count = D.n;
+  }
+
+  chip(key, pt, dir, vn) {
+    const g = this.sys.game, m = this.cur && this.cur.meta.get(key);
+    if (!m || m.site.destroyed || vn < 7 || m.info.cls === 'pole') return;
+    const cls = DEBRIS[m.info.cls], dims = CHIP[m.info.cls];
+    if (!cls || !dims || g.time - (m.chipT || -9) < 0.5) return;
+    m.chipT = g.time;
+    const n = Math.min(14, Math.round(vn / 2)), o = new THREE.Vector3(pt.x - dir.x * 0.4, pt.y + 0.2, pt.z - dir.z * 0.4);
+    const box = new THREE.Box3(new THREE.Vector3(o.x - 0.8, o.y, o.z - 0.8), new THREE.Vector3(o.x + 0.8, o.y + 0.9, o.z + 0.8));
+    this.spawnDebris(cls, m.info.cls, box, new THREE.Vector3(-dir.x * vn * 0.35, 0, -dir.z * vn * 0.35), n, o, dims);
+    if (g.fx) g.fx.dustBurst(o, Math.min(16, 4 + n), 1.4);
   }
 
   checkHits(dt) {
@@ -407,8 +437,9 @@ export class Structures {
       if (dx * dx + dz * dz > rr * rr) continue;
       const m = this.cur.meta.get(rec.key);
       if (!m || m.site.destroyed) continue;
-      const bv = m.info.breakV || 999;
-      if (sp < bv * 0.8) continue;
+      if (!(m.eb < Infinity)) continue;
+      const bv = Math.sqrt(2 * m.eb / s.mass);
+      if (sp < bv) continue;
       q.setFromEuler(new THREE.Euler(0, c.ry || 0, c.rz || 0, 'YXZ')); inv.copy(q).invert();
       lp.set(px - c.x, py + 0.6 - c.y, pz - c.z).applyQuaternion(inv);
       lv.set(v.x, v.y, v.z).applyQuaternion(inv);
@@ -426,6 +457,7 @@ export class Structures {
       const vn = -(v.x * nrm.x + v.y * nrm.y + v.z * nrm.z);
       if (vn < bv) continue;
       this.destroy(rec.key, v, new THREE.Vector3(px + v.x * t0, py + 0.6 + v.y * t0, pz + v.z * t0));
+      if (g.damage) g.damage.breakThrough(car, nrm.negate(), vn, bv, { kind: 'era', tag: c.tag === 'pole' ? 'pole' : c.tag, r: Math.min(c.hx, c.hz) });
     }
   }
 

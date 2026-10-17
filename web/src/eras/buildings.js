@@ -333,7 +333,7 @@ export function powerPole(k, o = {}) {
   for (const x of [-1.15, 0, 1.15]) k.cyl('metal', x, h - 0.73 + (x === 0 ? 0.6 : 0), 0, 0.05, 0.07, 0.22, 6, { tint: [0.35, 0.5, 0.45], aux: [0, 0.2, 0.0, 0] });
   if (o.transformer) k.cyl('metal', 0.32, h - 3, 0, 0.3, 0.3, 1.0, 10, { tint: [0.5, 0.52, 0.5], aux: [0, 0.4, 0.7, 0] });
   k.collider(0, h / 2, 0, 0.18, h / 2, 0.18, 0, 'pole');
-  return { cls: 'pole', breakV: 11, foot: [0.4, 0.4, 0], h };
+  return { cls: 'pole', breakV: 16, foot: [0.4, 0.4, 0], h };
 }
 
 export function telegraphPole(k, o = {}) {
@@ -342,7 +342,7 @@ export function telegraphPole(k, o = {}) {
   k.box('wood', 0, h - 0.5, 0, 1.6, 0.1, 0.1, { tint: [0.26, 0.2, 0.14], aux: W(2, 0.5, 1) });
   for (const x of [-0.65, -0.25, 0.25, 0.65]) k.cyl('glass', x, h - 0.45, 0, 0.04, 0.05, 0.14, 6, { tint: [0.12, 0.3, 0.25], aux: [0, 0, 0, 0] });
   k.collider(0, h / 2, 0, 0.15, h / 2, 0.15, 0, 'pole');
-  return { cls: 'pole', breakV: 9, foot: [0.3, 0.3, 0], h };
+  return { cls: 'pole', breakV: 13, foot: [0.3, 0.3, 0], h };
 }
 
 export function wires(k, A, B, hA, hB, offsets, sag, mat = 'metal', r = 0.025) {
