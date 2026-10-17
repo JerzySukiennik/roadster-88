@@ -1,4 +1,4 @@
-// Roadster 88 web dev server: static files from the project root with no-cache headers (web/ loads ../assets and ../shared).
+// Roadster 88 web dev server: static files from the project root with no-cache headers (web/ loads ../assets and ../shared), plus POST /__motor-sound so the sound editor can save assets/audio/motor-sound.json.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -10,6 +10,15 @@ const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; ch
 
 http.createServer((req, res) => {
   let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+  if (req.method === 'POST' && p === '/__motor-sound') {
+    let body = '';
+    req.on('data', (c) => { body += c; if (body.length > 20000) req.destroy(); });
+    req.on('end', () => {
+      try { const j = JSON.parse(body); fs.writeFileSync(path.join(root, 'assets/audio/motor-sound.json'), JSON.stringify(j, null, 1) + '\n'); res.writeHead(200, { 'Content-Type': 'application/json' }); res.end('{"ok":true}'); }
+      catch (e) { res.writeHead(400); res.end('bad json'); }
+    });
+    return;
+  }
   if (p === '/') { res.writeHead(302, { Location: '/web/' }); res.end(); return; }
   let file = path.join(root, p);
   if (!file.startsWith(root)) { res.writeHead(403); res.end(); return; }

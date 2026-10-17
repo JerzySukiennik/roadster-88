@@ -1,4 +1,5 @@
-// Roadster 88 audio: Web Audio engine with a live EV motor synth (clean sine whine on motor rpm, low-speed inverter sing, regen), band-limited per-nozzle cold-gas roar, wind/tyre loops, positional one-shots and era radio from assets/audio/catalog.json (missing keys stay silent), with a voice cap and a watchdog that rebuilds the graph if any node starts emitting non-finite samples.
+// Roadster 88 audio: Web Audio engine with the parametric EV motor synth from motorSound.js (settings from the sound editor, live via storage or BroadcastChannel, or assets/audio/motor-sound.json), band-limited per-nozzle cold-gas roar, wind/tyre loops, positional one-shots and era radio from assets/audio/catalog.json (missing keys stay silent), with a voice cap and a watchdog that rebuilds the graph if any node starts emitting non-finite samples.
+import { MotorSynth, DEFAULT_MOTOR, cleanMotor } from './motorSound.js';
 
 const BASE = '../assets/audio/';
 
@@ -52,24 +53,24 @@ export class AudioEngine {
   }
 
   buildMotor() {
-    const ctx = this.ctx;
-    const tone = ctx.createBiquadFilter(); tone.type = 'highshelf'; tone.frequency.value = 7000; tone.gain.value = -6;
-    this.motorBus = ctx.createGain(); this.motorBus.gain.value = 0.0; this.motorBus.connect(tone); tone.connect(this.master);
-    const parts = [[2.0, 0.5, 1.004], [2.0, 0.28, 0.996], [4.0, 0.2, 1], [6.07, 0.11, 1], [8.13, 0.05, 1], [1.0, 0.05, 1]];
-    this.motor = parts.map(([ratio, amp, det]) => {
-      const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = 40 * ratio;
-      const g = ctx.createGain(); g.gain.value = 0;
-      o.connect(g); g.connect(this.motorBus); o.start();
-      return { o, g, ratio: ratio * det, amp };
-    });
-    this.sing = ctx.createOscillator(); this.sing.type = 'sine';
-    this.singGain = ctx.createGain(); this.singGain.gain.value = 0;
-    this.sing.connect(this.singGain); this.singGain.connect(this.motorBus); this.sing.start();
-    this.regenOsc = ctx.createOscillator(); this.regenOsc.type = 'sine';
-    this.regenGain = ctx.createGain(); this.regenGain.gain.value = 0;
-    this.regenOsc.connect(this.regenGain); this.regenGain.connect(this.motorBus); this.regenOsc.start();
-    this.inverter = this.noiseVoice('bandpass', 9000, 6, this.motorBus);
+    if (!this.motorSettings) this.loadMotorSettings();
+    this.motorSynth = new MotorSynth(this.ctx, this.master, this.motorSettings || DEFAULT_MOTOR);
   }
+
+  loadMotorSettings() {
+    let P = null;
+    try { P = JSON.parse(localStorage.getItem('r88.motorSound') || 'null'); } catch (e) { P = null; }
+    this.motorSettings = P ? cleanMotor(P) : DEFAULT_MOTOR;
+    if (!P) fetch('../assets/audio/motor-sound.json', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((j) => { if (j && !this.motorLocal) this.setMotor(j); }).catch(() => {});
+    if (!this.motorListen) {
+      this.motorListen = true;
+      const apply = (j) => { this.motorLocal = true; this.setMotor(j); };
+      addEventListener('storage', (e) => { if (e.key === 'r88.motorSound' && e.newValue) { try { apply(JSON.parse(e.newValue)); } catch (err) { /* bad json */ } } });
+      try { new BroadcastChannel('r88-motor').onmessage = (e) => apply(e.data); } catch (e) { /* no channel */ }
+    }
+  }
+
+  setMotor(P) { this.motorSettings = cleanMotor(P); if (this.motorSynth) this.motorSynth.set(this.motorSettings); }
 
   buildThrust() {
     const ctx = this.ctx;
@@ -202,22 +203,9 @@ export class AudioEngine {
     const t = this.ctx.currentTime, sim = s.sim, P = s.powertrain;
     const inside = s.fpp;
     this.outside.frequency.setTargetAtTime(inside ? 2600 : 20000, t, 0.1);
-    const rpm = sim.motorRpm, f0 = Math.max(4, rpm / 60);
-    const load = Math.min(1, Math.abs(sim.motorForce) / P.max_wheel_force), regen = Math.min(1, sim.regenForce / P.regen_force) * Math.min(1, sim.speed / 6);
+    const load = Math.min(1, Math.abs(sim.motorForce) / P.max_wheel_force);
     const vol = sim.enabled && !s.gone ? 1 : 0;
-    const band = (f) => { const a = Math.min(1, Math.max(0, (f - 120) / 330)), b = Math.min(1, Math.max(0, (f - 6000) / 6000)); return a * a * (3 - 2 * a) * (1 - b); };
-    this.motorBus.gain.setTargetAtTime(vol * (0.015 + 0.3 * load + 0.1 * regen) * (inside ? 1.2 : 0.8), t, 0.06);
-    for (const m of this.motor) {
-      const f = f0 * m.ratio;
-      m.o.frequency.setTargetAtTime(f, t, 0.03);
-      m.g.gain.setTargetAtTime(m.amp * band(f) * (0.55 + 0.45 * load), t, 0.04);
-    }
-    const slow = Math.max(0, 1 - sim.speed / 12);
-    this.sing.frequency.setTargetAtTime(520 + f0 * 3.1, t, 0.04);
-    this.singGain.gain.setTargetAtTime(0.09 * slow * Math.min(1, sim.speed / 0.6) * (0.3 + 0.7 * load), t, 0.05);
-    this.regenOsc.frequency.setTargetAtTime(f0 * 1.92, t, 0.03);
-    this.regenGain.gain.setTargetAtTime(regen * 0.3 * band(f0 * 1.92), t, 0.06);
-    this.inverter.g.gain.setTargetAtTime(vol * 0.01 * load, t, 0.05);
+    if (this.motorSynth) this.motorSynth.update(dt, sim.speed, load, sim.contacts, vol * (inside ? 1.15 : 0.85));
     const sp = sim.speed;
     this.wind.f.frequency.setTargetAtTime(300 + sp * 22, t, 0.1);
     this.wind.g.gain.setTargetAtTime(vol * Math.min(0.5, (sp / 90) ** 2 * 0.45), t, 0.1);
