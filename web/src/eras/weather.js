@@ -162,7 +162,7 @@ export class Weather {
       if (this.drift <= 0) { const opts = NEXT[this.kind].filter((x) => this.api.kinds.includes(x)); if (opts.length && Math.random() < 0.6) this.setTarget(opts[Math.floor(Math.random() * opts.length)], false); this.drift = 120 + Math.random() * 200; }
     }
     const month = g.tc ? g.tc.present.month : this.month;
-    if (month !== this.month) { this.month = month; this.api.season = this.eraId === 'hadean' ? 'none' : seasonOf(month); this.sys.applySeason(); }
+    if (month !== this.month) { this.month = month; this.api.season = this.eraId === 'hadean' ? 'none' : seasonOf(month); this.sys.applySeason(); if (on && !this.override) this.roll(this.eraId, { instant: false }); }
     this.wet = Math.min(1, Math.max(0, this.wet + dt * (C.rain > 0.05 ? C.rain * 0.025 : -(C.dark > 0.4 ? 0.0015 : 0.004))));
     if (this.kind === 'fog') this.wet = Math.max(this.wet, Math.min(0.35, this.wet + dt * 0.003));
     this.snowCover = Math.min(1, Math.max(0, this.snowCover + dt * (C.snow > 0.05 ? C.snow * 0.012 : -0.0015)));
