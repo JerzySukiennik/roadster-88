@@ -130,9 +130,9 @@ export class TimeFX {
     if (st.arrive > 0) { arcsOn = Math.max(arcsOn, st.arrive * 1.6); spread = 1.4; }
     this.arcTimer -= dt;
     if (arcsOn > 0.02 && visibleCar) {
-      if (this.arcTimer <= 0) { this.arcTimer = rnd(0.03, 0.07); const n = this.buildArcs(Math.ceil(2 + arcsOn * 9), carMatrix, spread); this.arcs.geometry.setDrawRange(0, n); this.arcs.geometry.attributes.position.needsUpdate = true; }
+      if (this.arcTimer <= 0) { this.arcTimer = rnd(0.03, 0.07); const n = this.buildArcs(Math.ceil(2 + arcsOn * 9), carMatrix, spread); this.arcs.geometry.setDrawRange(0, n); this.arcs.visible = n > 0; this.arcs.geometry.attributes.position.needsUpdate = true; }
       this.arcIntensity.value = arcsOn * rnd(0.6, 1.2);
-    } else { this.arcIntensity.value = 0; this.arcs.geometry.setDrawRange(0, 0); }
+    } else { this.arcIntensity.value = 0; this.arcs.geometry.setDrawRange(0, 0); this.arcs.visible = false; }
     this.mats.u.arcGlow.value = arcsOn * 0.18 * rnd(0.6, 1.0);
     if (this.implosion.visible) {
       this.implT += dt;

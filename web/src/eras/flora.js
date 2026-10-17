@@ -650,6 +650,6 @@ export function rockGeometry(detail, seed) {
     p.setXYZ(i, v.x * k * 1.15, v.y * k * 0.72, v.z * k);
   }
   g.computeVertexNormals();
-  const flat = g.toNonIndexed(); flat.computeVertexNormals();
+  const flat = g.index ? g.toNonIndexed() : g.clone(); flat.computeVertexNormals();
   return detail > 1 ? g : flat;
 }

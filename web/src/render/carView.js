@@ -43,6 +43,7 @@ export function loadRealCar(lod) {
         const root = gltf.scene.getObjectByName('Roadster') || gltf.scene;
         root.userData.source = f;
         root.animations = gltf.animations || [];
+        ensureUVs(root);
         optimizeTemplate(root);
         root.userData.shadowGeom = shadowFromTemplate(root);
         return root;
@@ -51,6 +52,18 @@ export function loadRealCar(lod) {
     return null;
   })();
   return realCarPromise;
+}
+
+function ensureUVs(root) {
+  root.traverse((o) => {
+    if (!o.isMesh || o.geometry.attributes.uv) return;
+    if (![].concat(o.material).some((m) => m && (m.map || m.normalMap || m.roughnessMap))) return;
+    const g = o.geometry, p = g.attributes.position;
+    g.computeBoundingBox();
+    const s = g.boundingBox.getSize(new THREE.Vector3()), ax = [[0, s.x], [1, s.y], [2, s.z]].sort((a, b) => b[1] - a[1]), A = ax[0][0], B = ax[1][0], uv = new Float32Array(p.count * 2);
+    for (let i = 0; i < p.count; i++) { uv[i * 2] = p.getComponent(i, A) * 6; uv[i * 2 + 1] = p.getComponent(i, B) * 6; }
+    g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  });
 }
 
 const STATIC_ROOT = /^(Badge_|Diffuser|Housing_Nozzle|Sill_|Splitter)/;

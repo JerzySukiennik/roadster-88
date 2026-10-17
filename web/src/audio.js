@@ -22,6 +22,7 @@ export class AudioEngine {
     this.master = ctx.createGain(); this.master.gain.value = 0.85;
     this.master.connect(comp); comp.connect(ctx.destination); this.comp = comp;
     this.guard = ctx.createAnalyser(); this.guard.fftSize = 256; comp.connect(this.guard); this.guardBuf = new Float32Array(256);
+    { const o = ctx.createOscillator(), g = ctx.createGain(), an = ctx.createAnalyser(); an.fftSize = 256; g.gain.value = 0.25; o.connect(g); g.connect(an); o.start(); this.probe = { o, a: an }; this.guardBlind = undefined; this.lastCT = null; this.stall = 0; this.quiet = 0; }
     this.outside = ctx.createBiquadFilter(); this.outside.type = 'lowpass'; this.outside.frequency.value = 20000; this.outside.connect(this.master);
     this.noiseBuf = this.makeNoise(2);
     this.buildMotor();
@@ -180,19 +181,50 @@ export class AudioEngine {
   watchdog(dt) {
     this.watchT += dt;
     if (this.watchT < 0.4 || this.rebuilding) return;
-    this.watchT = 0;
+    const span = this.watchT; this.watchT = 0;
     if (!this.watchHooks) {
       this.watchHooks = true;
       document.addEventListener('visibilitychange', () => { if (!document.hidden && this.ctx && this.ctx.state !== 'running') this.ctx.resume().catch(() => {}); });
-      if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) navigator.mediaDevices.addEventListener('devicechange', () => { if (this.ctx && !this.rebuilding) { console.warn('audio: output device changed, rebuilding'); this.rebuild(); } });
+      if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) navigator.mediaDevices.addEventListener('devicechange', () => { if (this.ctx && !this.rebuilding) this.heal('output device changed'); });
     }
-    if (this.ctx.state !== 'running' && !document.hidden) { this.ctx.resume().catch(() => {}); return; }
+    const ctx = this.ctx;
+    if (ctx.state !== 'running') { if (!document.hidden) ctx.resume().catch(() => {}); this.stall = 0; this.lastCT = null; if (this.lastState !== ctx.state) this.note('context ' + ctx.state); this.lastState = ctx.state; return; }
+    this.lastState = 'running';
+    const ct = ctx.currentTime, adv = this.lastCT === null || this.lastCT === undefined ? span : ct - this.lastCT; this.lastCT = ct;
+    if (!document.hidden && adv < span * 0.25) { this.stall = (this.stall || 0) + 1; if (this.stall >= 3) { this.stall = 0; this.heal('audio clock stalled'); return; } } else this.stall = 0;
     this.guard.getFloatTimeDomainData(this.guardBuf);
     let e = 0;
-    for (let i = 0; i < this.guardBuf.length; i++) { const v = this.guardBuf[i]; if (!Number.isFinite(v)) { console.warn('audio: non-finite output'); this.rebuild(); return; } e += v * v; }
+    for (let i = 0; i < this.guardBuf.length; i++) { const v = this.guardBuf[i]; if (!Number.isFinite(v)) { this.heal('non-finite output'); return; } e += v * v; }
+    this.rms = Math.sqrt(e / this.guardBuf.length);
+    if (this.guardBlind === undefined && this.probe) {
+      this.probe.a.getFloatTimeDomainData(this.guardBuf);
+      let pe = 0; for (let i = 0; i < this.guardBuf.length; i++) pe += this.guardBuf[i] * this.guardBuf[i];
+      this.guardBlind = Math.sqrt(pe / this.guardBuf.length) < 1e-4;
+      if (this.guardBlind) this.note('analyser reads are blocked, silence check off');
+      try { this.probe.o.stop(); this.probe.o.disconnect(); } catch (err) { /* stopped */ }
+      this.probe = null;
+    }
     const expect = (this.motorSynth ? this.motorSynth.level || 0 : 0) + (this.radioOn && this.musicKey && this.buffers.has(this.musicKey) ? this.radioVol * 0.2 : 0);
-    if (expect > 0.03 && Math.sqrt(e / this.guardBuf.length) < 1e-6) { this.quiet = (this.quiet || 0) + 1; if (this.quiet >= 4) { this.quiet = 0; console.warn('audio: silent while sound was expected, rebuilding'); this.rebuild(); } }
+    if (!this.guardBlind && expect > 0.03 && this.rms < 1e-6) { this.quiet = (this.quiet || 0) + 1; if (this.quiet >= 4) { this.quiet = 0; this.heal('silent while sound was expected'); } }
     else this.quiet = 0;
+  }
+
+  heal(reason) {
+    const now = performance.now();
+    this.healTimes = (this.healTimes || []).filter((t) => now - t < 30000);
+    this.note(reason);
+    if (this.healPaused && now < this.healPaused) return;
+    if (this.healTimes.length >= 3) { this.healPaused = now + 60000; this.note('too many rebuilds, auto-heal paused for 60 s'); console.warn('audio: too many rebuilds, pausing auto-heal'); return; }
+    this.healTimes.push(now);
+    console.warn('audio: ' + reason + ', rebuilding');
+    this.rebuild();
+  }
+
+  note(t) { (this.log || (this.log = [])).push(new Date().toLocaleTimeString() + ' ' + t); if (this.log.length > 8) this.log.shift(); }
+
+  stats() {
+    const c = this.ctx;
+    return { state: c ? c.state : 'none', rate: c ? c.sampleRate : 0, latency: c && c.baseLatency ? Math.round(c.baseLatency * 1000) : 0, time: c ? c.currentTime.toFixed(1) : '-', rms: (this.rms || 0).toFixed(4), motor: this.motorSynth ? (this.motorSynth.level || 0).toFixed(3) : '-', voices: this.voices, ready: this.ready, resets: this.resets, blind: !!this.guardBlind, radio: this.radioOn ? this.musicKey : 'off', log: (this.log || []).slice(-5) };
   }
 
   async rebuild() {
