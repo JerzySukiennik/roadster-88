@@ -17,6 +17,7 @@ export class Story {
     this.i = -1; this.target = null; this.radioQ = []; this.dlgOpen = null; this.spots = []; this.t = 0; this.events = [];
     this._v = new THREE.Vector3();
     addEventListener('keydown', (e) => this.key(e), true);
+    if (game.valley && game.valley.onLocation) game.valley.onLocation(() => this.applyWorld());
     const fs = { radius: 2.4, holding: true, pos: () => this.frontOfCar(), enabled: () => !!this.frunkLabel(), onUse: () => this.frunkUse() };
     Object.defineProperty(fs, 'label', { get: () => this.frunkLabel() });
     game.interact.add(fs);
@@ -57,6 +58,8 @@ export class Story {
     this.st.done = true; this.save();
     this.objective(null);
   }
+
+  earth() { const L = this.g.valley && this.g.valley.location; return !!(L && L.mode === 'earth'); }
 
   period(year) { return eraOf(year).id; }
   inYear(year) { return this.g.eraId() === this.period(year); }
@@ -212,7 +215,7 @@ export class Story {
   applyWorld() {
     const g = this.g; if (!g.valley || !g.life) return;
     this.build();
-    const P = this.props, N = this.npc, f = this.flags, y26 = this.inYear(2026), y85 = this.inYear(1885), kes = f.timeline === 'kessler';
+    const earth = this.earth(), P = this.props, N = this.npc, f = this.flags, y26 = !earth && this.inYear(2026), y85 = !earth && this.inYear(1885), kes = f.timeline === 'kessler';
     P.show('ws_normal', y26 && !kes); P.show('ws_kessler', y26 && kes);
     for (const n of ['statue', 'tower', 'drones', 'bb0', 'bb1', 'bb2']) P.show(n, y26 && kes);
     P.show('forge', y85);
@@ -226,6 +229,8 @@ export class Story {
     if (this.pendingTitle) { const t = this.pendingTitle; this.pendingTitle = null; this.title(...t); }
     this.t += dt;
     this.npc.update(dt); this.props.update(dt);
+    if (this.earth()) { if (!this.away) { this.away = true; this.el.obj.classList.remove('on'); this.el.wp.classList.remove('on'); } return; }
+    if (this.away) { this.away = false; if (this.el.text.textContent && !this.st.done) this.el.obj.classList.add('on'); }
     if (this.dlgOpen) {
       const D = this.dlgOpen; D.t += dt;
       if (D.shown < D.full.length) { D.shown = Math.min(D.full.length, D.shown + dt * 60); this.el.dt.textContent = D.full.slice(0, Math.floor(D.shown)); if (D.shown >= D.full.length) this.el.dc.style.visibility = ''; }
