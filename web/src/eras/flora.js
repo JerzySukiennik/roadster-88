@@ -1,10 +1,10 @@
-// Roadster 88 era flora: a procedurally painted leaf atlas (oak, conifer, fan palm, fern, cycad, grasses, reeds, sage, broadleaf, eucalyptus, twigs and tree impostors with alpha-preserving mips), the shared foliage and rock materials, and the species geometry builders (near cards and far impostors).
+// Roadster 88 era flora: a procedurally painted leaf atlas (oak, conifer, fan palm, fern, cycad, grasses, reeds, sage, broadleaf, eucalyptus, twigs, wildflowers, lycopsid leaves, ginkgo fans, citrus, wheat, moss and far-future fronds, tree impostors with alpha-preserving mips), the shared foliage and rock materials, and the species geometry builders from Devonian prototaxites, Carboniferous lepidodendrons and calamites to orange groves and far-future umbrella trees (near cards and far impostors).
 import * as THREE from 'three/webgpu';
 import { texture, attribute, uv, vec2, vec3, float, floor, uniform, mix, step, smoothstep, mx_noise_float, positionLocal, positionWorld, normalViewGeometry, time, sin, hash, instanceIndex, bumpMap, max } from 'three/tsl';
 import { rng } from './lib.js';
 
-export const CELL = { oak: 0, conifer: 1, palm: 2, fern: 3, cycad: 4, grass: 5, dry: 6, reed: 7, impOak: 8, impConifer: 9, impPalm: 10, shrub: 11, bigleaf: 12, eucalypt: 13, twig: 14, impFern: 15 };
-const S = 512, G = 4;
+export const CELL = { oak: 0, conifer: 1, palm: 2, fern: 3, cycad: 4, grass: 5, dry: 6, reed: 7, impOak: 8, impConifer: 9, impPalm: 10, shrub: 11, bigleaf: 12, eucalypt: 13, twig: 14, impFern: 15, flower: 16, lepido: 17, ginkgo: 18, alien: 19, moss: 20, orange: 21, wheat: 22 };
+const S = 512, G = 5;
 
 function hsl(h, s, l, a = 1) { return `hsla(${h},${s}%,${l}%,${a})`; }
 
@@ -97,6 +97,30 @@ function paintAtlas() {
     const branch = (x, y, a, len, w, d) => { const x1 = x + Math.cos(a) * len, y1 = y + Math.sin(a) * len; twig(x, y, x1, y1, w, hsl(30, 12, r(22, 32))); if (d > 0) for (let k = 0; k < 3; k++) branch(x1, y1, a + r(-0.7, 0.7), len * r(0.55, 0.75), w * 0.65, d - 1); };
     branch(S / 2, S, -Math.PI / 2, S * 0.3, 9, 5);
   });
+  cell(CELL.flower, () => {
+    blades(70, 92, 40, 30, 0.25, 0.7, 3.2, 0.3, { tipL: 12 });
+    const cols = [[52, 88, 56], [48, 92, 60], [28, 92, 52], [270, 42, 52], [0, 0, 88], [52, 88, 56]];
+    for (let i = 0; i < 90; i++) { const c = cols[Math.floor(R() * cols.length)], x = S / 2 + r(-0.42, 0.42) * S, y = S * r(0.32, 0.78); for (let k = 0; k < 5; k++) { const a = (k / 5) * Math.PI * 2; leaf(x, y, a, r(7, 11), r(4, 6), hsl(c[0] + r(-4, 4), c[1], c[2] + r(-6, 6))); } ctx.fillStyle = hsl(40, 70, 30); ctx.beginPath(); ctx.arc(x, y, 2.5, 0, Math.PI * 2); ctx.fill(); }
+  });
+  cell(CELL.lepido, () => {
+    for (let i = 0; i < 70; i++) { const x0 = S / 2 + r(-8, 8), a = -Math.PI / 2 + r(-0.55, 0.55), L = S * r(0.55, 0.98), x1 = x0 + Math.cos(a) * L, y1 = S + Math.sin(a) * L; ctx.strokeStyle = hsl(r(95, 115), r(30, 42), r(20, 32)); ctx.lineWidth = r(2.5, 4.5); ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x0, S); ctx.quadraticCurveTo((x0 + x1) / 2 + r(-20, 20), (S + y1) / 2, x1, y1); ctx.stroke(); }
+  });
+  cell(CELL.ginkgo, () => {
+    for (let k = 0; k < 8; k++) twig(S / 2, S * 0.95, S / 2 + r(-S * 0.38, S * 0.38), S * r(0.15, 0.6), r(3, 5), 'rgba(80,64,48,1)');
+    for (let i = 0; i < 170; i++) { const x = S / 2 + r(-0.42, 0.42) * S, y = S * r(0.08, 0.82), a = r(0, Math.PI * 2), w = r(16, 26); ctx.fillStyle = hsl(r(68, 84), r(40, 55), r(30, 44) - (y / S) * 10); ctx.beginPath(); ctx.moveTo(x, y); ctx.arc(x, y, w, a - 0.75, a + 0.75); ctx.closePath(); ctx.fill(); }
+  });
+  cell(CELL.alien, () => {
+    for (let f = 0; f < 3; f++) frond(S / 2 + r(-40, 40), S, S / 2 + r(-120, 120), S * r(0.02, 0.2), r(-40, 40), S * 0.2, 6, r(268, 300), 55, 34, { n: 26, rachis: 4 });
+    for (let i = 0; i < 70; i++) { ctx.fillStyle = hsl(r(170, 190), 80, r(55, 70)); ctx.beginPath(); ctx.arc(S / 2 + r(-0.4, 0.4) * S, S * r(0.05, 0.8), r(2, 5), 0, Math.PI * 2); ctx.fill(); }
+  });
+  cell(CELL.moss, () => {
+    for (let i = 0; i < 1400; i++) { const x = S / 2 + r(-0.47, 0.47) * S, y = S - Math.pow(R(), 1.8) * S * 0.42 - 4; leaf(x, y, r(0, 6.28), r(5, 10), r(3, 5), hsl(r(82, 105), r(40, 58), r(18, 32) + (S - y) / S * 6)); }
+  });
+  cell(CELL.orange, () => {
+    cluster(S / 2, S * 0.5, S * 0.42, 560, 108, 42, 21, 30, 11, { shade: 10 });
+    for (let i = 0; i < 34; i++) { const a = r(0, Math.PI * 2), d = Math.sqrt(R()) * S * 0.36, x = S / 2 + Math.cos(a) * d, y = S * 0.5 + Math.sin(a) * d; ctx.fillStyle = hsl(r(26, 34), 95, r(46, 56)); ctx.beginPath(); ctx.arc(x, y, r(7, 10), 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = 'rgba(255,240,200,0.5)'; ctx.beginPath(); ctx.arc(x - 2.5, y - 2.5, 2.4, 0, Math.PI * 2); ctx.fill(); }
+  });
+  cell(CELL.wheat, () => { blades(80, 44, 52, 52, 0.55, 0.95, 2.2, 0.12, { seeds: 0.95, tipL: 8, tipH: 2 }); });
   const impTree = (k, trunkH, canopy, opts) => {
     cell(k, () => {
       const cx = S / 2;
@@ -147,8 +171,9 @@ function mipTexture(cv) {
 }
 
 export const IMP_N = 8;
-const IMP_SPECS = { oak: ['round', 6], cottonwood: ['round', 4], magnolia: ['round', 4], conifer: ['cone', 6], palm: ['palm', 5], eucalyptus: ['euc', 4], treefern: ['tfern', 4], deadTree: ['dead', 4] };
-const ROUND = { oak: { w: [0.78, 1.0], h: [0.5, 0.68], t: [0.3, 0.42], hue: [72, 86], sat: 30, lit: 27 }, cottonwood: { w: [0.62, 0.85], h: [0.6, 0.8], t: [0.28, 0.36], hue: [82, 96], sat: 38, lit: 31 }, magnolia: { w: [0.66, 0.9], h: [0.6, 0.75], t: [0.22, 0.3], hue: [100, 112], sat: 34, lit: 23 } };
+const IMP_SPECS = { oak: ['round', 6], cottonwood: ['round', 4], magnolia: ['round', 4], conifer: ['cone', 6], palm: ['palm', 5], eucalyptus: ['euc', 4], treefern: ['tfern', 4], deadTree: ['dead', 4], lepido: ['lepido', 4], calamites: ['calam', 3], ginkgo: ['round', 3], orange: ['round', 3], prototax: ['pillar', 2], archaeop: ['cone', 4], alienTree: ['alien', 4] };
+const CONE_HUE = { conifer: [148, 162], archaeop: [96, 112] };
+const ROUND = { ginkgo: { w: [0.55, 0.75], h: [0.6, 0.78], t: [0.25, 0.34], hue: [70, 84], sat: 44, lit: 36 }, orange: { w: [0.9, 1.0], h: [0.6, 0.72], t: [0.18, 0.24], hue: [104, 112], sat: 42, lit: 20 }, oak: { w: [0.78, 1.0], h: [0.5, 0.68], t: [0.3, 0.42], hue: [72, 86], sat: 30, lit: 27 }, cottonwood: { w: [0.62, 0.85], h: [0.6, 0.8], t: [0.28, 0.36], hue: [82, 96], sat: 38, lit: 31 }, magnolia: { w: [0.66, 0.9], h: [0.6, 0.75], t: [0.22, 0.3], hue: [100, 112], sat: 34, lit: 23 } };
 
 function paintImpostors() {
   const S = 256, cv = document.createElement('canvas'); cv.width = cv.height = S * IMP_N;
@@ -171,7 +196,7 @@ function paintImpostors() {
         const cy = top - ch * 0.42, cn = old ? 9 : 16 + Math.floor(R() * 10);
         for (let k = 0; k < cn; k++) { const a = r(0, 6.28), d = Math.sqrt(R()); const x = bx + lean + Math.cos(a) * d * cw * 0.85, y = cy + Math.sin(a) * d * ch * 0.42; blob(x, y, S * r(0.05, 0.1), 70, hue, P.sat, P.lit - 8, 6); blob(x, y - 3, S * r(0.04, 0.08), 50, hue, P.sat, P.lit, 12); }
       } else if (shape === 'cone') {
-        const bw = r(0.3, 0.46) * S, start = r(0.04, 0.28) * S, H = S * 0.97, top = old ? S * r(0.3, 0.45) : S * 0.02, lean = r(-0.05, 0.05) * S, hue = r(148, 162);
+        const bw = r(0.3, 0.46) * S, start = r(0.04, 0.28) * S, H = S * 0.97, top = old ? S * r(0.3, 0.45) : S * 0.02, lean = r(-0.05, 0.05) * S, hue = r(...(CONE_HUE[sp] || CONE_HUE.conifer));
         stroke([[S / 2, S], [S / 2 + lean, top]], S * 0.022, 'rgb(62,46,34)');
         const tiers = 10 + Math.floor(R() * 6);
         for (let i = 0; i < tiers; i++) { const t = i / tiers, y = S - start - t * (H - start); if (y < top) break; if (old && R() < 0.3) continue; const w = bw * Math.pow(1 - t, 0.9) + 4, x = S / 2 + lean * (1 - y / S); for (let k = 0; k < 3; k++) blob(x + r(-w, w) * 0.7, y + r(-4, 4), S * 0.03 + w * 0.22, 40, hue, 26, 20 + r(-2, 3), 8); }
@@ -191,6 +216,23 @@ function paintImpostors() {
         stroke([[S / 2, S], [tx, top]], S * 0.03, 'rgb(55,40,28)');
         const fr = 9 + Math.floor(R() * 6);
         for (let i = 0; i < fr; i++) { const a = -Math.PI / 2 + (i / (fr - 1) - 0.5) * Math.PI * 1.7, L = S * r(0.3, 0.44); const ex = tx + Math.cos(a) * L, ey = top + Math.sin(a) * L * 0.6 + S * 0.15; stroke([[tx, top], [tx + Math.cos(a) * L * 0.5, top + Math.sin(a) * L * 0.4 - 10], [ex, ey]], 2, 'rgb(60,80,30)'); for (let q = 1; q < 10; q++) { const t = q / 10; leaf(tx + (ex - tx) * t, top + (ey - top) * t - Math.sin(t * Math.PI) * 10, a + Math.PI / 2, 9 * (1 - t * 0.5), 2.4, `hsl(${r(95, 110)},45%,${r(24, 32)}%)`); leaf(tx + (ex - tx) * t, top + (ey - top) * t - Math.sin(t * Math.PI) * 10, a - Math.PI / 2, 9 * (1 - t * 0.5), 2.4, `hsl(${r(95, 110)},45%,${r(24, 32)}%)`); } }
+      } else if (shape === 'lepido') {
+        const lean = r(-0.06, 0.06) * S, top = S * r(0.18, 0.3), tx = S / 2 + lean;
+        stroke([[S / 2, S], [S / 2 + lean * 0.5, S * 0.6], [tx, top]], S * 0.04, 'rgb(62,66,48)');
+        const br = (x, y, a, len, w, d) => { const x1 = x + Math.cos(a) * len, y1 = y + Math.sin(a) * len; stroke([[x, y], [x1, y1]], w, 'rgb(60,64,46)'); if (d > 0) { br(x1, y1, a - r(0.3, 0.6), len * 0.75, w * 0.7, d - 1); br(x1, y1, a + r(0.3, 0.6), len * 0.75, w * 0.7, d - 1); } else blob(x1, y1, S * r(0.04, 0.06), 60, r(98, 112), 34, 24, 6); };
+        br(tx, top, -Math.PI / 2, S * 0.06, S * 0.025, old ? 1 : 2);
+      } else if (shape === 'calam') {
+        const H = S * r(0.85, 0.97), lean = r(-0.05, 0.05) * S;
+        stroke([[S / 2, S], [S / 2 + lean, S - H]], S * 0.022, 'rgb(76,82,56)');
+        for (let y = S - H * 0.3; y > S - H; y -= S * 0.045) { const t = (S - y) / H, x = S / 2 + lean * t, L = S * (0.16 - t * 0.09); for (const sd of [-1, 1]) stroke([[x, y], [x + sd * L * 0.6, y - L * 0.25], [x + sd * L, y - L * 0.6]], 2.4, `hsl(${r(96, 112)},34%,${r(22, 30)}%)`); }
+      } else if (shape === 'pillar') {
+        const w = S * r(0.07, 0.1), top = S * r(0.05, 0.25);
+        g.fillStyle = 'rgb(128,118,100)'; g.beginPath(); g.moveTo(S / 2 - w * 1.1, S); g.lineTo(S / 2 - w, top + w); g.quadraticCurveTo(S / 2, top - w * 0.4, S / 2 + w, top + w); g.lineTo(S / 2 + w * 1.1, S); g.fill();
+        g.fillStyle = 'rgba(70,62,50,0.35)'; g.fillRect(S / 2 + w * 0.3, top + w, w * 0.7, S - top);
+      } else if (shape === 'alien') {
+        const lean = r(-0.1, 0.1) * S, tx = S / 2 + lean, top = S * r(0.12, 0.3);
+        stroke([[S / 2, S], [S / 2 + lean * 0.4, S * 0.6], [tx, top]], S * 0.025, 'rgb(96,84,120)');
+        for (let k = 0; k < 1 + (v % 3); k++) { const y = top + k * S * 0.12, w = S * (0.22 + k * 0.08); for (let q = 0; q < 26; q++) leaf(tx + r(-w, w), y + r(-S * 0.03, S * 0.03), r(-0.4, 0.4), r(9, 16), r(4, 7), `hsl(${r(270, 300)},${r(45, 60)}%,${r(28, 40)}%)`); for (let q = 0; q < 8; q++) leaf(tx + r(-w, w), y + r(-S * 0.02, S * 0.02), 0, 3, 3, `hsl(180,85%,${r(60, 72)}%)`); }
       } else if (shape === 'dead') {
         const br = (x, y, a, len, w, d) => { const x1 = x + Math.cos(a) * len, y1 = y + Math.sin(a) * len; stroke([[x, y], [x1, y1]], w, `hsl(30,10%,${r(24, 34)}%)`); if (d > 0) for (let k = 0; k < 2 + Math.floor(R() * 2); k++) br(x1, y1, a + r(-0.8, 0.8), len * r(0.5, 0.75), w * 0.65, d - 1); };
         if (v % 2 === 1) stroke([[S / 2, S], [S / 2 + r(-10, 10), S * 0.45]], S * 0.05, 'hsl(30,10%,30%)');
@@ -278,16 +320,8 @@ export class FloraLib {
     return m;
   }
 
-  setEra(eraId) {
-    const P = {
-      hadean: { leaf: [1, 1, 1], bark: [1, 1, 1], rock: [0.11, 0.095, 0.09], moss: 0, lava: 3.5, wind: 0.2 },
-      dino: { leaf: [0.82, 1.05, 0.8], bark: [0.9, 0.85, 0.8], rock: [0.42, 0.42, 0.38], moss: 0.75, lava: 0, wind: 0.6 },
-      1885: { leaf: [1.05, 1.0, 0.82], bark: [1, 1, 1], rock: [0.55, 0.49, 0.41], moss: 0.05, lava: 0, wind: 0.9 },
-      2026: { leaf: [1, 1, 0.9], bark: [1, 1, 1], rock: [0.52, 0.47, 0.41], moss: 0.05, lava: 0, wind: 0.9 },
-      2080: { leaf: [1.08, 1.0, 0.8], bark: [1, 1, 1], rock: [0.56, 0.5, 0.42], moss: 0, lava: 0, wind: 1 },
-      ruins: { leaf: [0.85, 1.05, 0.78], bark: [0.85, 0.85, 0.8], rock: [0.4, 0.4, 0.35], moss: 0.85, lava: 0, wind: 0.8 },
-      scifi: { leaf: [0.8, 1.0, 0.95], bark: [0.9, 0.9, 0.9], rock: [0.45, 0.45, 0.46], moss: 0.3, lava: 0, wind: 0.5 },
-    }[eraId] || {};
+  setEra(period) {
+    const P = period.floraLib || {};
     if (P.leaf) this.U.leaf.value.setRGB(...P.leaf);
     if (P.bark) this.U.bark.value.setRGB(...P.bark);
     if (P.rock) this.U.rockTint.value.setRGB(...P.rock);
@@ -398,9 +432,9 @@ function broadleaf(R, v, V, o) {
   return B.build();
 }
 
-function conifer(R, v, V) {
-  const B = new VegBuilder(), old = v === V - 1, bark = [0.24, 0.17, 0.12];
-  const H = 18 + R() * 10, lean = (R() - 0.5) * 0.6, start = 2.5 + R() * 5, rad0 = 4 + R() * 2.2, droop = 0.15 + R() * 0.3;
+function conifer(R, v, V, o = {}) {
+  const B = new VegBuilder(), old = v === V - 1, bark = o.bark || [0.24, 0.17, 0.12];
+  const H = (o.h || 18) + R() * 10, lean = (R() - 0.5) * 0.6, start = 2.5 + R() * 5, rad0 = 4 + R() * 2.2, droop = 0.15 + R() * 0.3;
   const topH = old ? H * (0.62 + R() * 0.15) : H;
   B.tube([V3(0, -0.5, 0), V3(lean * 0.4, topH * 0.45, 0), V3(lean, topH, lean * 0.3)], [0.5, 0.35, old ? 0.18 : 0.06], 8, bark, 3);
   const tiers = 9 + Math.floor(R() * 6);
@@ -415,7 +449,7 @@ function conifer(R, v, V) {
       const a = a0 + (k / n) * Math.PI * 2 + (R() - 0.5) * 0.5;
       const dir = V3(Math.cos(a), -droop, Math.sin(a)).normalize(), side = V3(-Math.sin(a), 0, Math.cos(a));
       const tilt = 0.4 + R() * 0.8;
-      B.card(CELL.conifer, V3(cx, y, cz).addScaledVector(dir, rad / 2), dir, side.clone().multiplyScalar(Math.cos(tilt)).add(V3(0, Math.sin(tilt), 0)).normalize(), rad * (1 + R() * 0.3), rad * (0.7 + R() * 0.25), [0.9 + R() * 0.2, 0.95 + R() * 0.1, 0.9 + R() * 0.2], sphereN(V3(cx, y + 2, cz), 0.5));
+      B.card(o.cell === undefined ? CELL.conifer : o.cell, V3(cx, y, cz).addScaledVector(dir, rad / 2), dir, side.clone().multiplyScalar(Math.cos(tilt)).add(V3(0, Math.sin(tilt), 0)).normalize(), rad * (1 + R() * 0.3), rad * (0.7 + R() * 0.25), [0.9 + R() * 0.2, 0.95 + R() * 0.1, 0.9 + R() * 0.2], sphereN(V3(cx, y + 2, cz), 0.5));
     }
   }
   return B.build();
@@ -463,6 +497,60 @@ function deadTree(R, v, V) {
     const end = base.clone().add(V3(Math.cos(a) * l, l * (0.4 + R() * 0.6), Math.sin(a) * l));
     B.tube([base, end], [0.16, 0.04], 5, bark, 1);
     B.card(CELL.twig, end.clone().add(V3(0, -1.5, 0)), V3(-Math.sin(a), 0, Math.cos(a)), V3(Math.cos(a) * 0.3, 1, Math.sin(a) * 0.3).normalize(), 3 + R() * 2, 3.5 + R() * 2, [1, 1, 1], sphereN(base, 0.3), 1, true);
+  }
+  return B.build();
+}
+
+function tuft(B, R, c, len, n, tint = [1, 1, 1]) {
+  for (let i = 0; i < n; i++) {
+    const a = R() * 6.28, el = -0.25 + R() * 1.5;
+    const dir = V3(Math.cos(a) * Math.cos(el), Math.sin(el), Math.sin(a) * Math.cos(el)), side = V3(-Math.sin(a), 0, Math.cos(a));
+    B.card(CELL.lepido, c, side, dir, len * 0.55 * (0.8 + R() * 0.4), len * (0.8 + R() * 0.4), [tint[0] * (0.9 + R() * 0.2), tint[1], tint[2] * (0.9 + R() * 0.2)], sphereN(c.clone().sub(V3(0, 0.3, 0)), 0.4), 1, true);
+  }
+}
+
+function lepido(R, v, V) {
+  const B = new VegBuilder(), young = v === 0, old = v === V - 1, bark = [0.26, 0.28, 0.2];
+  const H = young ? 8 + R() * 5 : 22 + R() * 12, lean = (R() - 0.5) * 0.8;
+  const top = V3(lean, H, lean * 0.4);
+  B.tube([V3(0, -0.6, 0), V3(0, 0.6, 0), V3(lean * 0.4, H * 0.5, lean * 0.15), top], young ? [0.5, 0.36, 0.28, 0.2] : [1.0, 0.72, 0.56, 0.38], 10, bark, 7);
+  if (young) { tuft(B, R, top, 2.4, 26); B.tube([V3(lean * 0.6, H * 0.6, 0), V3(lean * 0.8, H * 0.8, 0.1), top.clone()], [0.3, 0.26, 0.2], 6, [0.3, 0.36, 0.22], 2); return B.build(); }
+  const fork = (p, dir, len, r, d) => {
+    const end = p.clone().addScaledVector(dir, len);
+    B.tube([p.clone(), p.clone().addScaledVector(dir, len * 0.5), end], [r, r * 0.86, r * 0.72], 6, bark, 2);
+    if (d === 0) { tuft(B, R, end, 1.7 + R() * 0.7, 11); return; }
+    const a = R() * 6.28, side = V3(Math.cos(a), 0, Math.sin(a)).sub(dir.clone().multiplyScalar(Math.cos(a) * dir.x + Math.sin(a) * dir.z)).normalize();
+    for (const sd of [-1, 1]) fork(end, dir.clone().multiplyScalar(0.78).addScaledVector(side, sd * 0.62).normalize(), len * 0.74, r * 0.7, d - 1);
+  };
+  fork(top, V3(0, 1, 0), 2.6 + R(), 0.4, old ? 2 : 3);
+  return B.build();
+}
+
+function calamites(R, v, V) {
+  const B = new VegBuilder(), bark = [0.32, 0.35, 0.24], H = 7 + R() * 8 + v, lean = (R() - 0.5) * 0.6;
+  const segs = Math.max(6, Math.round(H / 0.9)), pts = [], radii = [];
+  for (let i = 0; i <= segs; i++) { const t = i / segs; pts.push(V3(lean * t * t, -0.4 + t * (H + 0.4), 0)); radii.push(Math.max(0.05, 0.34 - t * 0.26) * (i % 2 ? 0.94 : 1.04)); }
+  B.tube(pts, radii, 8, bark, 4);
+  for (let i = Math.floor(segs * 0.3); i <= segs; i++) {
+    const t = i / segs, c = V3(lean * t * t, -0.4 + t * (H + 0.4), 0), L = (1 - t * 0.6) * (1.5 + R() * 0.8), n = 7 + Math.floor(R() * 3);
+    for (let k = 0; k < n; k++) { const a = (k / n) * 6.28 + R() * 0.4, dir = V3(Math.cos(a), 0.35 + R() * 0.3, Math.sin(a)).normalize(), side = V3(-Math.sin(a), 0, Math.cos(a)); B.card(CELL.lepido, c, side, dir, 0.5, L, [0.85, 1, 0.8], sphereN(c, 0.3), 1, true); }
+  }
+  return B.build();
+}
+
+function prototax(R) {
+  const B = new VegBuilder(), H = 5 + R() * 4, r0 = 0.45 + R() * 0.4, lean = (R() - 0.5) * 0.4;
+  B.tube([V3(0, -0.5, 0), V3(lean * 0.3, H * 0.4, 0), V3(lean * 0.7, H * 0.85, 0), V3(lean, H, 0), V3(lean, H + r0 * 0.6, 0)], [r0 * 1.1, r0, r0 * 0.95, r0 * 0.8, 0.05], 10, [0.55, 0.5, 0.42], 3);
+  return B.build();
+}
+
+function alienTree(R, v) {
+  const B = new VegBuilder(), bark = [0.42, 0.38, 0.5], H = 9 + R() * 9, lean = (R() - 0.5) * 1.2, top = V3(lean, H, lean * 0.5);
+  B.tube([V3(0, -0.4, 0), V3(lean * 0.2, H * 0.4, 0), V3(lean * 0.8, H * 0.85, lean * 0.3), top], [0.42, 0.3, 0.24, 0.18], 8, bark, 3);
+  const tiers = 1 + (v % 3);
+  for (let t = 0; t < tiers; t++) {
+    const y = H - t * 2.4, rad = 3 + t * 1.4 + R() * 1.5, c = V3(lean * (y / H), y, lean * 0.5 * (y / H)), n = 14 + t * 6;
+    for (let k = 0; k < n; k++) { const a = (k / n) * 6.28 + R() * 0.3, dir = V3(Math.cos(a), -0.08 - R() * 0.12, Math.sin(a)).normalize(), side = V3(-Math.sin(a), 0, Math.cos(a)); B.card(CELL.alien, c, side, dir, rad * 0.55, rad, [0.9 + R() * 0.2, 1, 0.9 + R() * 0.2], sphereN(c.clone().sub(V3(0, 1, 0)), 0.5), 1, true); }
   }
   return B.build();
 }
@@ -519,6 +607,18 @@ export const SPECIES = {
   cycad: { V: 4, near: (R, v, V) => { const B = new VegBuilder(), stems = v === V - 1 ? 2 + Math.floor(R() * 2) : 1; for (let s = 0; s < stems; s++) { const H = 0.6 + R() * 1.8, ox = stems > 1 ? (R() - 0.5) * 1.6 : 0, oz = stems > 1 ? (R() - 0.5) * 1.6 : 0; B.tube([V3(ox, -0.3, oz), V3(ox, H * 0.5, oz), V3(ox + (R() - 0.5) * 0.3, H, oz)], [0.42, 0.38, 0.3], 8, [0.28, 0.22, 0.14], 4); crownFronds(B, R, CELL.cycad, V3(ox, H, oz), 11 + Math.floor(R() * 8), 2.4, 1.0, [0.3, 0.95], [1, 1, 1], 0.8); } return B.build(); }, h: 4, r: 2, trunk: 0.4, mass: 300, breakV: 14 },
   treefern: { V: 4, near: (R, v, V) => { const B = new VegBuilder(), H = 3 + R() * 4, lx = (R() - 0.5) * 0.8; B.tube([V3(0, -0.3, 0), V3(lx * 0.4, H * 0.5, 0), V3(lx, H, 0.1)], [0.26, 0.22, 0.2], 7, [0.18, 0.13, 0.09], 3); crownFronds(B, R, CELL.fern, V3(lx, H, 0.1), 9 + Math.floor(R() * 7), 3.4, 1.4, [0.05, 0.75], [0.95, 1, 0.9], 1); return B.build(); }, imp: [7, 7], h: 7, r: 3.2, trunk: 0.25, mass: 250, breakV: 12 },
   deadTree: { V: 4, near: (R, v, V) => deadTree(R, v, V), imp: [8, 11], h: 11, r: 3, trunk: 0.35, mass: 600, breakV: 12 },
+  lepido: { V: 5, near: (R, v, V) => lepido(R, v, V), imp: [9, 30], h: 30, r: 4, trunk: 0.6, mass: 2500, breakV: 26 },
+  calamites: { V: 4, near: (R, v, V) => calamites(R, v, V), imp: [5, 14], h: 14, r: 2.5, trunk: 0.3, mass: 500, breakV: 14 },
+  ginkgo: { V: 4, near: (R, v, V) => broadleaf(R, v, V, { bark: [0.26, 0.22, 0.18], trunk: 4.5, tr: 0.42, limbs: [3, 5], cw: 4.6, ch: 5.2, rise: 3.2, cards: 58, card: 2.6, cell: CELL.ginkgo, tint: [1, 1, 1] }), imp: [11, 16], h: 16, r: 5, trunk: 0.42, mass: 1600, breakV: 22 },
+  orange: { V: 3, near: (R, v, V) => broadleaf(R, v, V, { bark: [0.24, 0.2, 0.15], trunk: 1.1, tr: 0.13, limbs: [3, 4], cw: 2.2, ch: 2.0, rise: 0.7, cards: 44, card: 1.3, cell: CELL.orange, tint: [1, 1, 1] }), imp: [5, 4.5], h: 4.5, r: 2.4, trunk: 0.15, mass: 200, breakV: 9 },
+  prototax: { V: 3, near: (R) => prototax(R), imp: [2.5, 8], h: 8, r: 0.9, trunk: 0.7, mass: 3000, breakV: 30 },
+  archaeop: { V: 4, near: (R, v, V) => conifer(R, v, V, { cell: CELL.fern, h: 12, bark: [0.22, 0.2, 0.15] }), imp: [10, 22], h: 22, r: 5, trunk: 0.42, mass: 2200, breakV: 25 },
+  alienTree: { V: 4, near: (R, v) => alienTree(R, v), imp: [14, 18], h: 18, r: 7, trunk: 0.4, mass: 1500, breakV: 20 },
+  flowers: { V: 1, near: () => { const B = new VegBuilder(); crossImpostor(B, CELL.flower, 1.0, 0.7, [1, 1, 1], 3); return B.build(); }, h: 0.7, r: 0.5 },
+  moss: { V: 1, near: () => { const B = new VegBuilder(); crossImpostor(B, CELL.moss, 1.1, 0.42, [1, 1, 1], 3); return B.build(); }, h: 0.4, r: 0.55 },
+  wheat: { V: 1, near: () => { const B = new VegBuilder(); crossImpostor(B, CELL.wheat, 0.9, 1.05, [1, 1, 1], 3); return B.build(); }, h: 1.05, r: 0.45 },
+  tundra: { V: 1, near: () => { const B = new VegBuilder(); crossImpostor(B, CELL.dry, 0.9, 0.45, [0.85, 0.9, 0.82], 3); return B.build(); }, h: 0.45, r: 0.45 },
+  alienFern: { V: 3, near: (R) => { const B = new VegBuilder(); crownFronds(B, R, CELL.alien, V3(0, 0, 0), 7 + Math.floor(R() * 5), 1.9, 0.9, [0.4, 1.1], [1, 1, 1], 0.4); return B.build(); }, h: 1.8, r: 1.2 },
   cactus: { V: 4, near: (R, v) => cactus(R, v), h: 2.5, r: 1, trunk: 0.2, mass: 120, breakV: 5 },
   shrub: { V: 4, near: (R, v, V) => bush(R, v, V, { size: 1.2, hk: 0.65, cards: 14, card: 1.5, cell: CELL.shrub, tint: [1, 1, 1] }), h: 1.6, r: 1.3 },
   sage: { V: 4, near: (R, v, V) => bush(R, v, V, { size: 0.8, hk: 0.55, cards: 10, card: 1.0, cell: CELL.shrub, tint: [0.85, 0.92, 0.9] }), h: 1, r: 0.9 },
@@ -534,7 +634,7 @@ export function farGeometry(sp) {
   const def = SPECIES[sp];
   if (!def || !def.imp) return null;
   const B = new VegBuilder();
-  crossQuads(B, def.imp[0], def.imp[1], sp === 'palm' || sp === 'treefern' || sp === 'deadTree' ? 2 : 3);
+  crossQuads(B, def.imp[0], def.imp[1], sp === 'palm' || sp === 'treefern' || sp === 'deadTree' || sp === 'prototax' || sp === 'calamites' ? 2 : 3);
   return B.build();
 }
 

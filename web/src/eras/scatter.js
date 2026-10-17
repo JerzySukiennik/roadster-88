@@ -1,11 +1,12 @@
-// Roadster 88 era scatter: per-era flora and rock plans placed deterministically over the valley in natural clumps and clearings, every instance with its own variant, age, scale, lean and hue, streamed around the camera as near cards (one instanced mesh per variant) and far impostors (one atlas, flipped and tinted per instance), trunk and rock colliders around the car, and breakable trees that fall as rigid bodies and stay felled in the causality world state.
+// Roadster 88 era scatter: per-period flora and rock plans (floraplans.js) placed deterministically over the valley and, streamed tile by tile around the camera, over the whole mega map outside it (keeping off water, roads and the city) in natural clumps and clearings, every instance with its own variant, age, scale, lean and hue, streamed around the camera as near cards (one instanced mesh per variant) and far impostors (one atlas, flipped and tinted per instance), trunk and rock colliders around the car, and breakable trees that fall as rigid bodies and stay felled in the causality world state.
 import * as THREE from 'three/webgpu';
 import { FloraLib, SPECIES, rockGeometry, farGeometry } from './flora.js';
 import { Land, F } from './land.js';
 import { rng, hash2i, hashStr, inPoly } from './lib.js';
+import { plansFor, planKey, smooth } from './floraplans.js';
+import { periodInfo } from './periods.js';
 import { GROUP, groups } from '../sim/car.js';
 
-const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 function vnoise(x, z, s) {
   const xi = Math.floor(x), zi = Math.floor(z), fx = x - xi, fz = z - zi, u = fx * fx * (3 - 2 * fx), v = fz * fz * (3 - 2 * fz);
   const a = hash2i(xi, zi, s), b = hash2i(xi + 1, zi, s), c = hash2i(xi, zi + 1, s), d = hash2i(xi + 1, zi + 1, s);
@@ -13,79 +14,11 @@ function vnoise(x, z, s) {
 }
 const fbm2 = (x, z, s) => vnoise(x, z, s) * 0.6 + vnoise(x * 2.1, z * 2.1, s + 7) * 0.3 + vnoise(x * 4.3, z * 4.3, s + 13) * 0.1;
 
-const STYLE = { oak: [0.06, 1, 1], cottonwood: [0.04, 0.8, 1], magnolia: [0.05, 0.8, 1], conifer: [0.04, 0.6, 1], palm: [0.1, 0.5, 0], eucalyptus: [0.07, 0.6, 1], cycad: [0.05, 0.7, 1], treefern: [0.08, 0.7, 1], deadTree: [0.15, 0.3, 0], cactus: [0.06, 0.6, 0], shrub: [0.03, 0.8, 0], sage: [0.03, 0.8, 0], oleander: [0.03, 0.7, 0], fern: [0.08, 0.6, 0], grass: [0.08, 0.6, 0], dryGrass: [0.08, 0.6, 0], reed: [0.08, 0.5, 0], horsetail: [0.08, 0.5, 0] };
-const GROVE = { s: 70, lo: 0.44, hi: 0.66, base: 0.1, boost: 1.7 }, THICKET = { s: 38, lo: 0.36, hi: 0.6, base: 0.3, boost: 1.35 };
+const STYLE = { oak: [0.06, 1, 1], cottonwood: [0.04, 0.8, 1], magnolia: [0.05, 0.8, 1], conifer: [0.04, 0.6, 1], palm: [0.1, 0.5, 0], eucalyptus: [0.07, 0.6, 1], cycad: [0.05, 0.7, 1], treefern: [0.08, 0.7, 1], deadTree: [0.15, 0.3, 0], cactus: [0.06, 0.6, 0], shrub: [0.03, 0.8, 0], sage: [0.03, 0.8, 0], oleander: [0.03, 0.7, 0], fern: [0.08, 0.6, 0], grass: [0.08, 0.6, 0], dryGrass: [0.08, 0.6, 0], reed: [0.08, 0.5, 0], horsetail: [0.08, 0.5, 0], lepido: [0.05, 0.7, 1], calamites: [0.07, 0.6, 1], ginkgo: [0.05, 0.8, 1], orange: [0.02, 0.5, 0], prototax: [0.05, 0.6, 1], archaeop: [0.05, 0.6, 1], alienTree: [0.1, 0.8, 1], flowers: [0.08, 0.6, 0], moss: [0.04, 0.5, 0], wheat: [0.05, 0.3, 0], tundra: [0.08, 0.5, 0], alienFern: [0.08, 0.6, 0] };
+const GROUND = new Set(['grass', 'dryGrass', 'fern', 'horsetail', 'reed', 'flowers', 'moss', 'wheat', 'tundra', 'alienFern']);
 
-const clearGround = (g, roadLimit = 0.04) => (g.road > roadLimit || (g.flag & (F.TOWN | F.KEEP)) || g.blocked || g.wet < 0.3 ? 0 : 1);
-const lakeBed = (g) => (g.flag & F.LAKE ? 1 : 0);
-
-const PLANS = {
-  hadean: [
-    { sp: 'boulder', seed: 'basaltB', density: 2.6, near: 220, far: 1700, scale: [1.6, 5.5], w: (g) => (g.road > 0.6 ? 0 : 0.35 + Math.min(0.65, g.slope * 2.5)) * (g.flag & F.KEEP ? 0 : 1) },
-    { sp: 'rock', seed: 'basaltR', density: 70, near: 170, scale: [0.25, 1.1], w: (g) => (g.wet < 0.3 ? 0 : 0.5 + g.n2 * 0.5) },
-  ],
-  dino: [
-    { sp: 'conifer', seed: 'dconifer', density: 6, near: 190, far: 2300, scale: [0.72, 1.4], clump: GROVE, w: (g) => clearGround(g) * (0.12 + 0.88 * smooth(0.38, 0.58, g.n1)) * (g.slope < 0.55 ? 1 : 0) * (g.h < 380 ? 1 : 0.3) },
-    { sp: 'magnolia', seed: 'dmag', density: 5, near: 170, far: 1900, scale: [0.72, 1.4], clump: GROVE, w: (g) => clearGround(g) * (0.35 + 0.65 * smooth(0.25, 0.45, g.n1)) * (g.slope < 0.35 ? 1 : 0) },
-    { sp: 'treefern', seed: 'dtf', density: 9, near: 160, far: 900, scale: [0.8, 1.4], clump: GROVE, w: (g) => clearGround(g) * Math.max(g.flag & F.WASH ? 1 : 0, g.shore < 14 ? 1 : 0, 0.15 + smooth(0.5, 0.8, g.n2) * 0.7) },
-    { sp: 'cycad', seed: 'dcy', density: 22, near: 230, scale: [0.7, 1.4], clump: GROVE, w: (g) => clearGround(g) * (g.slope < 0.3 ? 1 : 0) * smooth(0.25, 0.55, g.n2) },
-    { sp: 'fern', seed: 'dfern', density: 650, near: 120, ground: true, scale: [0.9, 1.8], w: (g) => clearGround(g, 0.5) * (1 - smooth(0.3, 0.6, g.slope)) * (0.45 + 0.55 * g.n2) },
-    { sp: 'horsetail', seed: 'dhor', density: 160, near: 95, ground: true, scale: [0.7, 1.3], w: (g) => clearGround(g, 0.5) * Math.max(g.flag & F.WASH ? 1 : 0, g.shore < 6 ? 1 : 0) },
-    { sp: 'rock', seed: 'drock', density: 14, near: 160, scale: [0.3, 1.2], w: (g) => clearGround(g) * (0.2 + g.slope * 2) },
-    { sp: 'boulder', seed: 'boulders', density: 0.8, near: 220, far: 1500, scale: [1.5, 4.5], w: (g) => clearGround(g, 0.1) * (g.flag & (F.CANYON | F.MASSIF | F.MESA) ? 1 : 0.25 + g.slope) },
-  ],
-  1885: [
-    { sp: 'oak', seed: 'oak', density: 2.2, near: 180, far: 2300, scale: [0.72, 1.4], clump: GROVE, w: (g) => clearGround(g) * (0.15 + 0.85 * smooth(0.35, 0.55, g.n1)) * (g.slope < 0.32 ? 1 : 0) * (g.h < 260 ? 1 : 0) * (1 - lakeBed(g)) },
-    { sp: 'cottonwood', seed: 'cotton', density: 7, near: 180, far: 2000, scale: [0.72, 1.4], w: (g) => clearGround(g) * Math.max(g.flag & F.WASH ? 0.7 : 0, g.shore > 1 && g.shore < 14 ? 1 : 0) },
-    { sp: 'deadTree', seed: 'dead85', density: 0.12, near: 170, far: 1400, scale: [0.7, 1.2], w: (g) => clearGround(g) * (g.slope < 0.4 ? 1 : 0) * (1 - lakeBed(g)) },
-    { sp: 'cactus', seed: 'cact85', density: 3, near: 200, scale: [0.7, 1.35], clump: THICKET, w: (g) => clearGround(g, 0.2) * (1 - lakeBed(g)) * (g.shore > 25 ? 1 : 0) * smooth(0.45, 0.7, g.n2) * (g.slope < 0.45 ? 1 : 0) * (g.h < 320 ? 1 : 0.2) },
-    { sp: 'sage', seed: 'sage', density: 34, near: 260, scale: [0.7, 1.4], clump: THICKET, w: (g) => clearGround(g, 0.3) * (1 - lakeBed(g)) * (0.25 + smooth(0.06, 0.3, g.slope)) * (0.4 + 0.6 * g.n2) },
-    { sp: 'dryGrass', seed: 'dgrass', density: 380, near: 90, ground: true, scale: [0.55, 1.0], w: (g) => clearGround(g, 0.5) * (1 - lakeBed(g) * 0.7) * (0.35 + 0.65 * g.n2) },
-    { sp: 'reed', seed: 'reed', density: 220, near: 130, ground: true, scale: [0.8, 1.3], w: (g) => (g.depth > -0.35 && g.depth < 1.3 ? 1 : 0) },
-    { sp: 'rock', seed: 'rocks', density: 12, near: 160, scale: [0.3, 1.2], w: (g) => clearGround(g) * (0.15 + g.slope * 2.5) },
-    { sp: 'boulder', seed: 'boulders', density: 0.8, near: 220, far: 1500, scale: [1.5, 4.5], w: (g) => clearGround(g, 0.1) * (g.flag & (F.CANYON | F.MASSIF | F.MESA) ? 1 : 0.25 + g.slope) },
-  ],
-  2026: [
-    { sp: 'deadTree', seed: 'dead26', density: 0.1, near: 170, far: 1400, scale: [0.7, 1.2], w: (g) => clearGround(g) * (g.slope < 0.4 ? 1 : 0) * (1 - lakeBed(g)) },
-    { sp: 'oak', seed: 'oak', density: 2.2, near: 180, far: 2300, scale: [0.72, 1.4], clump: GROVE, w: (g) => clearGround(g) * (0.15 + 0.85 * smooth(0.35, 0.55, g.n1)) * (g.slope < 0.32 ? 1 : 0) * (g.h < 260 ? 1 : 0) * (1 - lakeBed(g)) },
-    { sp: 'cactus', seed: 'cact26', density: 2.5, near: 200, scale: [0.7, 1.35], clump: THICKET, w: (g) => clearGround(g, 0.2) * (1 - lakeBed(g)) * (g.shore > 25 ? 1 : 0) * smooth(0.45, 0.7, g.n2) * (g.slope < 0.45 ? 1 : 0) * (g.h < 320 ? 1 : 0.2) },
-    { sp: 'sage', seed: 'sage', density: 30, near: 260, scale: [0.7, 1.4], clump: THICKET, w: (g) => clearGround(g, 0.3) * (1 - lakeBed(g)) * (0.25 + smooth(0.06, 0.3, g.slope)) * (0.4 + 0.6 * g.n2) },
-    { sp: 'dryGrass', seed: 'dgrass', density: 330, near: 90, ground: true, scale: [0.7, 1.3], w: (g) => clearGround(g, 0.5) * (1 - lakeBed(g)) * (0.35 + 0.65 * g.n2) },
-    { sp: 'rock', seed: 'rocks', density: 12, near: 160, scale: [0.3, 1.2], w: (g) => clearGround(g) * (0.15 + g.slope * 2.5) },
-    { sp: 'boulder', seed: 'boulders', density: 0.8, near: 220, far: 1500, scale: [1.5, 4.5], w: (g) => clearGround(g, 0.1) * (g.flag & (F.CANYON | F.MASSIF | F.MESA) ? 1 : 0.25 + g.slope) },
-  ],
-  2080: [
-    { sp: 'deadTree', seed: 'dead80', density: 0.3, near: 170, far: 1400, scale: [0.7, 1.2], w: (g) => clearGround(g) * (g.slope < 0.4 ? 1 : 0) * (1 - lakeBed(g)) },
-    { sp: 'oak', seed: 'oak', density: 2.2, near: 180, far: 2300, scale: [0.72, 1.4], clump: GROVE, w: (g) => clearGround(g) * (0.15 + 0.85 * smooth(0.35, 0.55, g.n1)) * (g.slope < 0.32 ? 1 : 0) * (g.h < 260 ? 1 : 0) * (1 - lakeBed(g)) * (hash2i(Math.round(g.x), Math.round(g.z), 2080) < 0.8 ? 1 : 0) },
-    { sp: 'cactus', seed: 'cact80', density: 4, near: 200, scale: [0.7, 1.35], clump: THICKET, w: (g) => clearGround(g, 0.2) * (1 - lakeBed(g)) * (g.shore > 25 ? 1 : 0) * smooth(0.45, 0.7, g.n2) * (g.slope < 0.45 ? 1 : 0) * (g.h < 320 ? 1 : 0.2) },
-    { sp: 'sage', seed: 'sage', density: 22, near: 260, scale: [0.7, 1.3], clump: THICKET, w: (g) => clearGround(g, 0.3) * (1 - lakeBed(g)) * (0.25 + smooth(0.06, 0.3, g.slope)) * (0.4 + 0.6 * g.n2) },
-    { sp: 'dryGrass', seed: 'dgrass', density: 240, near: 90, ground: true, scale: [0.6, 1.1], w: (g) => clearGround(g, 0.5) * (1 - lakeBed(g)) * (0.3 + 0.7 * g.n2) },
-    { sp: 'rock', seed: 'rocks', density: 12, near: 160, scale: [0.3, 1.2], w: (g) => clearGround(g) * (0.15 + g.slope * 2.5) },
-    { sp: 'boulder', seed: 'boulders', density: 0.8, near: 220, far: 1500, scale: [1.5, 4.5], w: (g) => clearGround(g, 0.1) * (g.flag & (F.CANYON | F.MASSIF | F.MESA) ? 1 : 0.25 + g.slope) },
-  ],
-  ruins: [
-    { sp: 'oak', seed: 'roak', density: 5, near: 180, far: 2300, scale: [0.72, 1.4], clump: GROVE, w: (g) => (g.road > 0.55 || g.flag & F.KEEP || g.blocked || g.wet < 0.3 ? 0 : 1) * smooth(0.3, 0.5, g.n1) * (g.slope < 0.45 ? 1 : 0) },
-    { sp: 'conifer', seed: 'rcon', density: 2.2, near: 190, far: 2300, scale: [0.72, 1.4], clump: GROVE, w: (g) => (g.road > 0.55 || g.flag & F.KEEP || g.blocked || g.wet < 0.3 ? 0 : 1) * smooth(0.55, 0.7, g.n1) },
-    { sp: 'deadTree', seed: 'rdead', density: 0.6, near: 170, far: 1400, scale: [0.8, 1.3], w: (g) => clearGround(g, 0.5) },
-    { sp: 'cottonwood', seed: 'cotton', density: 7, near: 180, far: 2000, scale: [0.72, 1.4], w: (g) => clearGround(g) * Math.max(g.flag & F.WASH ? 0.7 : 0, g.shore > 1 && g.shore < 16 ? 1 : 0) },
-    { sp: 'shrub', seed: 'rshrub', density: 45, near: 260, scale: [0.8, 1.6], clump: THICKET, w: (g) => (g.road > 0.85 || g.flag & F.KEEP || g.wet < 0.3 ? 0 : 1) * (0.4 + 0.6 * g.n2) },
-    { sp: 'grass', seed: 'rgrass', density: 420, near: 90, ground: true, scale: [0.9, 1.6], w: (g) => (g.road > 0.9 || g.wet < 0.3 ? 0 : 1) * (0.4 + 0.6 * g.n2) },
-    { sp: 'reed', seed: 'reed', density: 240, near: 130, ground: true, scale: [0.8, 1.4], w: (g) => (g.depth > -0.35 && g.depth < 1.5 ? 1 : 0) },
-    { sp: 'rock', seed: 'rocks', density: 12, near: 160, scale: [0.3, 1.2], w: (g) => clearGround(g) * (0.15 + g.slope * 2.5) },
-    { sp: 'boulder', seed: 'boulders', density: 0.8, near: 220, far: 1500, scale: [1.5, 4.5], w: (g) => clearGround(g, 0.1) * (g.flag & (F.CANYON | F.MASSIF | F.MESA) ? 1 : 0.25 + g.slope) },
-  ],
-  scifi: [
-    { sp: 'oak', seed: 'soak', density: 2.2, near: 180, far: 2300, scale: [0.72, 1.4], clump: GROVE, w: (g) => clearGround(g) * smooth(0.45, 0.6, g.n1) * (g.slope < 0.35 ? 1 : 0) },
-    { sp: 'conifer', seed: 'scon', density: 1.6, near: 190, far: 2300, scale: [0.72, 1.4], clump: GROVE, w: (g) => clearGround(g) * smooth(0.6, 0.72, g.n1) },
-    { sp: 'grass', seed: 'sgrass', density: 300, near: 90, ground: true, scale: [0.8, 1.3], w: (g) => clearGround(g, 0.5) * (0.4 + 0.6 * g.n2) },
-    { sp: 'reed', seed: 'reed', density: 120, near: 120, ground: true, scale: [0.8, 1.2], w: (g) => (g.depth > -0.3 && g.depth < 1.0 ? 1 : 0) },
-    { sp: 'rock', seed: 'rocks', density: 8, near: 160, scale: [0.3, 1.2], w: (g) => clearGround(g) * (0.15 + g.slope * 2.5) },
-    { sp: 'boulder', seed: 'boulders', density: 0.8, near: 220, far: 1500, scale: [1.5, 4.5], w: (g) => clearGround(g, 0.1) * (g.flag & (F.CANYON | F.MASSIF | F.MESA) ? 1 : 0.25 + g.slope) },
-  ],
-};
-
-const ROCK = { rock: { h: 1, r: 1, trunk: 0, rock: true }, boulder: { h: 3, r: 1, trunk: 0, rock: true } };
-const TALL_TILE = 128, GROUND_TILE = 32, LO = -2048, HI = 2048;
+const ROCK = { rock: { h: 1, r: 1, trunk: 0, rock: true }, boulder: { h: 3, r: 1, trunk: 0, rock: true }, stromatolite: { h: 1, r: 1.2, trunk: 0, rock: true } };
+const TALL_TILE = 128, GROUND_TILE = 32, INNER = 2048, BLOCKED_SURF = new Set(['water', 'asphalt', 'concrete', 'sidewalk', 'deck', 'pavement', 'rail', 'steel', 'tunnel']);
 
 export class Scatter {
   constructor(sys) {
@@ -107,6 +40,9 @@ export class Scatter {
     this.frustum = new THREE.Frustum(); this.projCam = new THREE.PerspectiveCamera();
     this.dirty = true;
     this.counts = {};
+    const B = sys.valley.bounds, half = B ? Math.max(INNER, Math.min(8192, Math.max(-B.x0, B.x1, -B.z0, B.z1))) : INNER;
+    const H = typeof location !== 'undefined' && /[?&]noouter\b/.test(location.search) ? INNER : half;
+    this.LO = -H; this.HI = H; this.queue = []; this.queued = new Set();
     this._m = new THREE.Matrix4(); this._q = new THREE.Quaternion(); this._v = new THREE.Vector3(); this._s = new THREE.Vector3(); this._box = new THREE.Box3();
   }
 
@@ -120,7 +56,7 @@ export class Scatter {
     if (M) return M;
     const def = SPECIES[sp] || ROCK[sp];
     const lib = this.flora;
-    const ground = sp === 'grass' || sp === 'dryGrass' || sp === 'fern' || sp === 'horsetail' || sp === 'reed';
+    const ground = GROUND.has(sp);
     let nearGs, farG, mat, farMat;
     if (ROCK[sp]) { nearGs = [rockGeometry(2, hashStr(sp))]; farG = rockGeometry(1, hashStr(sp) + 1); mat = farMat = lib.rock; }
     else { const V = def.V || 1; nearGs = Array.from({ length: V }, (_, v) => def.near(rng(hashStr(sp) + v * 7919), v, V)); farG = farGeometry(sp); mat = lib.mat; farMat = lib.farMat; }
@@ -173,8 +109,9 @@ export class Scatter {
       if (d > -0.15) wet = 0;
       else shore = Math.min(shore, -d * 4);
     }
-    const natural = ctx.eraId === 'hadean' || ctx.eraId === 'dino';
-    return { x, z, h, slope: 1 - n.y, flag: natural ? flag & ~F.TOWN : flag, road: natural ? 0 : L.roadNear(x, z, ctx.eraId !== '1885'), blocked: L.blocked(x, z), n1: fbm2(x / 420, z / 420, 11), n2: fbm2(x / 70, z / 70, 23), wet, depth, shore };
+    const P = ctx.period || (ctx.period = periodInfo(ctx.eraId)), natural = P.natural;
+    if ((Math.abs(x) > INNER || Math.abs(z) > INNER) && V.surfaceAt && BLOCKED_SURF.has(V.surfaceAt(x, z))) wet = 0;
+    return { x, z, h, slope: 1 - n.y, flag: natural ? flag & ~F.TOWN : flag, road: natural ? 0 : L.roadNear(x, z, P.loop), blocked: L.blocked(x, z), n1: fbm2(x / 420, z / 420, 11), n2: fbm2(x / 70, z / 70, 23), wet, depth, shore };
   }
 
   genTile(plan, tx, tz, size, ctx) {
@@ -184,7 +121,7 @@ export class Scatter {
     const R = rng(Math.floor(hash2i(tx, tz, ph) * 4294967296));
     const n = Math.floor(expected) + (R() < expected % 1 ? 1 : 0);
     const out = [];
-    const x0 = LO + tx * size, z0 = LO + tz * size;
+    const x0 = this.LO + tx * size, z0 = this.LO + tz * size;
     const rockish = !!ROCK[plan.sp];
     for (let k = 0; k < n; k++) {
       const x = x0 + R() * size, z = z0 + R() * size, acc = R(), rot = R() * Math.PI * 2, sr = R(), c0 = R(), c1 = R(), sq = R();
@@ -197,35 +134,36 @@ export class Scatter {
       const T = this.traits(plan.sp, rv, ra, rt, rh, rb, rf);
       const s = (plan.scale[0] + (plan.scale[1] - plan.scale[0]) * sr) * T.k;
       const sink = rockish ? s * 0.35 : 0.05 + Math.abs(T.tilt) * 2;
-      out.push({ x, y: g.h - sink, z, rot, s, sy: rockish ? s * (0.6 + sq * 0.6) : s * (0.88 + sq * 0.24), key, c: rockish ? [0.86 + c0 * 0.22, 0.88 + c1 * 0.18, 0.84 + (c0 + c1) * 0.1] : [0.95 + c0 * 0.1, 0.95 + c1 * 0.1, 0.95 + (c0 + c1) * 0.05], sp: plan.sp, v: T.v, tilt: rockish ? 0 : T.tilt, h: T.h, b: T.b, bw: T.bw, f: T.f });
+      out.push({ x, y: g.h - sink, z, rot, s, sy: rockish ? s * (0.6 + sq * 0.6) * (plan.squash || 1) : s * (0.88 + sq * 0.24), key, c: rockish ? [0.86 + c0 * 0.22, 0.88 + c1 * 0.18, 0.84 + (c0 + c1) * 0.1] : [0.95 + c0 * 0.1, 0.95 + c1 * 0.1, 0.95 + (c0 + c1) * 0.05], sp: plan.sp, v: T.v, tilt: rockish ? 0 : T.tilt, h: T.h, b: T.b, bw: T.bw, f: T.f });
     }
     return out;
   }
 
-  enter(eraId) {
+  enter(eraId, year) {
     this.clearPhysics();
-    this.eraId = eraId;
+    this.queue.length = 0; this.queued.clear();
+    this.eraId = eraId; this.year = year;
     const ctx = this.sys.eraContext(eraId);
     this.ctx = ctx;
     for (const f of ctx.fluids) if (!f.near && f.poly) { let cx = 0, cz = 0; for (const [x, z] of f.poly) { cx += x; cz += z; } cx /= f.poly.length; cz /= f.poly.length; f.near = f.poly.map(([x, z]) => [cx + (x - cx) * 1.35, cz + (z - cz) * 1.35]); }
-    this.flora.setEra(eraId);
+    this.flora.setEra(periodInfo(eraId));
     for (const [, M] of this.meshes) this.setVisible(M, false);
     this.removed = new Set();
     for (const c of this.sys.worldState.keysChangedIn(eraId)) if (c.state !== 'intact') this.removed.add(c.key);
     const t0 = performance.now();
     this.pools = [];
-    for (const plan of PLANS[eraId] || []) {
+    for (const plan of plansFor(eraId, year)) {
       const M = this.meshFor(plan.sp);
       this.setVisible(M, true);
       const lazy = !plan.far;
       const pool = { plan, M, tall: !lazy, lazy, tsize: plan.ground ? GROUND_TILE : 64, tiles: new Map(), near: plan.near * Math.sqrt(this.sys.detail), far: (plan.far || 0) * Math.min(1, 0.6 + 0.4 * this.sys.detail) };
       if (!lazy) {
-        const ck = eraId + ':' + plan.seed + ':' + plan.sp;
+        const ck = eraId + ':' + planKey(plan);
         let tiles = this.genCache.get(ck);
         if (!tiles) {
           tiles = new Map();
-          const T = TALL_TILE, nT = (HI - LO) / T, sub = 2;
-          for (let tz = 0; tz < nT; tz++) for (let tx = 0; tx < nT; tx++) {
+          const T = TALL_TILE, nT = (this.HI - this.LO) / T, sub = 2, i0 = Math.floor((-INNER - this.LO) / T), i1 = Math.ceil((INNER - this.LO) / T);
+          for (let tz = i0; tz < i1; tz++) for (let tx = i0; tx < i1; tx++) {
             const list = [];
             for (let a = 0; a < sub; a++) for (let b = 0; b < sub; b++) list.push(...this.genTile(plan, tx * sub + a, tz * sub + b, T / sub, ctx));
             if (list.length) tiles.set(tz * nT + tx, this.tileOf(list, tx, tz, T));
@@ -240,7 +178,7 @@ export class Scatter {
       if (this.removed.has(p.key)) continue;
       let pool = this.pools.find((q) => q.plan.sp === p.sp && q.planted);
       if (!pool) { const M = this.meshFor(p.sp, true); this.setVisible(M, true); const def = M.def; pool = { plan: { sp: p.sp, seed: 'planted' }, M, tall: true, planted: true, tiles: new Map(), near: (def.h > 6 ? 190 : 230) * Math.sqrt(this.sys.detail), far: def.h > 6 ? 2000 : 0 }; this.pools.push(pool); }
-      const nT = (HI - LO) / TALL_TILE, tx = Math.floor((p.x - LO) / TALL_TILE), tz = Math.floor((p.z - LO) / TALL_TILE), k = tz * nT + tx;
+      const nT = (this.HI - this.LO) / TALL_TILE, tx = Math.floor((p.x - this.LO) / TALL_TILE), tz = Math.floor((p.z - this.LO) / TALL_TILE), k = tz * nT + tx;
       let t = pool.tiles.get(k); if (!t) { t = this.tileOf([], tx, tz, TALL_TILE); pool.tiles.set(k, t); }
       const hv = hashStr(p.key), fr = (n) => ((hv >>> n) % 997) / 997;
       const T = this.traits(p.sp, fr(0), 0.5, fr(3), fr(7), fr(11), fr(17));
@@ -253,7 +191,7 @@ export class Scatter {
 
   tileOf(list, tx, tz, T) {
     let y0 = Infinity, y1 = -Infinity; for (const i of list) { y0 = Math.min(y0, i.y); y1 = Math.max(y1, i.y + 30); }
-    return { list, x: LO + (tx + 0.5) * T, z: LO + (tz + 0.5) * T, half: T / 2, y0: isFinite(y0) ? y0 : 0, y1: isFinite(y1) ? y1 : 30 };
+    return { list, x: this.LO + (tx + 0.5) * T, z: this.LO + (tz + 0.5) * T, half: T / 2, y0: isFinite(y0) ? y0 : 0, y1: isFinite(y1) ? y1 : 30 };
   }
 
   leave() { this.clearPhysics(); }
@@ -297,7 +235,7 @@ export class Scatter {
     pc.fov = Math.min(150, camera.fov + (doFar ? 55 : 40)); pc.aspect = camera.aspect; pc.near = 0.5; pc.far = 6000; pc.updateProjectionMatrix();
     pc.position.copy(camera.position); pc.quaternion.copy(camera.quaternion); pc.updateMatrixWorld(true);
     this.frustum.setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(pc.projectionMatrix, pc.matrixWorldInverse));
-    const cx = cam.x, cz = cam.z, removed = this.removed;
+    const cx = cam.x, cz = cam.z, removed = this.removed, land = this.land;
     const counts = this.counts || {};
     for (const pool of this.pools) {
       const M = pool.M;
@@ -313,17 +251,17 @@ export class Scatter {
         if (d - t.half * 1.42 > reach) return;
         if (d > t.half * 1.5 + 40) { this._box.min.set(t.x - t.half, t.y0 - 5, t.z - t.half); this._box.max.set(t.x + t.half, t.y1 + 5, t.z + t.half); if (!this.frustum.intersectsBox(this._box)) return; }
         for (const it of t.list) {
-          if (removed.has(it.key)) continue;
+          if (removed.has(it.key) || (!pool.planted && land.blocked(it.x, it.z))) continue;
           const ex = it.x - cx, ez = it.z - cz, d2 = ex * ex + ez * ez;
           if (doNear && d2 < nearR2) nbs[Vn > 1 ? (it.v || 0) % Vn : 0].push(it, pool.tall ? 1 : 1 - smooth(nearR2 * 0.55, nearR2, d2));
           if (hasFar && d2 >= farIn2 && d2 < farR2) fb.push(it);
         }
       };
-      if (pool.tall) { for (const [, t] of pool.tiles) visitTile(t); }
+      if (pool.tall) { for (const [, t] of pool.tiles) visitTile(t); if (!pool.planted && this.HI > INNER && doFar) this.queueOuter(pool, cx, cz, Math.min(reach, 1900)); }
       else if (doNear) {
-        const T = pool.tsize, r = Math.ceil(nearR / T) + 1, tcx = Math.floor((cx - LO) / T), tcz = Math.floor((cz - LO) / T);
+        const T = pool.tsize, r = Math.ceil(nearR / T) + 1, tcx = Math.floor((cx - this.LO) / T), tcz = Math.floor((cz - this.LO) / T);
         for (let tz = tcz - r; tz <= tcz + r; tz++) for (let tx = tcx - r; tx <= tcx + r; tx++) {
-          if (tx < 0 || tz < 0 || tx >= (HI - LO) / T || tz >= (HI - LO) / T) continue;
+          if (tx < 0 || tz < 0 || tx >= (this.HI - this.LO) / T || tz >= (this.HI - this.LO) / T) continue;
           const key = tz * 4096 + tx;
           let t = pool.tiles.get(key);
           if (!t) { t = this.tileOf(this.genTile(pool.plan, tx, tz, T, this.ctx), tx, tz, T); pool.tiles.set(key, t); }
@@ -331,7 +269,7 @@ export class Scatter {
         }
         if (pool.tiles.size > 3000) { let n = 0; for (const [k, t] of pool.tiles) { if (Math.hypot(t.x - cx, t.z - cz) > nearR * 2) { pool.tiles.delete(k); if (++n > 800) break; } } }
       }
-      const tint = this.tints && this.tints[pool.plan.sp];
+      const tint = pool.plan.tint || (this.tints && this.tints[pool.plan.sp]);
       if (doNear) {
         for (let v = 0; v < M.near.length; v++) {
           const b = nbs[v], n = v < Vn ? b.length / 2 : 0;
@@ -352,6 +290,44 @@ export class Scatter {
     this.counts = counts;
   }
 
+  queueOuter(pool, cx, cz, reach) {
+    const T = TALL_TILE, nT = (this.HI - this.LO) / T, r = Math.ceil(reach / T), tcx = Math.floor((cx - this.LO) / T), tcz = Math.floor((cz - this.LO) / T);
+    for (let tz = tcz - r; tz <= tcz + r; tz++) for (let tx = tcx - r; tx <= tcx + r; tx++) {
+      if (tx < 0 || tz < 0 || tx >= nT || tz >= nT) continue;
+      const k = tz * nT + tx;
+      if (pool.tiles.has(k)) continue;
+      const x = this.LO + (tx + 0.5) * T, z = this.LO + (tz + 0.5) * T;
+      if (Math.abs(x) < INNER && Math.abs(z) < INNER) continue;
+      if (Math.hypot(x - cx, z - cz) > reach + T) continue;
+      const qk = pool.plan.seed + pool.plan.sp + k;
+      if (this.queued.has(qk)) continue;
+      this.queued.add(qk); this.queue.push({ pool, tx, tz, k, qk, d: Math.hypot(x - cx, z - cz) });
+    }
+    if (this.queue.length > 1) this.queue.sort((a, b) => a.d - b.d);
+  }
+
+  drainOuter(budgetMs) {
+    if (!this.queue.length) return;
+    const t0 = performance.now(), T = TALL_TILE;
+    let n = 0;
+    while (this.queue.length && performance.now() - t0 < budgetMs) {
+      const q = this.queue.shift();
+      this.queued.delete(q.qk);
+      if (!this.pools.includes(q.pool) || q.pool.tiles.has(q.k)) continue;
+      const list = [];
+      for (let a = 0; a < 2; a++) for (let b = 0; b < 2; b++) list.push(...this.genTile(q.pool.plan, q.tx * 2 + a, q.tz * 2 + b, T / 2, this.ctx));
+      q.pool.tiles.set(q.k, this.tileOf(list, q.tx, q.tz, T));
+      n++;
+    }
+    if (n) this.outerDirty = (this.outerDirty || 0) + n;
+    if (this.outerDirty > 24 || (!this.queue.length && this.outerDirty)) { this.outerDirty = 0; this.dirty = true; }
+    for (const pool of this.pools) {
+      if (!pool.tall || pool.planted || pool.tiles.size < 6000) continue;
+      const cam = this.lastFarCam;
+      for (const [k, t] of pool.tiles) if ((Math.abs(t.x) > INNER || Math.abs(t.z) > INNER) && Math.hypot(t.x - cam.x, t.z - cam.z) > 3200) pool.tiles.delete(k);
+    }
+  }
+
   flush(im, n) {
     im.count = n; im.visible = n > 0;
     if (!n) return;
@@ -367,7 +343,7 @@ export class Scatter {
       if (!def.trunk && !def.rock) continue;
       for (const [, t] of pool.tiles) {
         if (Math.abs(t.x - car.x) > rad + t.half || Math.abs(t.z - car.z) > rad + t.half) continue;
-        for (const it of t.list) { if (this.removed.has(it.key)) continue; const dx = it.x - car.x, dz = it.z - car.z; if (dx * dx + dz * dz < rad2 && (!def.rock || it.s > 0.55)) want.set(it.key, { it, def, sp: pool.plan.sp }); }
+        for (const it of t.list) { if (this.removed.has(it.key) || (!pool.planted && this.land.blocked(it.x, it.z))) continue; const dx = it.x - car.x, dz = it.z - car.z; if (dx * dx + dz * dz < rad2 && (!def.rock || it.s > 0.55)) want.set(it.key, { it, def, sp: pool.plan.sp }); }
       }
     }
     for (const [k, c] of this.colliders) if (!want.has(k)) { w.removeCollider(c, false); this.colliders.delete(k); }
@@ -463,6 +439,7 @@ export class Scatter {
       if (doFar) { this.lastFarCam.copy(cam); this.lastFarFwd.copy(fwd); }
       const t0 = performance.now(); this.rebuild(cam, true, doFar); this.rebuildMs = performance.now() - t0;
     }
+    this.drainOuter(g.started ? 1.5 : 50);
     if (g.car) {
       const p = g.car.sim.pos;
       if (Math.hypot(p.x - this.lastCar.x, p.z - this.lastCar.z) > 10) { this.lastCar.set(p.x, p.y, p.z); this.updateColliders(p); }

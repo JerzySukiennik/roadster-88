@@ -1,10 +1,19 @@
-// Roadster 88 life agents: the per-creature state (pose, speed, heading, timers, colours), clip playback with crossfades and speed-matched locomotion, ground-following steering with terrain and water avoidance, flight steering with banking, and groups (herds, packs, flocks) that share a centre, a goal and a mood.
+// Roadster 88 life agents: a swappable random source (seeded per online room so every client spawns the same world), the per-creature state (pose, speed, heading, timers, colours), clip playback with crossfades and speed-matched locomotion, ground-following steering with terrain and water avoidance, flight steering with banking, and groups (herds, packs, flocks) that share a centre, a goal and a mood.
 
 export const TAU = Math.PI * 2;
 export const wrap = (a) => { while (a > Math.PI) a -= TAU; while (a < -Math.PI) a += TAU; return a; };
 export const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 export const towards = (v, t, d) => (v < t ? Math.min(t, v + d) : Math.max(t, v - d));
-export const rnd = (a, b) => a + Math.random() * (b - a);
+let R = Math.random;
+export const random = () => R();
+export const rnd = (a, b) => a + R() * (b - a);
+export function useRandom(f) { R = f || Math.random; }
+export function seeded(key) {
+  let h = 2166136261;
+  for (let i = 0; i < key.length; i++) { h ^= key.charCodeAt(i); h = Math.imul(h, 16777619); }
+  let s = (h >>> 0) || 1;
+  return () => { s = (s + 0x6d2b79f5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
 
 let SERIAL = 0;
 
@@ -12,13 +21,13 @@ export class Agent {
   constructor(kind, o = {}) {
     this.id = ++SERIAL;
     this.kind = kind; this.K = null;
-    this.x = o.x || 0; this.z = o.z || 0; this.y = o.y || 0; this.yaw = o.yaw === undefined ? Math.random() * TAU : o.yaw;
+    this.x = o.x || 0; this.z = o.z || 0; this.y = o.y || 0; this.yaw = o.yaw === undefined ? R() * TAU : o.yaw;
     this.speed = 0; this.want = 0; this.tx = this.x; this.tz = this.z; this.vy = 0;
-    this.seed = o.seed === undefined ? Math.random() : o.seed; this.scale = o.scale || 1;
+    this.seed = o.seed === undefined ? R() : o.seed; this.scale = o.scale || 1;
     this.c0 = o.c0 || null; this.c1 = o.c1 || null;
     this.brain = o.brain || 'idle'; this.group = o.group || null; this.role = o.role || null;
     this.state = o.state || 'idle'; this.st = 0; this.timer = rnd(0, 4);
-    this.clip = o.clip || 'idle'; this.t = Math.random(); this.prev = null; this.pt = 0; this.fade = 1; this.fadeDur = 0.25; this.action = null;
+    this.clip = o.clip || 'idle'; this.t = R(); this.prev = null; this.pt = 0; this.fade = 1; this.fadeDur = 0.25; this.action = null;
     this.look = 0; this.lookTo = 0;
     this.pitch = 0; this.roll = 0; this.lean = 0;
     this.fly = !!o.fly; this.alt = o.alt || 0; this.vyAir = 0;
@@ -72,7 +81,7 @@ export class Group {
     this.radius = o.radius || 15; this.home = [this.cx, this.cz];
     this.range = o.range || 300; this.alt = o.alt || 0;
     this.threat = null; this.data = o.data || {};
-    this.heading = Math.random() * TAU;
+    this.heading = R() * TAU;
   }
 
   centroid() {

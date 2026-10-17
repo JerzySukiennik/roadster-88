@@ -66,10 +66,10 @@ export class Library {
     this.build();
   }
 
-  setEra(eraId) {
-    const W = { hadean: [0, 0, 0, 0, 0], dino: [0, 0, 0, 0, 0], 1885: [0, 0.25, 0.35, 0.15, 0.5], 2026: [0, 0.2, 0.05, 0.1, 0.6], 2080: [0, 0.08, 0.02, 0.0, 0.7], ruins: [0.85, 0.75, 0, 0.9, 0.0], scifi: [0, 0, 0, 0, 0.8] }[eraId] || [0, 0, 0, 0, 0.5];
+  setEra(P) {
+    const W = P.wear;
     this.U.moss.value = W[0]; this.U.grime.value = W[1]; this.U.dust.value = W[2]; this.U.rust.value = W[3]; this.U.lit.value = W[4];
-    this.U.lights.value = eraId === 'ruins' ? 0 : 1;
+    this.U.lights.value = P.lights;
   }
 
   update(dt, sky) {
@@ -329,7 +329,7 @@ export class Kit {
   sign(rect, cx, cy, cz, w, h, ry = 0, glow = 0) {
     const c = Math.cos(ry), s = Math.sin(ry), hw = w / 2;
     const P = [new THREE.Vector3(cx - c * hw, cy - h / 2, cz + s * hw), new THREE.Vector3(cx + c * hw, cy - h / 2, cz - s * hw), new THREE.Vector3(cx + c * hw, cy + h / 2, cz - s * hw), new THREE.Vector3(cx - c * hw, cy + h / 2, cz + s * hw)];
-    const [u0, v0, u1, v1] = rect;
+    const [u0, v0, u1, v1] = typeof rect === 'string' ? (this.signRect ? this.signRect(rect) : [0, 0, 0, 0]) : rect;
     return this.quadUV('sign', P, new THREE.Vector3(s, 0, c), [[u0, v0], [u1, v0], [u1, v1], [u0, v1]], { aux: [glow, 0, 0, 0] });
   }
 

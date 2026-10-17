@@ -1,6 +1,6 @@
-// Roadster 88 era system: swaps the valley between the seven eras (terrain palette and deltas, sky and fog, fluids, flora, props, structures, ambient key), keeps the causality world state and streams era content around the camera.
+// Roadster 88 era system: swaps the valley between the periods of the timeline (terrain palette and deltas, ground rules, the city style of the year, sky and fog, fluids, flora, props, structures, ambient key), keeps the causality world state per year and streams era content around the camera.
 import * as THREE from 'three/webgpu';
-import { ERA_IDS, ERA_INDEX, PALETTES, FLUIDS, AMBIENT, ERA_INFO } from './presets.js';
+import { periodInfo, cityFor, detailKey, PERIOD_IDS } from './periods.js';
 import { WorldState, defaultTurningPoints } from './worldstate.js';
 import { Fluids } from './fluids.js';
 import { SkyExtras } from './skyfx.js';
@@ -8,20 +8,23 @@ import { Scatter } from './scatter.js';
 import { Structures } from './structures.js';
 import { Library, inPoly, distToPolyline } from './lib.js';
 import { Weather, greenness, seasonOf } from './weather.js';
-import { eraOf } from '../sim/timetravel.js';
+import { eraOf, PERIODS } from '../sim/timetravel.js';
 
 const DETAIL = { low: 0.35, medium: 0.6, high: 1, ultra: 1.35 };
+export const ERA_IDS = PERIOD_IDS;
 
 export class EraSystem {
   constructor(game, valley) {
     this.game = game; this.valley = valley;
     this.root = new THREE.Group(); this.root.name = 'Eras';
     game.gfx.scene.add(this.root);
-    this.roadList = (valley.roads || []).map((r) => ({ ...r, pts: r.pts || (r.points || []).map((p) => [p[0], p[2]]) }));
-    this.worldState = new WorldState();
+    const inner = (pts) => pts.some(([x, z]) => Math.abs(x) < 2200 && Math.abs(z) < 2200);
+    this.roadList = (valley.roads || []).map((r) => ({ ...r, pts: r.pts || (r.points || []).map((p) => [p[0], p[2]]) })).filter((r) => inner(r.pts));
+    this.year = game.tc ? game.tc.present.year : 2026;
+    this.worldState = new WorldState(() => this.year);
     defaultTurningPoints(this.worldState);
     this.detail = DETAIL[game.gfx.presetName] || 1;
-    this.eraId = null; this.ambient = null;
+    this.eraId = null; this.detailKey = null; this.ambient = null; this.period = null;
     this.lib = new Library(this);
     this.fluids = new Fluids(this);
     this.skyfx = new SkyExtras(this);
@@ -31,7 +34,7 @@ export class EraSystem {
     this.cache = new Map();
     this.handed = new Set();
     this.camPos = new THREE.Vector3();
-    this.stats = { applyMs: 0 };
+    this.stats = { applyMs: 0, cityMs: 0 };
   }
 
   regions(id) { return (this.valley.regions || []).filter((r) => r.id === id); }
@@ -47,10 +50,17 @@ export class EraSystem {
     return false;
   }
 
+  yearFor(eraId) {
+    const y = this.game.tc ? this.game.tc.present.year : 2026;
+    if (eraOf(y).id === eraId) return y;
+    const p = PERIODS.find((q) => q.id === eraId);
+    return p ? p.date.year : y;
+  }
+
   eraContext(eraId) {
     if (this.cache.has(eraId)) return this.cache.get(eraId);
-    const V = this.valley, ctx = { eraId, fluids: [], bumps: [], volcanoes: [], herd: [] };
-    for (const f of FLUIDS[eraId] || []) {
+    const P = periodInfo(eraId), ctx = { eraId, fluids: [], bumps: [], volcanoes: [], herd: [] };
+    for (const f of P.fluids) {
       const r = this.region(f.region);
       if (!r) continue;
       const lv = this.fluidLevel(r, f.fill);
@@ -58,15 +68,16 @@ export class EraSystem {
       const k = f.fill > 1 ? 1.3 : 1.08, mesh = r.poly.map(([x, z]) => [cx + (x - cx) * k, cz + (z - cz) * k]);
       ctx.fluids.push({ kind: f.kind, region: f.region, level: lv, poly: r.poly, mesh });
     }
-    if (eraId === 'hadean') {
-      const picks = this.pickSpots(ERA_INFO.hadean.volcanoes, 760, (x, z) => {
+    if (P.volcanoes) {
+      const small = eraId !== 'hadean';
+      const picks = this.pickSpots(P.volcanoes, 760, (x, z) => {
         const rd = this.roadDist(x, z); if (rd < 170) return -1;
         if (this.inRegion('lake', x, z, 160) || this.inRegion('town', x, z, 120) || this.inRegion('mesa', x, z, 120)) return -1;
         const r = Math.hypot(x, z); return 1 - Math.abs(r - 1250) / 900;
-      }, 7);
-      picks.forEach((p, i) => { const r = 150 + (i % 3) * 40, h = 50 + (i % 2) * 28; ctx.bumps.push({ x: Math.round(p.x), z: Math.round(p.z), r, h, crater: true }); ctx.volcanoes.push({ x: p.x, z: p.z, r, h }); });
+      }, small ? 11 : 7);
+      picks.forEach((p, i) => { const r = (small ? 110 : 150) + (i % 3) * 40, h = (small ? 34 : 50) + (i % 2) * (small ? 18 : 28); ctx.bumps.push({ x: Math.round(p.x), z: Math.round(p.z), r, h, crater: true }); ctx.volcanoes.push({ x: p.x, z: p.z, r, h }); });
     }
-    if (eraId === 'dino') {
+    if (P.skyfx.herd) {
       const lake = this.region('lake');
       if (lake) {
         let cx = 0, cz = 0; for (const [x, z] of lake.poly) { cx += x; cz += z; } cx /= lake.poly.length; cz /= lake.poly.length;
@@ -112,29 +123,43 @@ export class EraSystem {
   }
 
   apply(eraId, opts = {}) {
-    if (!ERA_INDEX.hasOwnProperty(eraId)) eraId = '2026';
-    if (eraId === this.eraId && !opts.force) return;
-    const t0 = performance.now();
-    const prev = this.eraId;
+    if (!PERIOD_IDS.includes(eraId)) eraId = '2026';
+    const year = opts.year !== undefined ? opts.year : this.yearFor(eraId);
+    const key = detailKey(eraId, year);
+    if (eraId === this.eraId && key === this.detailKey && !opts.force) { this.year = year; return; }
+    const t0 = performance.now(), T = {}; let tl = t0;
+    const lap = (k) => { const n = performance.now(); T[k] = Math.round((n - tl) * 10) / 10; tl = n; };
+    const prev = this.eraId, samePeriod = prev === eraId;
     if (prev) { this.scatter.leave(prev); this.structures.leave(prev); }
-    this.eraId = eraId;
+    lap('leave');
+    this.eraId = eraId; this.detailKey = key; this.year = year;
+    const P = this.period = periodInfo(eraId);
     const V = this.valley, ctx = this.eraContext(eraId);
-    if (V.setEraTerrain) V.setEraTerrain(eraId, { fluids: ctx.fluids.map((f) => ({ kind: f.kind, region: f.region, level: f.level, poly: f.mesh })), bumps: ctx.bumps });
+    lap('ctx');
+    if (V.setEraTerrain && !(samePeriod && !opts.force)) V.setEraTerrain(eraId, { fluids: ctx.fluids.map((f) => ({ kind: f.kind, region: f.region, level: f.level, poly: f.mesh })), bumps: ctx.bumps, natural: P.natural, loop: P.loop, tracks: P.tracks });
+    lap('terrain');
+    this.city = cityFor(eraId, year);
+    if (V.setCity) { try { V.setCity(this.city); } catch (e) { console.warn('valley.setCity failed', e); } }
+    lap('city'); this.stats.cityMs = T.city;
     for (const v of ctx.volcanoes) v.y = V.heightAt(v.x, v.z);
     for (const h of ctx.herd) h.y = V.heightAt(h.x, h.z) - 0.5;
     const sky = this.game.sky;
-    if (sky.setEra) sky.setEra(ERA_INFO[eraId].sky);
-    this.lib.setEra(eraId);
-    this.fluids.set(ctx.fluids, eraId);
-    this.skyfx.build(eraId, ctx);
+    if (sky.setEra) sky.setEra(P.sky);
+    this.lib.setEra(P);
+    this.fluids.set(ctx.fluids, P);
+    this.skyfx.build(eraId, ctx, P, year);
+    lap('sky');
     this.turning = this.worldState.resolveTurningPoints(eraId);
-    this.structures.enter(eraId, this.turning);
-    this.scatter.enter(eraId);
-    this.ambient = AMBIENT[eraId];
-    this.weather.roll(eraId, { instant: true });
+    this.structures.enter(eraId, this.turning, year);
+    lap('structures');
+    this.scatter.enter(eraId, year);
+    lap('flora');
+    this.ambient = P.ambient;
+    if (!samePeriod) this.weather.roll(eraId, { instant: true });
     this.applySeason();
     sky.envDirty = true;
-    this.stats.applyMs = performance.now() - t0;
+    lap('season');
+    this.stats.applyMs = performance.now() - t0; this.stats.steps = T;
     if (this.onApply) this.onApply(eraId, prev);
   }
 
@@ -169,6 +194,10 @@ export class EraSystem {
         if (name === 'main') { const a = T.at(100, 0, 0); return at(a.x - T.d[0] * 40 + 0.01, a.z - T.d[1] * 40, Math.atan2(T.d[0], T.d[1]), { pitch: 0.06, orbit: 0.35 }); }
         if (T.rail) { const x = this.structures.lineX(T.rail, T.p0[1]) + 16, z = T.p0[1] + T.hw + 18; return at(x, z, Math.atan2(-1, 0.25), { pitch: 0.08, orbit: 0.3 }); }
       }
+    }
+    if (name === 'lake') {
+      const lk = this.region('lake');
+      if (lk) { const [cx, cz] = lk.center || centroid(lk.poly); const p = lk.poly[Math.floor(lk.poly.length * 0.62)], x = cx + (p[0] - cx) * 1.25, z = cz + (p[1] - cz) * 1.25; return at(x, z, Math.atan2(cx - x, cz - z), { pitch: 0.04 }); }
     }
     if (name === 'grove') {
       const items = [];
@@ -210,6 +239,34 @@ export class EraSystem {
     return { pos: [x, this.valley.heightAt(x, z) + 0.15, z], yaw: Math.atan2(s.x - x, s.z - z), pitch: 0.1 };
   }
 
+  lookAt(key, want = 42) {
+    const m = this.structures.cur && this.structures.cur.meta.get(key);
+    if (!m) return null;
+    const s = m.site, V = this.valley, h = (m.info && m.info.h) || 8;
+    let best = null, bs = Infinity;
+    for (const r of this.roadList) {
+      if (r.kind === 'rail') continue;
+      const pts = r.pts || [];
+      for (let i = 0; i < pts.length; i++) {
+        const [x, z] = pts[i], d = Math.hypot(x - s.x, z - s.z);
+        if (d < 18 || d > 110) continue;
+        const y = V.heightAt(x, z);
+        if (this.structures.overlaps(x, y + 1, z, 3.5)) continue;
+        const fwd = ((x - s.x) * Math.sin(s.yaw || 0) + (z - s.z) * Math.cos(s.yaw || 0)) / d;
+        const sc = Math.abs(d - Math.max(want, h * 1.3)) + (1 - fwd) * 60;
+        if (sc < bs) { bs = sc; best = [x, z]; }
+      }
+    }
+    if (!best) {
+      const T = this.structures.town(), c = T && T.reg ? T.reg.center || [0, 0] : [0, 0];
+      let dx = s.x - c[0], dz = s.z - c[1]; const l = Math.hypot(dx, dz) || 1; dx /= l; dz /= l;
+      for (let k = 0; k < 12 && !best; k++) { const a = k * 0.5, d = want + k * 4, x = s.x + (dx * Math.cos(a) - dz * Math.sin(a)) * d, z = s.z + (dz * Math.cos(a) + dx * Math.sin(a)) * d; if (!this.structures.overlaps(x, V.heightAt(x, z) + 1, z, 3.5)) best = [x, z]; }
+    }
+    if (!best) return null;
+    const [x, z] = best;
+    return { pos: [x, V.heightAt(x, z) + 0.15, z], yaw: Math.atan2(s.x - x, s.z - z), pitch: Math.min(0.3, 0.05 + h / 400) };
+  }
+
   debugDestroy(key = 'town:8') {
     const vp = this.siteView(key);
     const m = this.structures.cur && this.structures.cur.meta.get(key);
@@ -221,15 +278,15 @@ export class EraSystem {
 
   handOver(key) {
     this.handed.add(key);
-    if (key === 'herd') { const im = this.skyfx.items.sauropods; if (im) im.visible = false; return this.eraId === 'dino' ? this.eraContext('dino').herd.map((h) => ({ ...h })) : null; }
+    if (key === 'herd') { const im = this.skyfx.items.sauropods; if (im) im.visible = false; return this.period && this.period.skyfx.herd ? this.eraContext(this.eraId).herd.map((h) => ({ ...h })) : null; }
     return this.structures.handOver(key);
   }
 
   paletteFor(eraId) {
-    const base = PALETTES[eraId] || {}, month = this.game.tc ? this.game.tc.present.month : 10;
-    const p = JSON.parse(JSON.stringify(base));
+    const P = periodInfo(eraId), month = this.game.tc ? this.game.tc.present.month : 10;
+    const p = JSON.parse(JSON.stringify(P.palette));
     const L = p.layers || (p.layers = {});
-    const gk = { 1885: 0.85, 2026: 0.85, 2080: 0.7, ruins: 0.35, scifi: 0.5 }[eraId];
+    const gk = P.green || 0;
     const g = greenness(month), lerp3 = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
     if (gk && L.grass) {
       const t = g * gk;
@@ -238,23 +295,25 @@ export class EraSystem {
       if (L.floor) { L.floor.color = lerp3(L.floor.color, [0.13, 0.15, 0.07], t * 0.45); L.floor.color2 = lerp3(L.floor.color2 || L.floor.color, [0.17, 0.18, 0.09], t * 0.45); }
       if (L.high) L.high.color = lerp3(L.high.color, [0.06, 0.09, 0.035], t * 0.5);
     }
-    if (eraId === 'dino' && (month >= 11 || month <= 4)) p.wet = (p.wet || 0) + 0.15;
-    const W = this.weather;
-    if (eraId !== 'hadean') {
+    if (P.wetSeason && (month >= 11 || month <= 4)) p.wet = (p.wet || 0) + 0.15;
+    const W = this.weather, base = p.snow || { amount: 0 };
+    if (base.amount > 0 || P.kinds.includes('snow')) {
       const winter = gk && seasonOf(month) === 'winter';
       const cover = W ? W.snowCover : 0;
-      const amt = Math.max(winter ? 0.8 : 0, cover * 0.95);
-      p.snow = { color: [0.82, 0.85, 0.9], line: winter && cover < 0.05 ? 430 : 430 - cover * 470, amount: amt };
-      if (W) p.wet = Math.max(p.wet || 0, W.wet * 0.85);
+      const line0 = base.amount > 0 ? base.line : 430;
+      const amt = Math.max(base.amount || 0, winter ? 0.8 : 0, cover * 0.95);
+      p.snow = { color: base.color || [0.82, 0.85, 0.9], line: winter && cover < 0.05 ? line0 : line0 - cover * 470, amount: amt };
+      if (P.cold && seasonOf(month) === 'winter') { p.snow.line = Math.min(p.snow.line, -20); p.snow.amount = Math.max(p.snow.amount, 0.85); }
     }
+    if (W) p.wet = Math.max(p.wet || 0, W.wet * 0.85);
     return p;
   }
 
   pushPalette() { if (this.eraId && this.valley.setPalette) this.valley.setPalette(this.paletteFor(this.eraId)); }
 
   applySeason() {
-    const month = this.game.tc ? this.game.tc.present.month : 10, g = greenness(month), id = this.eraId;
-    const seasonal = id !== 'hadean' && id !== 'dino';
+    const month = this.game.tc ? this.game.tc.present.month : 10, g = greenness(month), P = this.period;
+    const seasonal = P && !P.seasonless && !P.wetSeason;
     const lerp3 = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
     this.scatter.tints = seasonal ? { dryGrass: lerp3([1, 1, 1], [0.42, 0.95, 0.3], g * 0.85), sage: lerp3([1, 1, 1], [0.75, 1.05, 0.7], g * 0.6), grass: lerp3([1, 1, 1], [0.85, 1.05, 0.8], g * 0.5), oak: lerp3([1, 1, 1], [0.92, 1.05, 0.9], g * 0.5) } : {};
     this.scatter.dirty = true;
@@ -278,8 +337,8 @@ export class EraSystem {
   }
 
   debug() {
-    return { era: this.eraId, applyMs: +this.stats.applyMs.toFixed(1), changes: this.worldState.log.length, scatter: this.scatter.debug(), structures: this.structures.debug(), weather: this.weather.debug(), turning: this.turning ? this.turning.notes : [] };
+    return { era: this.eraId, year: this.year, label: eraOf(this.year).label, detail: this.detailKey, city: this.city, applyMs: +this.stats.applyMs.toFixed(1), steps: this.stats.steps, changes: this.worldState.log.length, scatter: this.scatter.debug(), structures: this.structures.debug(), weather: this.weather.debug(), turning: this.turning ? this.turning.notes : [] };
   }
 }
 
-export { ERA_IDS, inPoly, distToPolyline };
+export { inPoly, distToPolyline };

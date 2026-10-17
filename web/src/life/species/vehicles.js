@@ -1,4 +1,4 @@
-// Roadster 88 life vehicles: procedural SDF traffic for each era (2026 sedan, hatchback, SUV, pickup and semi truck; 2080 autonomous pod and EV; far-future hover car; 1885 farm wagon and stagecoach; quadcopter drone) with wheels, rotors and suspension as bones and a rolling or spinning clip. Paint colour comes per instance.
+// Roadster 88 life vehicles: procedural SDF traffic for each era (a 1910s Model T style tourer, a 1930s sedan and a stake-bed truck, 1950s tail fins, a long 1970s sedan, a rounded 1990s sedan, 2026 sedan, hatchback, SUV, pickup and semi truck; 2080 autonomous pod and EV; far-future hover car; 1885 farm wagon and stagecoach; quadcopter drone) with wheels, rotors and suspension as bones and a rolling or spinning clip. Paint colour comes per instance.
 import { Model } from '../sdf.js';
 
 const K = 0.03;
@@ -95,6 +95,66 @@ const V = {
     lights(M, 8.38, 1.2, 0.95, 0.15, 0.06, 'lens');
     lights(M, -7.82, 1.1, 1.1, 0.08, 0.06, 'glow');
     wheels(M, [6.8, 3.6, 2.4, -5.0, -6.2], 0.52, 0.15, { track: 1.0 });
+  } },
+  car_t: { m: { mass: 550, length: 3.4, width: 1.68, height: 2.05, wheel: 0.38 }, b(M) {
+    M.bone('body', null, [0, 0, 0]);
+    M.box([0, 0.62, -0.2], [0.62, 0.2, 1.35], { bone: 'body', round: 0.04, k: 0.02, region: 'paint' });
+    M.box([0, 0.95, 0.95], [0.38, 0.2, 0.42], { bone: 'body', round: 0.05, k: 0.02, region: 'paint' });
+    M.box([0, 0.95, 1.4], [0.36, 0.26, 0.05], { bone: 'body', round: 0.03, k: 0.01, region: 'brass' });
+    M.box([0, 1.0, -0.55], [0.64, 0.25, 0.75], { bone: 'body', round: 0.05, k: 0.02, region: 'paint' });
+    M.box([0, 1.3, 0.48], [0.6, 0.3, 0.02], { bone: 'body', round: 0.01, k: 0.005, region: 'glass', prio: 2 });
+    M.box([0, 1.98, -0.45], [0.7, 0.04, 1.0], { bone: 'body', round: 0.03, k: 0.01, region: 'canvas' });
+    for (const [x, z] of [[0.62, 0.48], [-0.62, 0.48], [0.62, -1.38], [-0.62, -1.38]]) M.cyl([x, 1.6, z], 0.025, 0.38, { bone: 'body', k: 0.005, region: 'trim' });
+    for (const z of [1.05, -1.1]) for (const s of [1, -1]) M.ell([s * 0.72, 0.82, z], [0.2, 0.08, 0.48], { bone: 'body', k: 0.02, region: 'paint' });
+    for (const s of [1, -1]) M.box([s * 0.74, 0.5, 0], [0.14, 0.025, 0.7], { bone: 'body', k: 0.01, region: 'trim' });
+    for (const s of [1, -1]) M.ell([s * 0.3, 1.0, 1.42], [0.09, 0.09, 0.06], { bone: 'body', k: 0.01, region: 'lens', prio: 3 });
+    M.box([0, 0.7, -1.58], [0.4, 0.05, 0.03], { bone: 'body', k: 0.005, region: 'glow', prio: 3 });
+    wheels(M, [1.05, -1.1], 0.38, 0.05, { track: 0.74, spokes: 12 });
+  } },
+  car_30s: { m: { mass: 1300, length: 4.6, width: 1.82, height: 1.75, wheel: 0.36 }, b(M) {
+    M.bone('body', null, [0, 0, 0]);
+    M.box([0, 0.72, 1.1], [0.42, 0.28, 1.05], { bone: 'body', round: 0.14, k: 0.03, region: 'paint' });
+    M.box([0, 0.75, 2.12], [0.38, 0.3, 0.05], { bone: 'body', round: 0.08, k: 0.02, region: 'rim', prio: 1 });
+    M.box([0, 1.08, -0.65], [0.72, 0.62, 1.15], { bone: 'body', round: 0.22, k: 0.04, region: 'paint' });
+    M.box([0, 1.33, -0.62], [0.735, 0.22, 0.95], { bone: 'body', round: 0.08, k: 0.01, region: 'glass', prio: 2 });
+    M.ell([0, 0.8, -1.75], [0.62, 0.42, 0.45], { bone: 'body', k: 0.04, region: 'paint' });
+    for (const z of [1.45, -1.45]) for (const s of [1, -1]) M.ell([s * 0.72, 0.62, z], [0.22, 0.26, 0.62], { bone: 'body', k: 0.06, region: 'paint' });
+    for (const s of [1, -1]) M.box([s * 0.84, 0.36, 0], [0.12, 0.025, 0.9], { bone: 'body', k: 0.02, region: 'trim' });
+    for (const s of [1, -1]) M.ell([s * 0.55, 0.92, 2.0], [0.12, 0.12, 0.1], { bone: 'body', k: 0.02, region: 'lens', prio: 3 });
+    M.box([0, 0.38, 2.2], [0.8, 0.05, 0.05], { bone: 'body', round: 0.03, k: 0.01, region: 'rim', prio: 1 });
+    M.box([0, 0.38, -2.2], [0.8, 0.05, 0.05], { bone: 'body', round: 0.03, k: 0.01, region: 'rim', prio: 1 });
+    for (const s of [1, -1]) M.ell([s * 0.6, 0.85, -2.15], [0.06, 0.06, 0.04], { bone: 'body', k: 0.01, region: 'glow', prio: 3 });
+    wheels(M, [1.45, -1.45], 0.36, 0.1, { track: 0.74 });
+  } },
+  truck_old: { m: { mass: 1800, length: 5.0, width: 1.9, height: 2.05, wheel: 0.4 }, b(M) {
+    M.bone('body', null, [0, 0, 0]);
+    M.box([0, 0.85, 1.55], [0.42, 0.3, 0.75], { bone: 'body', round: 0.1, k: 0.03, region: 'paint' });
+    M.box([0, 0.9, 2.3], [0.4, 0.32, 0.05], { bone: 'body', round: 0.05, k: 0.01, region: 'rim', prio: 1 });
+    M.box([0, 1.25, 0.35], [0.75, 0.68, 0.5], { bone: 'body', round: 0.12, k: 0.03, region: 'paint' });
+    M.box([0, 1.5, 0.35], [0.76, 0.2, 0.42], { bone: 'body', round: 0.06, k: 0.01, region: 'glass', prio: 2 });
+    M.box([0, 0.88, -1.45], [0.9, 0.06, 1.3], { bone: 'body', k: 0.01, region: 'wood' });
+    for (const s of [1, -1]) M.box([s * 0.88, 1.2, -1.45], [0.03, 0.3, 1.28], { bone: 'body', k: 0.01, region: 'wood' });
+    M.box([0, 1.2, -2.73], [0.9, 0.3, 0.03], { bone: 'body', k: 0.01, region: 'wood' });
+    for (const z of [1.55, -1.6]) for (const s of [1, -1]) M.ell([s * 0.75, 0.68, z], [0.24, 0.28, 0.6], { bone: 'body', k: 0.06, region: 'paint' });
+    for (const s of [1, -1]) M.ell([s * 0.55, 1.02, 2.25], [0.11, 0.11, 0.08], { bone: 'body', k: 0.02, region: 'lens', prio: 3 });
+    M.box([0, 0.75, -2.75], [0.5, 0.04, 0.03], { bone: 'body', k: 0.005, region: 'glow', prio: 3 });
+    wheels(M, [1.55, -1.6], 0.4, 0.11, { track: 0.78 });
+  } },
+  car_50s: { m: { mass: 1700, length: 5.4, width: 2.0, height: 1.45, wheel: 0.36 }, b(M) {
+    car(M, { len: 5.4, wid: 2.0, sill: 0.24, belt: 0.84, roof: 1.42, hoodY: 0.8, deckY: 0.86, wsBase: 0.75, wsTop: 0.05, rwTop: -1.0, rwBase: -1.6, axles: [1.6, -1.55], wr: 0.36, ww: 0.12, round: 0.1, tumble: 0.22 });
+    for (const s of [1, -1]) { M.box([s * 0.86, 1.0, -2.25], [0.05, 0.22, 0.45], { bone: 'body', round: 0.04, k: 0.03, region: 'paint' }); M.box([s * 0.86, 1.05, -2.68], [0.06, 0.06, 0.04], { bone: 'body', round: 0.03, k: 0.01, region: 'glow', prio: 3 }); }
+    M.box([0, 0.42, 2.72], [1.0, 0.09, 0.07], { bone: 'body', round: 0.05, k: 0.01, region: 'rim', prio: 2 });
+    M.box([0, 0.42, -2.72], [1.0, 0.09, 0.07], { bone: 'body', round: 0.05, k: 0.01, region: 'rim', prio: 2 });
+    for (const s of [1, -1]) M.box([s * 1.0, 0.65, 0], [0.012, 0.03, 2.3], { bone: 'body', round: 0.01, k: 0.005, region: 'rim', prio: 2 });
+  } },
+  car_70s: { m: { mass: 1900, length: 5.6, width: 2.0, height: 1.38, wheel: 0.36 }, b(M) {
+    car(M, { len: 5.6, wid: 2.0, sill: 0.24, belt: 0.82, roof: 1.36, hoodY: 0.8, deckY: 0.84, wsBase: 0.5, wsTop: -0.25, rwTop: -1.2, rwBase: -1.75, axles: [1.65, -1.6], wr: 0.36, ww: 0.13, round: 0.05, tumble: 0.16, cpillar: 0.14, noseTaper: 0.3 });
+    M.box([0, 1.36, -0.72], [0.86, 0.03, 0.5], { bone: 'body', round: 0.03, k: 0.01, region: 'trim', prio: 2 });
+    M.box([0, 0.42, 2.82], [1.0, 0.1, 0.06], { bone: 'body', round: 0.04, k: 0.01, region: 'rim', prio: 2 });
+    M.box([0, 0.42, -2.82], [1.0, 0.1, 0.06], { bone: 'body', round: 0.04, k: 0.01, region: 'rim', prio: 2 });
+  } },
+  car_90s: { m: { mass: 1400, length: 4.6, width: 1.76, height: 1.4, wheel: 0.32 }, b(M) {
+    car(M, { len: 4.6, wid: 1.76, sill: 0.22, belt: 0.84, roof: 1.38, hoodY: 0.7, deckY: 0.82, wsBase: 0.85, wsTop: -0.05, rwTop: -0.95, rwBase: -1.55, axles: [1.35, -1.35], wr: 0.32, ww: 0.1, round: 0.2, tumble: 0.38, noseTaper: 0.7 });
   } },
   pod: { m: { mass: 900, length: 3.0, width: 1.6, height: 1.65, wheel: 0.3 }, b(M) {
     M.bone('body', null, [0, 0, 0]);

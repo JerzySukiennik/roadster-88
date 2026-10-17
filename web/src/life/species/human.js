@@ -1,4 +1,4 @@
-// Roadster 88 people: hand-scripted procedural humans (SDF anatomy for two builds, faces, hands, hair) dressed per era (1885 frontier, 2026 casual, 2080 tech wear, far-future suits), one shared rig and clips (idle, talk, walk, run, flee, dodge, fall, lie, get up, wave, point, cheer, cower, sit). No scans, no downloaded models, nobody's real likeness.
+// Roadster 88 people: hand-scripted procedural humans (SDF anatomy for two builds, faces, hands, hair) dressed per period (native Californians in tule and deerskin, a mission padre and a vaquero, a Gold Rush miner, 1885 frontier, 1900s suits and Gibson hats, 1920s fedoras and cloches, 1950s jeans and poodle skirts, 1970s bell-bottoms, 1990s caps and denim, 2026 casual, 2080 tech wear, far-future suits), one shared rig and clips (idle, talk, walk, run, flee, dodge, fall, lie, get up, wave, point, cheer, cower, sit). No scans, no downloaded models, nobody's real likeness.
 import { Model } from '../sdf.js';
 import { X, SIDES } from '../anatomy.js';
 import { TAU, clamp, lerp, smooth, wave, aim, foot } from '../gaits.js';
@@ -114,6 +114,130 @@ const OUTFITS = {
     for (const [s, L] of SIDES) { M.ell(X(s, [0.1, 0.06, 0.05]), [0.045, 0.045, 0.12], { bone: 'foot' + L, region: 'shoes', k: 0.02 }); }
     M.ell([0, 1.7, -0.02], [0.084, 0.075, 0.095], { bone: 'head', region: 'hair', k: 0.015 });
   },
+  mnative(M) {
+    body(M, false, { hips: 'dress', torso: 'skin', neck: 'skin', shoulder: 'skin', upper: 'skin', fore: 'skin', thigh: 'skin', shin: 'skin', foot: 'skin' });
+    M.cone([0, 1.0, 0], [0, 0.66, 0.0], 0.18, 0.24, { bone: 'hips', region: 'dress', k: 0.04 });
+    M.cyl([0, 1.0, 0], 0.172, 0.02, { bone: 'hips', region: 'belt', k: 0.01, prio: 1 });
+    M.ell([0, 1.69, -0.03], [0.084, 0.085, 0.1], { bone: 'head', region: 'hair', k: 0.02 });
+    M.cone([0, 1.66, -0.08], [0, 1.3, -0.12], 0.07, 0.05, { bone: 'head', region: 'hair', k: 0.03 });
+    M.cyl([0, 1.735, -0.01], 0.088, 0.012, { bone: 'head', region: 'hat', k: 0.008, prio: 1 });
+  },
+  fnative(M) {
+    body(M, true, { hips: 'dress', torso: 'vest', neck: 'skin', shoulder: 'vest', upper: 'skin', fore: 'skin', thigh: 'dress', shin: 'skin', foot: 'skin' });
+    M.cone([0, 1.04, 0], [0, 0.42, 0.0], 0.15, 0.3, { bone: 'hips', region: 'dress', k: 0.05 });
+    M.ell([0, 1.36, -0.01], [0.21, 0.09, 0.14], { bone: 'chest', region: 'vest', k: 0.03 });
+    M.ell([0, 1.7, -0.025], [0.086, 0.088, 0.1], { bone: 'head', region: 'hair', k: 0.02 });
+    M.cone([0, 1.66, -0.09], [0, 1.25, -0.12], 0.07, 0.06, { bone: 'head', region: 'hair', k: 0.03 });
+    M.ell([0, 1.745, -0.005], [0.095, 0.055, 0.105], { bone: 'head', region: 'hat', k: 0.015 });
+  },
+  mpadre(M) {
+    body(M, false, { hips: 'dress', torso: 'dress', neck: 'skin', shoulder: 'dress', upper: 'dress', fore: 'dress', thigh: 'dress', shin: 'dress', foot: 'shoes' });
+    M.cone([0, 1.1, 0], [0, 0.06, 0.0], 0.18, 0.33, { bone: 'hips', region: 'dress', k: 0.06 });
+    for (const [s, L] of SIDES) M.cone(X(s, [0.27, 1.17, -0.03]), X(s, [0.34, 0.9, 0.02]), 0.06, 0.085, { bone: 'fore' + L, region: 'dress', k: 0.02 });
+    M.ell([0, 1.5, -0.1], [0.12, 0.13, 0.08], { bone: 'chest', region: 'dress', k: 0.03 });
+    M.cyl([0, 1.02, 0], 0.17, 0.012, { bone: 'hips', region: 'belt', k: 0.01, prio: 1 });
+    M.ell([0, 1.68, -0.035], [0.08, 0.055, 0.09], { bone: 'head', region: 'hair', k: 0.015 });
+  },
+  mvaquero(M) {
+    body(M, false, { hips: 'pants', torso: 'shirt', neck: 'skin', shoulder: 'vest', upper: 'vest', fore: 'shirt', thigh: 'pants', shin: 'pants', foot: 'shoes' });
+    M.ell([0, 1.3, 0.0], [0.178, 0.17, 0.118], { bone: 'chest', region: 'vest', k: 0.02 });
+    M.cyl([0, 1.0, 0], 0.17, 0.035, { bone: 'hips', region: 'belt', k: 0.01, prio: 1 });
+    for (const [s, L] of SIDES) M.cone(X(s, [0.1, 0.4, -0.01]), X(s, [0.1, 0.06, 0.0]), 0.062, 0.052, { bone: 'shin' + L, region: 'shoes', k: 0.02 });
+    M.cyl([0, 1.75, 0.005], 0.29, 0.007, { bone: 'head', region: 'hat', round: 0.006, k: 0.014 });
+    M.cone([0, 1.75, 0.005], [0, 1.88, 0.005], 0.1, 0.06, { bone: 'head', region: 'hat', k: 0.02 });
+    M.ell([0, 1.69, -0.02], [0.082, 0.07, 0.095], { bone: 'head', region: 'hair', k: 0.02 });
+    M.ell([0, 1.6, 0.075], [0.045, 0.012, 0.02], { bone: 'head', region: 'hair', k: 0.008, prio: 1 });
+  },
+  mminer(M) {
+    body(M, false, { hips: 'pants', torso: 'shirt', neck: 'skin', shoulder: 'shirt', upper: 'shirt', fore: 'shirt', thigh: 'pants', shin: 'pants', foot: 'shoes' });
+    for (const s of [1, -1]) M.box([0.075 * s, 1.22, 0.1], [0.012, 0.22, 0.01], { bone: 'chest', region: 'belt', k: 0.006, prio: 1 });
+    M.cyl([0, 0.99, 0], 0.168, 0.025, { bone: 'hips', region: 'belt', k: 0.01, prio: 1 });
+    for (const [s, L] of SIDES) M.cone(X(s, [0.1, 0.36, -0.01]), X(s, [0.1, 0.06, 0.0]), 0.064, 0.054, { bone: 'shin' + L, region: 'shoes', k: 0.02 });
+    M.cyl([0, 1.74, 0.005], 0.17, 0.008, { bone: 'head', region: 'hat', round: 0.008, k: 0.02 });
+    M.ell([0, 1.775, 0.0], [0.095, 0.055, 0.1], { bone: 'head', region: 'hat', k: 0.03 });
+    M.ell([0, 1.69, -0.02], [0.082, 0.07, 0.095], { bone: 'head', region: 'hair', k: 0.02 });
+    M.ell([0, 1.575, 0.065], [0.065, 0.05, 0.055], { bone: 'head', region: 'hair', k: 0.02 });
+  },
+  m1900(M) {
+    body(M, false, { hips: 'pants', torso: 'vest', neck: 'shirt', shoulder: 'vest', upper: 'vest', fore: 'vest', thigh: 'pants', shin: 'pants', foot: 'shoes' });
+    M.ell([0, 1.2, 0.0], [0.176, 0.27, 0.118], { bone: 'chest', region: 'vest', k: 0.02 });
+    M.cone([0, 1.04, -0.02], [0, 0.82, -0.04], 0.17, 0.19, { bone: 'hips', region: 'vest', k: 0.03 });
+    M.box([0, 1.4, 0.1], [0.025, 0.07, 0.01], { bone: 'chest', region: 'shirt', k: 0.008, prio: 1 });
+    M.cyl([0, 1.745, 0.005], 0.13, 0.006, { bone: 'head', region: 'hat', round: 0.005, k: 0.012 });
+    M.ell([0, 1.79, 0.005], [0.085, 0.06, 0.098], { bone: 'head', region: 'hat', k: 0.015 });
+    M.ell([0, 1.69, -0.02], [0.082, 0.07, 0.095], { bone: 'head', region: 'hair', k: 0.02 });
+    M.ell([0, 1.605, 0.085], [0.04, 0.012, 0.02], { bone: 'head', region: 'hair', k: 0.008, prio: 1 });
+  },
+  f1900(M) {
+    body(M, true, { hips: 'dress', torso: 'shirt', neck: 'shirt', shoulder: 'shirt', upper: 'shirt', fore: 'shirt', thigh: 'dress', shin: 'skin', foot: 'shoes' });
+    M.cone([0, 1.04, 0], [0, 0.06, 0.0], 0.14, 0.34, { bone: 'hips', region: 'dress', k: 0.06 });
+    for (const [s, L] of SIDES) M.ell(X(s, [0.19, 1.38, -0.01]), [0.075, 0.08, 0.075], { bone: 'arm' + L, region: 'shirt', k: 0.02 });
+    M.ell([0, 1.73, -0.035], [0.095, 0.075, 0.11], { bone: 'head', region: 'hair', k: 0.02 });
+    M.cyl([0, 1.765, 0.0], 0.2, 0.008, { bone: 'head', region: 'hat', round: 0.006, k: 0.012 });
+    M.ell([0, 1.8, -0.01], [0.1, 0.05, 0.11], { bone: 'head', region: 'hat', k: 0.02 });
+  },
+  m1920(M) {
+    body(M, false, { hips: 'pants', torso: 'vest', neck: 'shirt', shoulder: 'vest', upper: 'vest', fore: 'vest', thigh: 'pants', shin: 'pants', foot: 'shoes' });
+    M.ell([0, 1.22, 0.0], [0.18, 0.25, 0.12], { bone: 'chest', region: 'vest', k: 0.02 });
+    M.box([0, 1.3, 0.11], [0.018, 0.12, 0.008], { bone: 'chest', region: 'belt', k: 0.006, prio: 1 });
+    M.cyl([0, 1.745, 0.005], 0.165, 0.006, { bone: 'head', region: 'hat', round: 0.005, k: 0.012 });
+    M.ell([0, 1.795, 0.005], [0.088, 0.065, 0.1], { bone: 'head', region: 'hat', k: 0.02 });
+    M.box([0, 1.84, 0.005], [0.02, 0.015, 0.07], { bone: 'head', sub: true, k: 0.02 });
+    M.ell([0, 1.69, -0.02], [0.082, 0.065, 0.095], { bone: 'head', region: 'hair', k: 0.015 });
+  },
+  f1920(M) {
+    body(M, true, { hips: 'dress', torso: 'dress', neck: 'skin', shoulder: 'dress', upper: 'skin', fore: 'skin', thigh: 'dress', shin: 'skin', foot: 'shoes' });
+    M.cone([0, 1.12, 0], [0, 0.5, 0.0], 0.16, 0.22, { bone: 'hips', region: 'dress', k: 0.04 });
+    M.ell([0, 1.69, -0.01], [0.09, 0.075, 0.103], { bone: 'head', region: 'hair', k: 0.015 });
+    M.ell([0, 1.73, -0.005], [0.096, 0.07, 0.108], { bone: 'head', region: 'hat', k: 0.015 });
+    M.cyl([0, 1.69, 0.01], 0.115, 0.008, { bone: 'head', region: 'hat', round: 0.006, k: 0.01 });
+  },
+  m1950(M) {
+    body(M, false, { hips: 'pants', torso: 'shirt', neck: 'skin', shoulder: 'shirt', upper: 'shirt', fore: 'skin', thigh: 'pants', shin: 'pants', foot: 'shoes' });
+    for (const [s, L] of SIDES) { M.cone(X(s, [0.2, 1.4, -0.01]), X(s, [0.24, 1.29, -0.02]), 0.055, 0.05, { bone: 'arm' + L, region: 'shirt', k: 0.015 }); M.ell(X(s, [0.1, 0.06, 0.06]), [0.05, 0.05, 0.14], { bone: 'foot' + L, region: 'shoes', k: 0.02 }); M.ell(X(s, [0.1, 0.012, 0.06]), [0.052, 0.012, 0.14], { bone: 'foot' + L, region: 'sole', k: 0.01, prio: 1 }); }
+    M.cyl([0, 0.99, 0], 0.168, 0.02, { bone: 'hips', region: 'belt', k: 0.01, prio: 1 });
+    M.ell([0, 1.71, 0.0], [0.083, 0.07, 0.1], { bone: 'head', region: 'hair', k: 0.015 });
+    M.ell([0, 1.76, 0.06], [0.06, 0.035, 0.05], { bone: 'head', region: 'hair', k: 0.02 });
+  },
+  f1950(M) {
+    body(M, true, { hips: 'dress', torso: 'shirt', neck: 'skin', shoulder: 'shirt', upper: 'skin', fore: 'skin', thigh: 'dress', shin: 'skin', foot: 'shoes' });
+    M.cone([0, 1.05, 0], [0, 0.5, 0.0], 0.14, 0.36, { bone: 'hips', region: 'dress', k: 0.05 });
+    M.cyl([0, 1.05, 0], 0.15, 0.02, { bone: 'hips', region: 'belt', k: 0.01, prio: 1 });
+    M.ell([0, 1.7, -0.025], [0.085, 0.08, 0.1], { bone: 'head', region: 'hair', k: 0.02 });
+    M.cone([0, 1.72, -0.1], [0, 1.45, -0.15], 0.04, 0.025, { bone: 'head', region: 'hair', k: 0.02 });
+    M.ell([0, 1.72, -0.085], [0.025, 0.02, 0.02], { bone: 'head', region: 'hat', k: 0.006, prio: 1 });
+  },
+  m1970(M) {
+    body(M, false, { hips: 'pants', torso: 'shirt', neck: 'skin', shoulder: 'shirt', upper: 'shirt', fore: 'shirt', thigh: 'pants', shin: 'pants', foot: 'shoes' });
+    for (const [s, L] of SIDES) M.cone(X(s, [0.1, 0.42, 0.0]), X(s, [0.1, 0.03, 0.02]), 0.052, 0.09, { bone: 'shin' + L, region: 'pants', k: 0.02 });
+    M.cyl([0, 0.99, 0], 0.168, 0.025, { bone: 'hips', region: 'belt', k: 0.01, prio: 1 });
+    M.ell([0, 1.69, -0.03], [0.095, 0.095, 0.11], { bone: 'head', region: 'hair', k: 0.02 });
+    M.ell([0, 1.55, -0.07], [0.1, 0.09, 0.07], { bone: 'head', region: 'hair', k: 0.03 });
+    M.ell([0, 1.58, 0.07], [0.05, 0.03, 0.04], { bone: 'head', region: 'hair', k: 0.015 });
+  },
+  f1970(M) {
+    body(M, true, { hips: 'pants', torso: 'shirt', neck: 'skin', shoulder: 'shirt', upper: 'shirt', fore: 'shirt', thigh: 'pants', shin: 'pants', foot: 'shoes' });
+    for (const [s, L] of SIDES) M.cone(X(s, [0.1, 0.42, 0.0]), X(s, [0.1, 0.03, 0.02]), 0.048, 0.085, { bone: 'shin' + L, region: 'pants', k: 0.02 });
+    M.ell([0, 1.69, -0.03], [0.092, 0.095, 0.105], { bone: 'head', region: 'hair', k: 0.02 });
+    M.cone([0, 1.64, -0.07], [0, 1.28, -0.1], 0.1, 0.08, { bone: 'head', region: 'hair', k: 0.03 });
+    M.cyl([0, 1.72, 0.0], 0.095, 0.01, { bone: 'head', region: 'hat', k: 0.006, prio: 1 });
+  },
+  m1990(M) {
+    body(M, false, { hips: 'pants', torso: 'shirt', neck: 'skin', shoulder: 'shirt', upper: 'shirt', fore: 'skin', thigh: 'pants', shin: 'pants', foot: 'shoes' });
+    M.ell([0, 1.2, 0.0], [0.19, 0.24, 0.125], { bone: 'chest', region: 'shirt', k: 0.02 });
+    for (const [s, L] of SIDES) { M.cone(X(s, [0.1, 0.92, 0.0]), X(s, [0.1, 0.06, 0.02]), 0.09, 0.075, { bone: 'thigh' + L, bone2: 'shin' + L, region: 'pants', k: 0.03 }); M.ell(X(s, [0.1, 0.07, 0.06]), [0.058, 0.06, 0.15], { bone: 'foot' + L, region: 'shoes', k: 0.02 }); M.ell(X(s, [0.1, 0.014, 0.06]), [0.06, 0.014, 0.15], { bone: 'foot' + L, region: 'sole', k: 0.01, prio: 1 }); }
+    M.ell([0, 1.735, 0.0], [0.09, 0.05, 0.1], { bone: 'head', region: 'hat', k: 0.015 });
+    M.box([0, 1.725, 0.12], [0.07, 0.008, 0.06], { bone: 'head', region: 'hat', round: 0.006, k: 0.01 });
+    M.ell([0, 1.69, -0.03], [0.082, 0.06, 0.09], { bone: 'head', region: 'hair', k: 0.015 });
+  },
+  f1990(M) {
+    body(M, true, { hips: 'pants', torso: 'shirt', neck: 'skin', shoulder: 'vest', upper: 'vest', fore: 'vest', thigh: 'pants', shin: 'pants', foot: 'shoes' });
+    M.ell([0, 1.28, 0.0], [0.17, 0.21, 0.115], { bone: 'chest', region: 'vest', k: 0.02 });
+    for (const [s, L] of SIDES) { M.ell(X(s, [0.1, 0.06, 0.05]), [0.048, 0.05, 0.13], { bone: 'foot' + L, region: 'shoes', k: 0.02 }); M.ell(X(s, [0.1, 0.012, 0.05]), [0.05, 0.012, 0.13], { bone: 'foot' + L, region: 'sole', k: 0.01, prio: 1 }); }
+    M.ell([0, 1.7, -0.02], [0.092, 0.095, 0.108], { bone: 'head', region: 'hair', k: 0.02 });
+    M.cone([0, 1.7, -0.1], [0, 1.4, -0.12], 0.06, 0.04, { bone: 'head', region: 'hair', k: 0.02 });
+    M.ell([0, 1.72, -0.1], [0.04, 0.03, 0.03], { bone: 'head', region: 'hat', k: 0.008, prio: 1 });
+  },
   scifi(M) {
     body(M, false, { hips: 'shirt', torso: 'shirt', neck: 'shirt', shoulder: 'vest', upper: 'shirt', fore: 'shirt', thigh: 'shirt', shin: 'shirt', foot: 'shoes' });
     for (const [s, L] of SIDES) { M.ell(X(s, [0.16, 1.43, -0.01]), [0.075, 0.06, 0.07], { bone: 'arm' + L, region: 'vest', k: 0.02 }); M.cyl(X(s, [0.33, 0.95, 0.0]), 0.034, 0.012, { bone: 'fore' + L, region: 'glow', k: 0.006, prio: 1 }); }
@@ -138,7 +262,7 @@ export function clips(rig, fem, outfit) {
     const an = rig.joint('foot' + L), hp = rig.joint('thigh' + L);
     return { L, off: i * 0.5, an, hp };
   });
-  const skirt = outfit === 'f1885';
+  const skirt = ['f1885', 'f1900', 'mpadre'].includes(outfit);
   const armRest = (P, k = 1) => { for (const [s, L] of SIDES) { P.rz[I('arm' + L)] += -s * 0.22 * k; P.rx[I('fore' + L)] += -0.18 * k; } };
   const legIK = (P, Lg, y, z, footPitch, x = 0) => { rig.leg(P, ['thigh' + Lg.L, 'shin' + Lg.L, 'foot' + Lg.L], [Lg.an[0] + x, y, z]); aim(rig, P, 'foot' + Lg.L, footPitch); };
   const standLegs = (P, spread = 0) => { for (const Lg of legsOf) legIK(P, Lg, Lg.an[1], Lg.an[2], 0, Lg.an[0] > 0 ? spread : -spread); };

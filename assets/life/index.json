@@ -318,5 +318,265 @@
    364
   ],
   "module": "vehicles.js"
+ },
+ "human_mnative": {
+  "file": "human_mnative.bin",
+  "bytes": 137692,
+  "lods": [
+   5200,
+   1300,
+   318
+  ],
+  "module": "human.js"
+ },
+ "human_fnative": {
+  "file": "human_fnative.bin",
+  "bytes": 137596,
+  "lods": [
+   5198,
+   1300,
+   314
+  ],
+  "module": "human.js"
+ },
+ "human_mpadre": {
+  "file": "human_mpadre.bin",
+  "bytes": 137664,
+  "lods": [
+   5200,
+   1300,
+   320
+  ],
+  "module": "human.js"
+ },
+ "human_mvaquero": {
+  "file": "human_mvaquero.bin",
+  "bytes": 137776,
+  "lods": [
+   5196,
+   1300,
+   318
+  ],
+  "module": "human.js"
+ },
+ "human_mminer": {
+  "file": "human_mminer.bin",
+  "bytes": 137392,
+  "lods": [
+   5198,
+   1296,
+   318
+  ],
+  "module": "human.js"
+ },
+ "human_m1900": {
+  "file": "human_m1900.bin",
+  "bytes": 137720,
+  "lods": [
+   5200,
+   1300,
+   320
+  ],
+  "module": "human.js"
+ },
+ "human_f1900": {
+  "file": "human_f1900.bin",
+  "bytes": 137504,
+  "lods": [
+   5198,
+   1300,
+   318
+  ],
+  "module": "human.js"
+ },
+ "human_m1920": {
+  "file": "human_m1920.bin",
+  "bytes": 137768,
+  "lods": [
+   5200,
+   1300,
+   318
+  ],
+  "module": "human.js"
+ },
+ "human_f1920": {
+  "file": "human_f1920.bin",
+  "bytes": 137952,
+  "lods": [
+   5200,
+   1300,
+   320
+  ],
+  "module": "human.js"
+ },
+ "human_m1950": {
+  "file": "human_m1950.bin",
+  "bytes": 137748,
+  "lods": [
+   5200,
+   1300,
+   320
+  ],
+  "module": "human.js"
+ },
+ "human_f1950": {
+  "file": "human_f1950.bin",
+  "bytes": 137812,
+  "lods": [
+   5200,
+   1300,
+   318
+  ],
+  "module": "human.js"
+ },
+ "human_m1970": {
+  "file": "human_m1970.bin",
+  "bytes": 137772,
+  "lods": [
+   5198,
+   1300,
+   320
+  ],
+  "module": "human.js"
+ },
+ "human_f1970": {
+  "file": "human_f1970.bin",
+  "bytes": 137796,
+  "lods": [
+   5200,
+   1300,
+   316
+  ],
+  "module": "human.js"
+ },
+ "human_m1990": {
+  "file": "human_m1990.bin",
+  "bytes": 137660,
+  "lods": [
+   5200,
+   1300,
+   320
+  ],
+  "module": "human.js"
+ },
+ "human_f1990": {
+  "file": "human_f1990.bin",
+  "bytes": 137752,
+  "lods": [
+   5200,
+   1300,
+   320
+  ],
+  "module": "human.js"
+ },
+ "bison": {
+  "file": "bison.bin",
+  "bytes": 161740,
+  "lods": [
+   6000,
+   1600,
+   398
+  ],
+  "module": "bison.js"
+ },
+ "dimetrodon": {
+  "file": "dimetrodon.bin",
+  "bytes": 161732,
+  "lods": [
+   6000,
+   1600,
+   398
+  ],
+  "module": "dimetrodon.js"
+ },
+ "dragonfly": {
+  "file": "dragonfly.bin",
+  "bytes": 38484,
+  "lods": [
+   1394,
+   378,
+   108
+  ],
+  "module": "dragonfly.js"
+ },
+ "mammoth": {
+  "file": "mammoth.bin",
+  "bytes": 217072,
+  "lods": [
+   8000,
+   2200,
+   556
+  ],
+  "module": "mammoth.js"
+ },
+ "stegosaurus": {
+  "file": "stegosaurus.bin",
+  "bytes": 216692,
+  "lods": [
+   8000,
+   2200,
+   560
+  ],
+  "module": "stegosaurus.js"
+ },
+ "car_t": {
+  "file": "car_t.bin",
+  "bytes": 84580,
+  "lods": [
+   3200,
+   884,
+   240
+  ],
+  "module": "vehicles.js"
+ },
+ "car_30s": {
+  "file": "car_30s.bin",
+  "bytes": 88564,
+  "lods": [
+   3200,
+   900,
+   240
+  ],
+  "module": "vehicles.js"
+ },
+ "truck_old": {
+  "file": "truck_old.bin",
+  "bytes": 93328,
+  "lods": [
+   3200,
+   1166,
+   240
+  ],
+  "module": "vehicles.js"
+ },
+ "car_50s": {
+  "file": "car_50s.bin",
+  "bytes": 93720,
+  "lods": [
+   3200,
+   1242,
+   240
+  ],
+  "module": "vehicles.js"
+ },
+ "car_70s": {
+  "file": "car_70s.bin",
+  "bytes": 90604,
+  "lods": [
+   3200,
+   1024,
+   240
+  ],
+  "module": "vehicles.js"
+ },
+ "car_90s": {
+  "file": "car_90s.bin",
+  "bytes": 88996,
+  "lods": [
+   3200,
+   916,
+   240
+  ],
+  "module": "vehicles.js"
  }
 }

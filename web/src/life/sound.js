@@ -8,6 +8,10 @@ const PROFILE = {
   sauropod: { f: 34, dur: 3.2, form: [180, 420], noise: 0.35, gain: 0.9, horn: true },
   quetzal: { f: 320, dur: 0.6, form: [1200, 2600], noise: 0.7, gain: 0.35, screech: true },
   longhorn: { f: 105, dur: 1.5, form: [400, 800], noise: 0.15, gain: 0.5, horn: true },
+  mammoth: { f: 62, dur: 2.2, form: [260, 900], noise: 0.25, gain: 0.95, horn: true },
+  bison: { f: 82, dur: 1.6, form: [300, 650], noise: 0.35, gain: 0.6, horn: true },
+  stegosaurus: { f: 75, dur: 1.3, form: [280, 640], noise: 0.45, gain: 0.65 },
+  dimetrodon: { f: 150, dur: 0.8, form: [700, 1600], noise: 0.8, gain: 0.4, screech: true },
 };
 
 export class LifeAudio {
@@ -37,7 +41,7 @@ export class LifeAudio {
     const now = ctx.currentTime;
     const cd = { roar: 3, bite: 1.5, trumpet: 5, call: 0.8, horn: 1.5, whistle: 3, neigh: 3, bark: 0.8, howl: 4, flush: 1.5, scream: 1.2, hitPerson: 0.3, hitAnimal: 0.3, hitCar: 0.3 }[type] || 1;
     if ((this.cool.get(key) || 0) > now) return;
-    const d = this.sys.sense.dist(a.x, a.z);
+    const c = this.sys.camPos, d = Math.hypot(a.x - c.x, a.z - c.z);
     if (d > 900) return;
     this.cool.set(key, now + cd);
     const pos = { x: a.x, y: a.y + 1.5, z: a.z };

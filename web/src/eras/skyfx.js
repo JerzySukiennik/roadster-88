@@ -1,4 +1,4 @@
-// Roadster 88 era sky extras: the close Hadean moon, volcano ash plumes and meteors, distant Cretaceous sauropod silhouettes, and the far-future orbital ring with a space elevator and station.
+// Roadster 88 era sky extras: a moon whose size follows deep time (huge and molten in the Hadean, close in the Archean, small in the far future), volcano ash plumes, distant Cretaceous sauropod silhouettes, the impact fireball of the last Cretaceous days, the space elevator under construction and finished, the orbital ring whole, broken or as a debris arc, and the swollen sun of a dying Earth.
 import * as THREE from 'three/webgpu';
 import { vec3, vec2, float, uv, uniform, positionLocal, positionWorld, mx_noise_float, mx_fractal_noise_float, smoothstep, mix, abs, fract, sin, time, instancedBufferAttribute, texture, step, max, pow, normalWorld, dot, clamp } from 'three/tsl';
 import { fxMaterial } from '../render/gfx.js';
@@ -6,7 +6,7 @@ import { fxMaterial } from '../render/gfx.js';
 const D2R = Math.PI / 180;
 const dirAzEl = (az, el) => new THREE.Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el));
 
-function moonMaterial() {
+function moonMaterial(U) {
   const m = new THREE.MeshStandardNodeMaterial({ roughness: 1, metalness: 0 });
   m.fog = false;
   const p = positionLocal.normalize();
@@ -15,8 +15,30 @@ function moonMaterial() {
   const craters = smoothstep(0.0, 0.08, cr).mul(0.25).add(0.75);
   const lava = smoothstep(0.55, 0.75, mx_noise_float(p.mul(3.0).add(7.0)).mul(0.5).add(0.5));
   m.colorNode = mix(vec3(0.42, 0.4, 0.38), vec3(0.16, 0.15, 0.15), maria).mul(craters);
-  m.emissiveNode = vec3(1.0, 0.25, 0.04).mul(lava.mul(0.35)).add(vec3(0.03, 0.025, 0.02));
+  m.emissiveNode = vec3(1.0, 0.25, 0.04).mul(lava.mul(0.35).mul(U.moonLava)).add(vec3(0.03, 0.025, 0.02));
   return m;
+}
+
+function glowMaterial(U, col) {
+  const m = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+  m.fog = false;
+  const r = uv().sub(0.5).mul(2).length();
+  const core = float(1).sub(smoothstep(0.18, 0.24, r));
+  const halo = pow(float(1).sub(smoothstep(0.0, 1.0, r)), 3.0);
+  m.colorNode = vec3(...col).mul(core.mul(6.0).add(halo.mul(1.4))).mul(U.glow);
+  m.opacityNode = core.add(halo).min(1);
+  return fxMaterial(m);
+}
+
+function streakMaterial(U) {
+  const m = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
+  m.fog = false;
+  const u = uv();
+  const head = float(1).sub(smoothstep(0.0, 0.08, u.x.sub(0.06).abs().max(u.y.sub(0.5).abs().mul(0.15))));
+  const tail = float(1).sub(smoothstep(0.0, 1.0, u.x)).mul(float(1).sub(smoothstep(0.0, 0.5, u.y.sub(0.5).abs())));
+  m.colorNode = vec3(1.0, 0.78, 0.5).mul(head.mul(8.0).add(tail.mul(1.2))).mul(U.glow);
+  m.opacityNode = head.add(tail).min(1);
+  return fxMaterial(m);
 }
 
 function ringMaterial(U) {
@@ -100,27 +122,89 @@ export class SkyExtras {
     this.sys = sys;
     this.group = new THREE.Group(); this.group.name = 'EraSky';
     sys.root.add(this.group);
-    this.U = { night: uniform(0), ringGain: uniform(1) };
+    this.U = { night: uniform(0), ringGain: uniform(1), moonLava: uniform(1), glow: uniform(1) };
     this.items = {};
-    this.meteors = [];
+    this.moonDeg = 0;
   }
 
-  build(eraId, ctx) {
+  buildRing(kind) {
+    const key = 'ring_' + kind;
+    if (this.items[key]) return this.items[key];
+    const R = 8850, tilt = 30 * D2R;
+    const axis = new THREE.Vector3(Math.sin(tilt), Math.cos(tilt), 0.25).normalize();
+    const a = new THREE.Vector3(0, 0, 1).cross(axis).normalize(), b = axis.clone().cross(a).normalize();
+    const W = (kind === 'debris' ? 2.6 : 0.95) * D2R * R;
+    const pos = [], uvs = [], idx = [];
+    const segs = 360;
+    let k = 0;
+    for (let i = 0; i < segs; i++) {
+      if (kind === 'broken' && (Math.sin(i * 0.37) + Math.sin(i * 0.13 + 1.3)) < -0.6) continue;
+      for (const j of [i, i + 1]) {
+        const t = (j / segs) * Math.PI * 2, d = a.clone().multiplyScalar(Math.cos(t)).addScaledVector(b, Math.sin(t));
+        const c = d.clone().multiplyScalar(R + (kind === 'broken' ? Math.sin(j * 1.7) * 60 : 0));
+        const w = axis.clone().multiplyScalar(W / 2);
+        pos.push(c.x - w.x, c.y - w.y, c.z - w.z, c.x + w.x, c.y + w.y, c.z + w.z);
+        uvs.push(j / segs, 0, j / segs, 1);
+      }
+      idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); k += 4;
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2)); g.setIndex(idx);
+    const ring = new THREE.Mesh(g, ringMaterial(this.U)); ring.frustumCulled = false; ring.renderOrder = -1; ring.userData.k = 'ring'; ring.userData.follow = true;
+    this.group.add(ring); this.items[key] = ring;
+    return ring;
+  }
+
+  buildTether(full) {
+    const key = full ? 'tether' : 'tetherBuild';
+    if (this.items[key]) return this.items[key];
+    const tm = new THREE.MeshStandardNodeMaterial({ roughness: 0.35, metalness: 0.6 });
+    tm.fog = false;
+    const hgt = positionLocal.y;
+    const climb = step(0.993, fract(hgt.div(380).sub(time.mul(0.05))));
+    tm.colorNode = vec3(0.6, 0.62, 0.66);
+    tm.emissiveNode = vec3(0.6, 0.85, 1.0).mul(float(0.25).add(climb.mul(30)));
+    const H = full ? 8200 : 2600;
+    const tether = new THREE.Mesh(new THREE.CylinderGeometry(full ? 4 : 6, 9, H, 8, 1, true).translate(0, H / 2, 0), tm);
+    tether.position.set(-5200, 0, 4200); tether.frustumCulled = false; tether.userData.k = key; tether.userData.follow = true;
+    if (!full) { const cap = new THREE.Mesh(new THREE.CylinderGeometry(28, 28, 18, 12).translate(0, H, 0), tm); tether.add(cap); }
+    this.group.add(tether); this.items[key] = tether;
+    return tether;
+  }
+
+  buildStation() {
+    if (this.items.station) return this.items.station;
+    const st = new THREE.Group();
+    const sm = new THREE.MeshStandardNodeMaterial({ roughness: 0.4, metalness: 0.7 }); sm.fog = false;
+    sm.colorNode = vec3(0.7, 0.72, 0.76);
+    sm.emissiveNode = vec3(0.5, 0.75, 1.0).mul(step(0.92, fract(positionLocal.y.mul(0.05).add(positionLocal.x.mul(0.01)))).mul(4));
+    st.add(new THREE.Mesh(new THREE.TorusGeometry(160, 22, 10, 48), sm));
+    st.add(new THREE.Mesh(new THREE.CylinderGeometry(30, 30, 260, 16).rotateX(Math.PI / 2), sm));
+    st.position.copy(dirAzEl(150 * D2R, 38 * D2R).multiplyScalar(7200)); st.lookAt(0, 0, 0); st.rotateX(0.5);
+    st.userData.k = 'station'; st.userData.follow = true; st.traverse((o) => { o.frustumCulled = false; });
+    this.group.add(st); this.items.station = st;
+    return st;
+  }
+
+  build(eraId, ctx, P, year) {
     for (const k in this.items) this.items[k].visible = false;
     if (this.plumes) this.plumes.sprite.visible = false;
-    const key = eraId;
-    if (eraId === 'hadean') {
+    const F = (P && P.skyfx) || {};
+    this.moonDeg = F.moon || 0;
+    if (F.moon) {
       if (!this.items.moon) {
-        const m = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 24), moonMaterial());
+        const m = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 24), moonMaterial(this.U));
         m.frustumCulled = false; m.renderOrder = -1; m.userData.k = 'moon';
         this.group.add(m); this.items.moon = m;
       }
-      this.plumes = this.plumes || new Plumes(this.group);
-      this.plumes.sprite.visible = true;
-      this.plumes.setSources(ctx.volcanoes || []);
+      this.U.moonLava.value = eraId === 'hadean' ? 1 : eraId === 'archean' ? 0.25 : 0;
       this.items.moon.visible = true;
     }
-    if (eraId === 'dino') {
+    if (F.plumes && ctx.volcanoes && ctx.volcanoes.length) {
+      this.plumes = this.plumes || new Plumes(this.group);
+      this.plumes.sprite.visible = true;
+      this.plumes.setSources(ctx.volcanoes);
+    }
+    if (F.herd) {
       if (!this.items.sauropods) {
         const g = silhouetteGeometry('sauropod');
         const mat = new THREE.MeshStandardNodeMaterial({ roughness: 0.95, metalness: 0 });
@@ -135,49 +219,19 @@ export class SkyExtras {
       im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere();
       im.visible = spots.length > 0 && !this.sys.handed.has('herd');
     }
-    if (eraId === 'scifi') {
-      if (!this.items.ring) {
-        const R = 8850, tilt = 30 * D2R;
-        const axis = new THREE.Vector3(Math.sin(tilt), Math.cos(tilt), 0.25).normalize();
-        const a = new THREE.Vector3(0, 0, 1).cross(axis).normalize(), b = axis.clone().cross(a).normalize();
-        const W = 0.95 * D2R * R;
-        const pos = [], uvs = [], idx = [];
-        const segs = 360;
-        for (let i = 0; i <= segs; i++) {
-          const t = (i / segs) * Math.PI * 2, d = a.clone().multiplyScalar(Math.cos(t)).addScaledVector(b, Math.sin(t));
-          const c = d.clone().multiplyScalar(R);
-          const w = axis.clone().multiplyScalar(W / 2);
-          pos.push(c.x - w.x, c.y - w.y, c.z - w.z, c.x + w.x, c.y + w.y, c.z + w.z);
-          uvs.push(i / segs, 0, i / segs, 1);
-          if (i < segs) { const k = i * 2; idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); }
-        }
-        const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2)); g.setIndex(idx);
-        const ring = new THREE.Mesh(g, ringMaterial(this.U)); ring.frustumCulled = false; ring.renderOrder = -1; ring.userData.k = 'ring';
-        ring.userData.follow = true;
-        this.group.add(ring); this.items.ring = ring;
-        const tm = new THREE.MeshStandardNodeMaterial({ roughness: 0.35, metalness: 0.6 });
-        tm.fog = false;
-        const hgt = positionLocal.y;
-        const climb = step(0.993, fract(hgt.div(380).sub(time.mul(0.05))));
-        tm.colorNode = vec3(0.6, 0.62, 0.66);
-        tm.emissiveNode = vec3(0.6, 0.85, 1.0).mul(float(0.25).add(climb.mul(30)));
-        const tether = new THREE.Mesh(new THREE.CylinderGeometry(4, 9, 8200, 8, 1, true).translate(0, 4100, 0), tm);
-        tether.position.set(-5200, 0, 4200); tether.frustumCulled = false; tether.userData.k = 'tether'; tether.userData.follow = true;
-        this.group.add(tether); this.items.tether = tether;
-        const st = new THREE.Group();
-        const sm = new THREE.MeshStandardNodeMaterial({ roughness: 0.4, metalness: 0.7 }); sm.fog = false;
-        sm.colorNode = vec3(0.7, 0.72, 0.76);
-        sm.emissiveNode = vec3(0.5, 0.75, 1.0).mul(step(0.92, fract(positionLocal.y.mul(0.05).add(positionLocal.x.mul(0.01)))).mul(4));
-        st.add(new THREE.Mesh(new THREE.TorusGeometry(160, 22, 10, 48), sm));
-        st.add(new THREE.Mesh(new THREE.CylinderGeometry(30, 30, 260, 16).rotateX(Math.PI / 2), sm));
-        st.position.copy(dirAzEl(150 * D2R, 38 * D2R).multiplyScalar(7200)); st.lookAt(0, 0, 0); st.rotateX(0.5);
-        st.userData.k = 'station'; st.userData.follow = true; st.traverse((o) => { o.frustumCulled = false; });
-        this.group.add(st); this.items.station = st;
-      }
-      for (const k of ['ring', 'tether', 'station']) this.items[k].visible = true;
+    if (F.ring) this.buildRing(F.ring === true ? 'whole' : F.ring).visible = true;
+    if (F.tether) this.buildTether(F.tether === true).visible = true;
+    if (F.station) this.buildStation().visible = true;
+    this.U.ringGain.value = F.ring === 'debris' ? 0.45 : 1;
+    if (F.sun) {
+      if (!this.items.sun) { const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), glowMaterial(this.U, [1.0, 0.86, 0.66])); m.frustumCulled = false; m.renderOrder = -1; m.userData.k = 'bigsun'; this.group.add(m); this.items.sun = m; }
+      this.items.sun.visible = true; this.sunDeg = F.sun * (year > 900000000 ? 1.15 : 1);
     }
-    if (eraId === 'hadean') this.meteorRate = 0.5; else if (eraId === 'scifi') this.meteorRate = 0.04; else this.meteorRate = 0.02;
-    this.eraId = key;
+    if (eraId === 'dino' && year >= -66050000) {
+      if (!this.items.impactor) { const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), streakMaterial(this.U)); m.frustumCulled = false; m.renderOrder = -1; m.userData.k = 'impactor'; this.group.add(m); this.items.impactor = m; }
+      this.items.impactor.visible = true;
+    }
+    this.eraId = eraId;
   }
 
   update(dt, camPos, sky) {
@@ -186,10 +240,25 @@ export class SkyExtras {
     if (moon && moon.visible) {
       const d = dirAzEl(0.42, 0.23);
       moon.position.copy(camPos).addScaledVector(d, 6400);
-      moon.scale.setScalar(6400 * Math.tan(3.4 * D2R));
+      moon.scale.setScalar(6400 * Math.tan(this.moonDeg * D2R));
       moon.rotation.y = 0.6;
     }
-    for (const k of ['ring', 'tether', 'station']) { const o = this.items[k]; if (o && o.visible && o.userData.follow) { if (!o.userData.base) o.userData.base = o.position.clone(); o.position.set(camPos.x + o.userData.base.x, o.userData.base.y, camPos.z + o.userData.base.z); } }
+    const cam = this.sys.game.gfx.camera;
+    const sun = this.items.sun;
+    if (sun && sun.visible) {
+      sun.position.copy(camPos).addScaledVector(sky.sunDir, 6000);
+      sun.scale.setScalar(6000 * Math.tan(this.sunDeg * D2R) * 4);
+      sun.quaternion.copy(cam.quaternion);
+      this.U.glow.value = Math.max(0, Math.min(1, sky.sunDir.y * 6 + 0.4));
+    }
+    const imp = this.items.impactor;
+    if (imp && imp.visible) {
+      const d = dirAzEl(2.2, 0.34);
+      imp.position.copy(camPos).addScaledVector(d, 6200);
+      imp.scale.set(1400, 90, 1);
+      imp.lookAt(camPos); imp.rotateZ(-0.55);
+    }
+    for (const k in this.items) { const o = this.items[k]; if (o && o.visible && o.userData.follow) { if (!o.userData.base) o.userData.base = o.position.clone(); o.position.set(camPos.x + o.userData.base.x, o.userData.base.y, camPos.z + o.userData.base.z); } }
     if (this.plumes && this.plumes.sprite.visible) this.plumes.update(dt, 0.4 + 1.6 * Math.min(1, sky.sun.intensity / 6));
   }
 }

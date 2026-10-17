@@ -1,7 +1,8 @@
-// Roadster 88 era weather and seasons: the season from the present month, weather rolled per arrival from era and season and drifting while driving, blended sky, fog and sun, GPU-animated rain, snow, ash and dust around the camera, lightning, wet and snowy surfaces, wind, and the game.weather API for the car side and the menu.
+// Roadster 88 era weather and seasons: the season from the present month, weather rolled per arrival from the period's climate (Mediterranean California, tropical wet and dry, swamp, desert, frozen, Hadean ash, scorched) and season and drifting while driving, blended sky, fog and sun, GPU-animated rain, snow, ash and dust around the camera, lightning, wet and snowy surfaces, wind, and the game.weather API for the car side and the menu.
 import * as THREE from 'three/webgpu';
 import { uniform, vec2, vec3, float, uv, instancedBufferAttribute, cameraPosition, time, fract, smoothstep, sin, length, max, mx_noise_float } from 'three/tsl';
 import { fxMaterial } from '../render/gfx.js';
+import { periodInfo, climateTable } from './periods.js';
 
 export const WEATHER_KINDS = ['clear', 'clouds', 'overcast', 'fog', 'rain', 'storm', 'snow', 'dust', 'ash'];
 
@@ -23,19 +24,9 @@ const GREEN = [0.75, 0.9, 1, 0.9, 0.6, 0.3, 0.1, 0, 0, 0.05, 0.25, 0.5];
 export const seasonOf = (month) => (month === 12 || month <= 2 ? 'winter' : month <= 5 ? 'spring' : month <= 8 ? 'summer' : 'autumn');
 export const greenness = (month) => GREEN[Math.max(0, Math.min(11, month - 1))];
 
-export function kindsFor(eraId) {
-  if (eraId === 'hadean') return ['clear', 'ash', 'storm'];
-  if (eraId === 'dino') return ['clear', 'clouds', 'overcast', 'fog', 'rain', 'storm'];
-  return ['clear', 'clouds', 'overcast', 'fog', 'rain', 'storm', 'snow', 'dust'];
-}
+export function kindsFor(eraId) { return periodInfo(eraId).kinds; }
 
-function table(eraId, season) {
-  if (eraId === 'hadean') return { clear: 0.45, ash: 0.35, storm: 0.2 };
-  if (eraId === 'dino') return season === 'summer' || season === 'autumn' ? { clear: 0.36, clouds: 0.3, overcast: 0.1, fog: 0.07, rain: 0.1, storm: 0.07 } : { clear: 0.2, clouds: 0.25, overcast: 0.15, fog: 0.12, rain: 0.17, storm: 0.11 };
-  const T = { summer: { clear: 0.6, clouds: 0.2, dust: 0.12, fog: 0.03, storm: 0.05 }, autumn: { clear: 0.45, clouds: 0.22, overcast: 0.1, fog: 0.1, rain: 0.08, dust: 0.05 }, winter: { clear: 0.25, clouds: 0.18, overcast: 0.15, fog: 0.15, rain: 0.15, storm: 0.05, snow: 0.07 }, spring: { clear: 0.45, clouds: 0.25, overcast: 0.1, rain: 0.12, storm: 0.05, fog: 0.03 } }[season];
-  if (eraId === 'ruins' && T.dust) T.dust *= 0.3;
-  return T;
-}
+function table(eraId, season) { return climateTable(eraId, season); }
 
 const NEXT = { clear: ['clouds'], clouds: ['clear', 'overcast'], overcast: ['clouds', 'rain', 'fog'], fog: ['overcast', 'clouds'], rain: ['overcast', 'storm'], storm: ['rain'], snow: ['overcast'], dust: ['clear'], ash: ['clear', 'storm'] };
 
@@ -113,7 +104,7 @@ export class Weather {
     const R = this.sharedRng() || Math.random;
     this.eraId = eraId; this.month = month;
     const season = seasonOf(month), kinds = kindsFor(eraId);
-    this.api.kinds = kinds; this.api.season = eraId === 'hadean' ? 'none' : season;
+    this.api.kinds = kinds; this.api.season = periodInfo(eraId).seasonless ? 'none' : season;
     let kind = this.override && kinds.includes(this.override) ? this.override : null;
     if (!kind) {
       const T = table(eraId, season); let r = R(), acc = 0; kind = 'clear';
@@ -162,7 +153,7 @@ export class Weather {
       if (this.drift <= 0) { const opts = NEXT[this.kind].filter((x) => this.api.kinds.includes(x)); if (opts.length && Math.random() < 0.6) this.setTarget(opts[Math.floor(Math.random() * opts.length)], false); this.drift = 120 + Math.random() * 200; }
     }
     const month = g.tc ? g.tc.present.month : this.month;
-    if (month !== this.month) { this.month = month; this.api.season = this.eraId === 'hadean' ? 'none' : seasonOf(month); this.sys.applySeason(); if (on && !this.override) this.roll(this.eraId, { instant: false }); }
+    if (month !== this.month) { this.month = month; this.api.season = periodInfo(this.eraId).seasonless ? 'none' : seasonOf(month); this.sys.applySeason(); if (on && !this.override) this.roll(this.eraId, { instant: false }); }
     this.wet = Math.min(1, Math.max(0, this.wet + dt * (C.rain > 0.05 ? C.rain * 0.025 : -(C.dark > 0.4 ? 0.0015 : 0.004))));
     if (this.kind === 'fog') this.wet = Math.max(this.wet, Math.min(0.35, this.wet + dt * 0.003));
     this.snowCover = Math.min(1, Math.max(0, this.snowCover + dt * (C.snow > 0.05 ? C.snow * 0.012 : -0.0015)));
@@ -201,7 +192,7 @@ export class Weather {
     };
   }
 
-  windBase(eraId) { return { hadean: 0.2, dino: 0.6, 1885: 0.9, 2026: 0.9, 2080: 1, ruins: 0.8, scifi: 0.5 }[eraId] || 0.8; }
+  windBase(eraId) { return periodInfo(eraId).floraLib.wind || 0.8; }
 
   updateLightning(dt, cam, C) {
     const g = this.sys.game, sky = g.sky;

@@ -1,5 +1,6 @@
 // Roadster 88 life traffic: lanes built from the valley roads (right-hand traffic, two lanes each way on Highway 88, the Valley Loop, links, town streets, dirt tracks and air lanes above the roads), vehicles that follow them with an intelligent-driver model, brake and honk for the player, change lanes round obstacles and wrecks, U-turn at dead ends and recycle off-map, horse-drawn wagons with their team and driver, and the 1885 train on the rail grade.
-import { Agent, clamp, rnd, wrap } from './agents.js';
+import { colors } from './palette.js';
+import { Agent, clamp, rnd, random, wrap } from './agents.js';
 
 const LANES = {
   highway: [2.85, 6.65], loop: [3.8], link: [2.75], street13: [3.2], street18: [4.4], track: [1.2], rail: [0],
@@ -51,19 +52,11 @@ export class Lane {
   }
 }
 
-const MODELS = {
-  2026: [['car_sedan', 0.34], ['car_hatch', 0.2], ['car_suv', 0.24], ['car_pickup', 0.14], ['truck_semi', 0.08]],
-  2080: [['pod', 0.45], ['ev2080', 0.55]],
-  scifi: [['hover', 1]],
-  1885: [['wagon', 0.8], ['coach', 0.2]],
-};
-const PAINT = {
-  2026: [[0.7, 0.7, 0.7], [0.03, 0.03, 0.035], [0.5, 0.5, 0.52], [0.12, 0.13, 0.16], [0.42, 0.04, 0.03], [0.05, 0.12, 0.3], [0.85, 0.85, 0.82], [0.2, 0.22, 0.2], [0.55, 0.42, 0.25]],
-  2080: [[0.85, 0.86, 0.88], [0.6, 0.62, 0.66], [0.1, 0.11, 0.12], [0.2, 0.32, 0.4], [0.75, 0.6, 0.35]],
-  scifi: [[0.9, 0.9, 0.92], [0.15, 0.16, 0.18], [0.5, 0.55, 0.62]],
-  1885: [[0.3, 0.12, 0.06], [0.12, 0.16, 0.1], [0.08, 0.07, 0.06]],
-};
-const pick = (list) => { let r = Math.random(), acc = 0; for (const [id, w] of list) { acc += w; if (r <= acc) return id; } return list[0][0]; };
+const TRAFFIC_R = 2200, KEEP_R = 2700, MAX_CARS = 150;
+const PAINT = [[0.7, 0.7, 0.7], [0.03, 0.03, 0.035], [0.5, 0.5, 0.52], [0.12, 0.13, 0.16], [0.42, 0.04, 0.03], [0.05, 0.12, 0.3], [0.85, 0.85, 0.82], [0.2, 0.22, 0.2], [0.55, 0.42, 0.25]];
+const PAINT_FUTURE = [[0.85, 0.86, 0.88], [0.6, 0.62, 0.66], [0.1, 0.11, 0.12], [0.2, 0.32, 0.4], [0.75, 0.6, 0.35]];
+const PAINT_WAGON = [[0.3, 0.12, 0.06], [0.12, 0.16, 0.1], [0.08, 0.07, 0.06]];
+const pick = (list) => { let r = random(), acc = 0; for (const [id, w] of list) { acc += w; if (r <= acc) return id; } return list[0][0]; };
 
 export class Traffic {
   constructor(sys) {
@@ -71,52 +64,81 @@ export class Traffic {
     this.train = null;
   }
 
-  build(eraId) {
+  build(T, train) {
     const V = this.sys.V, roads = V.roads || [];
-    this.lanes = []; this.eraId = eraId;
-    const air = eraId === 'scifi';
+    this.lanes = []; this.T = T; this.rail = null;
+    const air = T.air, horseOnly = T.tracksOnly;
     for (const r of roads) {
       const type = r.type || r.kind;
       let key = type === 'street' ? (r.width > 15 ? 'street18' : 'street13') : type;
-      if (eraId === '1885') { if (type === 'rail') continue; if (!['track', 'street', 'highway'].includes(type)) continue; key = type === 'highway' ? 'track' : type === 'street' ? 'track' : key; }
       if (type === 'rail') continue;
-      if (eraId !== '1885' && type === 'track') continue;
+      if (horseOnly) { if (!['track', 'street', 'highway'].includes(type)) continue; key = type === 'highway' || type === 'street' ? 'track' : key; }
+      else if (type === 'track') continue;
       const offs = LANES[key]; if (!offs) continue;
-      const vmax = { highway: eraId === '2080' ? 34 : 30, loop: 22, link: 15, street: 11, track: 3.2 }[type] || 15;
-      for (const dir of [1, -1]) offs.forEach((o, i) => this.lanes.push(Object.assign(new Lane(r, o, dir, { vmax: eraId === '1885' ? 3.2 : vmax, alt: air ? (type === 'highway' ? 26 + i * 9 : 32) + (dir > 0 ? 0 : 5) : 0 }), { slot: i, rtype: type })));
+      const vmax = horseOnly ? 3.2 : Math.min(T.vmax, { highway: T.vmax, loop: 22, link: 15, street: 11, track: 3.2 }[type] || 15);
+      for (const dir of [1, -1]) offs.forEach((o, i) => this.lanes.push(Object.assign(new Lane(r, o, dir, { vmax, alt: air ? (type === 'highway' ? 26 + i * 9 : 32) + (dir > 0 ? 0 : 5) : 0 }), { slot: i, rtype: type })));
     }
     for (const L of this.lanes) L.twin = this.lanes.filter((o) => o !== L && o.road === L.road && o.dir === L.dir);
-    if (eraId === '1885') { const rail = roads.find((r) => (r.type || r.kind) === 'rail'); if (rail) this.rail = new Lane(rail, 0, 1, { vmax: 15 }); }
+    if (train) { const rail = roads.find((r) => (r.type || r.kind) === 'rail'); if (rail) this.rail = new Lane(rail, 0, 1, { vmax: 15 }); }
   }
 
-  populate(eraId, budget) {
-    const list = MODELS[eraId]; if (!list) return [];
+  focusPoint() { const c = this.sys.camPos, S = this.sys.game.car && this.sys.game.car.sim; return S ? [S.pos.x, S.pos.z] : c ? [c.x, c.z] : [0, 0]; }
+
+  lanesNear(fx, fz, r) {
+    const out = [];
+    for (const L of this.lanes) { const P = L.p; let best = Infinity; for (let i = 0; i < P.length; i += 4) { const d = Math.hypot(P[i][0] - fx, P[i][1] - fz); if (d < best) best = d; } if (best < r) out.push(L); }
+    return out;
+  }
+
+  populate(T, budget) {
+    const list = T.models; if (!list || !list.length) return [];
     const agents = [];
-    for (const L of this.lanes) {
-      const per = eraId === '1885' ? (L.rtype === 'highway' ? 900 : L.rtype === 'street' ? 1400 : 1100) : L.rtype === 'highway' ? 260 : L.rtype === 'loop' ? 520 : L.rtype === 'street' ? 420 : L.rtype === 'link' ? 500 : 900;
-      const n = Math.round(L.len / per * budget + (L.rtype === 'street' ? Math.random() * 0.8 : 0));
+    const horseOnly = T.tracksOnly;
+    const [fx, fz] = this.focusPoint();
+    this.focus = [fx, fz]; this.near = this.lanesNear(fx, fz, TRAFFIC_R);
+    const cap = Math.round(MAX_CARS * Math.min(1.3, budget)), want = [];
+    let total = 0;
+    for (const L of this.near) {
+      const per = horseOnly ? (L.rtype === 'highway' ? 900 : L.rtype === 'street' ? 1400 : 1100) : L.rtype === 'highway' ? 260 : L.rtype === 'loop' ? 520 : L.rtype === 'street' ? 420 : L.rtype === 'link' ? 500 : 900;
+      const n = L.len / per * budget * (T.horse && !horseOnly ? 0.75 : 1) + (L.rtype === 'street' ? Math.random() * 0.8 : 0);
+      want.push(n); total += n;
+    }
+    const k = total > cap ? cap / total : 1;
+    for (let li = 0; li < this.near.length; li++) {
+      const L = this.near[li], n = Math.round(want[li] * k);
       for (let i = 0; i < n; i++) {
         let model = pick(list);
-        if (model === 'truck_semi' && L.slot !== 0) model = 'car_sedan';
-        if (L.rtype === 'street' && model === 'truck_semi') model = 'car_hatch';
-        const a = new Agent(model, { brain: 'vehicle', seed: Math.random(), c0: [...(PAINT[eraId] || PAINT[2026])[Math.floor(Math.random() * (PAINT[eraId] || PAINT[2026]).length)], 0], c1: [0, 0, 0, 0] });
-        a.lane = L; a.s = (i + Math.random() * 0.6) / Math.max(1, n) * L.len; a.v = L.vmax * rnd(0.8, 1.0); a.v0 = L.vmax * rnd(0.88, 1.08) * (model === 'truck_semi' ? 0.85 : 1);
-        a.fly = eraId === 'scifi'; a.ground = !a.fly;
+        if (model === 'truck_semi' && L.slot !== 0) model = list.find(([m]) => m !== 'truck_semi')[0];
+        if (L.rtype === 'street' && model === 'truck_semi') model = list.find(([m]) => m !== 'truck_semi')[0];
+        const wagon = model === 'wagon' || model === 'coach', future = model === 'pod' || model === 'ev2080' || model === 'hover';
+        const pal = wagon ? PAINT_WAGON : future ? PAINT_FUTURE : null;
+        const c0 = pal ? [...pal[Math.floor(Math.random() * pal.length)], 0] : colors(model, Math.random())[0];
+        if (!pal && c0[0] === 0.5 && c0[1] === 0.5) { const q = PAINT[Math.floor(Math.random() * PAINT.length)]; c0[0] = q[0]; c0[1] = q[1]; c0[2] = q[2]; }
+        const a = new Agent(model, { brain: 'vehicle', seed: Math.random(), c0, c1: [0, 0, 0, 0] });
+        const v0 = wagon ? 3.2 : L.vmax;
+        a.lane = L; a.s = (i + Math.random() * 0.6) / Math.max(1, n) * L.len; a.v = v0 * rnd(0.8, 1.0); a.v0 = v0 * rnd(0.88, 1.08) * (model === 'truck_semi' ? 0.85 : 1);
+        a.fly = model === 'hover'; a.ground = !a.fly;
         L.cars.push(a); this.cars.push(a); agents.push(a);
-        if (eraId === '1885') agents.push(...this.team(a, model));
+        if (wagon) agents.push(...this.team(a, model));
       }
     }
     return agents;
   }
 
-  parked(eraId, n) {
-    const list = MODELS[eraId]; if (!list || eraId === 'scifi' || eraId === '1885') return [];
-    const out = [], streets = this.lanes.filter((L) => L.rtype === 'street');
+  parked(T, n) {
+    if (!T.parkedOk) return [];
+    const list = T.models.filter(([m]) => m !== 'truck_semi' && m !== 'wagon' && m !== 'coach' && m !== 'hover');
+    if (!list.length) return [];
+    const inner = (L) => { const m = L.p[Math.floor(L.p.length / 2)]; return Math.abs(m[0]) < 2100 && Math.abs(m[1]) < 2100; };
+    const out = [], streets = this.lanes.filter((L) => L.rtype === 'street' && !L.road.city && inner(L));
     for (let i = 0; i < n && streets.length; i++) {
-      const L = streets[Math.floor(Math.random() * streets.length)], s = rnd(10, L.len - 10);
+      const L = streets[Math.floor(random() * streets.length)], s = rnd(10, L.len - 10);
       const p = L.at(s, this._p), w = (L.road.width / 2) - 1.15 - L.off;
-      const model = pick(list.filter(([m]) => m !== 'truck_semi'));
-      const a = new Agent(model, { brain: 'parked', c0: [...PAINT[eraId][Math.floor(Math.random() * PAINT[eraId].length)], 0], c1: [0, 0, 0, 0] });
+      const model = pick(list);
+      const future = model === 'pod' || model === 'ev2080';
+      const c0 = future ? [...PAINT_FUTURE[Math.floor(random() * PAINT_FUTURE.length)], 0] : colors(model, random())[0];
+      if (!future && c0[0] === 0.5 && c0[1] === 0.5) { const q = PAINT[Math.floor(random() * PAINT.length)]; c0[0] = q[0]; c0[1] = q[1]; c0[2] = q[2]; }
+      const a = new Agent(model, { brain: 'parked', c0, c1: [0, 0, 0, 0] });
       a.x = p.x - Math.cos(p.yaw) * w; a.z = p.z + Math.sin(p.yaw) * w; a.yaw = p.yaw; a.parked = true;
       if (this.sys.eras && this.sys.eras.overlaps(a.x, this.sys.V.heightAt(a.x, a.z), a.z, 2)) continue;
       out.push(a);
@@ -132,13 +154,37 @@ export class Traffic {
       h.hitch = { w, ahead: (model === 'coach' ? 2.7 : 2.4) + pr * 2.7, side: side * 0.62 };
       w.team.push(h); out.push(h);
     }
-    const d = new Agent('human_m1885', { brain: 'seat' });
+    const d = new Agent((this.T && this.T.driver) || 'human_m1885', { brain: 'seat' });
     d.seatOn = { w, at: model === 'coach' ? [0, 1.85, 1.38] : [0, 0.95, 1.42] };
     w.driver = d; out.push(d);
     return out;
   }
 
+  recycle(dt) {
+    this.recT = (this.recT || 0) - dt;
+    if (this.recT > 0 || !this.cars.length || !this.T) return;
+    this.recT = 0.5;
+    const [fx, fz] = this.focusPoint();
+    if (!this.focus || Math.hypot(fx - this.focus[0], fz - this.focus[1]) > 450) { this.focus = [fx, fz]; this.near = this.lanesNear(fx, fz, TRAFFIC_R); }
+    if (!this.near || !this.near.length) return;
+    let moved = 0;
+    for (const a of this.cars) {
+      if (moved >= 6) break;
+      if (a.down || a.wreck || a.body) continue;
+      if (Math.hypot(a.x - fx, a.z - fz) < KEEP_R) continue;
+      for (let tries = 0; tries < 8; tries++) {
+        const L = this.near[Math.floor(Math.random() * this.near.length)], s = Math.random() * L.len, p = L.at(s, this._q), d = Math.hypot(p.x - fx, p.z - fz);
+        if (d < 320 || d > TRAFFIC_R) continue;
+        if (L.cars.some((c) => Math.abs(c.s - s) < 30)) continue;
+        if (a.lane) a.lane.cars = a.lane.cars.filter((c) => c !== a);
+        a.lane = L; a.s = s; a.v = a.v0 * 0.85; a.lc = null; L.cars.push(a); a.prev = null; moved++;
+        break;
+      }
+    }
+  }
+
   update(dt) {
+    this.recycle(dt);
     const S = this.sys.sense;
     for (const L of this.lanes) { L.cars = L.cars.filter((a) => !a.wreck && a.lane === L); L.cars.sort((a, b) => a.s - b.s); }
     const obstacles = this.sys.obstacles;
@@ -215,6 +261,8 @@ export class Traffic {
       const ty = gy + L.alt + Math.sin(this.sys.time * 0.7 + a.id) * 0.4;
       a.y = a.y ? a.y + clamp(ty - a.y, -8 * dt, 8 * dt) : ty;
       a.roll = clamp(-turn * 4, -0.4, 0.4); a.pitch = -clamp((a.v - (a.vPrev || a.v)) / Math.max(dt, 1e-3) * 0.02, -0.15, 0.15);
+    } else if (Math.hypot(x - this.sys.camPos.x, z - this.sys.camPos.z) > 420) {
+      a.x = x; a.z = z; a.y = gy; a.pitch = 0; a.roll = 0;
     } else {
       a.x = x; a.z = z; a.y = gy;
       const f = Math.sin(a.yaw), c = Math.cos(a.yaw), half = (a.K ? a.K.meta.length : 4.5) * 0.4;

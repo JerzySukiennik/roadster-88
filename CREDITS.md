@@ -128,3 +128,11 @@ Licensed under Creative Commons: By Attribution 4.0 License, http://creativecomm
 | File | Source | Used for | Licence |
 |---|---|---|---|
 | assets/driver/anims/ual.json, ual.bin | Universal Animation Library and Universal Animation Library 2 (Standard) by Quaternius, https://quaternius.itch.io/universal-animation-library | on-foot motion (idle, walk, jog, sprint, jumps, carry, throw, knock-down, get up, death, actions), retargeted to the avatar by web/tools/anim-bake.mjs | CC0 1.0 |
+
+## Earth terrain data
+| File | Source | Used for | Licence |
+|---|---|---|---|
+| assets/earth/e_*.bin (648 tiles, 10 x 10 degrees, 1 arc-minute, about 60 MB) | NOAA NCEI ETOPO 2022 Global Relief Model, 60 arc-second surface elevation, https://www.ncei.noaa.gov/products/etopo-global-relief-model | ground elevation for landing anywhere on Earth | public domain (US Government work) |
+| assets/earth/e_*.bin (water level), mask_8k.png, ice_5k.png | Natural Earth 10 m land, lakes and glaciated areas, https://www.naturalearthdata.com | coastlines, lakes and their levels, ice | public domain |
+| assets/earth/biome_1k.png | derived from assets/space/earth_day_jul_4k.webp (NASA Blue Marble imagery) | vegetation, desert and ice classes per landing point | public domain |
+| tool | web/tools/earth-bake.py (sources in Niepotrzebne/earth-src, not committed) | builds the files above | |

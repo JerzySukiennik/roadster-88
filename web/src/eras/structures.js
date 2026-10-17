@@ -1,13 +1,15 @@
-// Roadster 88 era structures: plans every era's buildings from the valley's town, streets, rail and regions (frontier town and railway, 2026 town and highway, 2080 town with maglev, turbines and solar farm, ruins, far-future spires, Hadean basalt), keeps site lineage across eras, builds merged meshes with Rapier colliders, destroys buildings the car hits hard (debris, dust, rubble) and records it in the causality world state.
+// Roadster 88 era structures: builds what sites.js plans for the period and year from the valley's town, streets, rail and regions (villages, mission, camps, frontier town and railway, brick and mid-century towns, the 2026 town and highway, maglev, sky towers, turbines and solar farm, ruins, spires, crystals, Hadean basalt), keeps site lineage across eras, builds merged meshes with Rapier colliders, destroys buildings the car hits hard (debris, dust, rubble) and records it in the causality world state.
 import * as THREE from 'three/webgpu';
 import { Kit, C, rng, hashStr } from './lib.js';
 import { SignAtlas } from './signs.js';
 import * as B from './buildings.js';
+import * as B2 from './buildings2.js';
+import { planSites, plantedFor } from './sites.js';
+import { periodInfo, PERIOD_INDEX } from './periods.js';
 import { GROUP, groups } from '../sim/car.js';
-import { ERA_INDEX } from './presets.js';
 
 const MATS = ['wood', 'masonry', 'plaster', 'roof', 'metal', 'glass', 'light', 'scifi', 'rubble', 'sign'];
-const BUILD = { falseFront: B.falseFront, hotel: B.hotel, bank: B.bank, church: B.church, barn: B.barn, cabin: B.cabin, depot: B.depot, waterTower: B.waterTower, windmill: B.windmill, locomotive: B.locomotive, railcar: B.railcar, ranch: B.ranch, gasStation: B.gasStation, stripMall: B.stripMall, streetLight: B.streetLight, powerPole: B.powerPole, telegraphPole: B.telegraphPole, billboard: B.billboard, hwSign: B.hwSign, midrise: B.midrise, evHub: B.evHub, ruinShell: B.ruinShell, rubblePile: B.rubblePile, foundation: B.foundation, spire: B.spire, arch: B.arch, floatPad: B.floatPad, basaltColumns: B.basaltColumns, turbineTower: B.turbineTower, prop: B.prop };
+const BUILD = { falseFront: B.falseFront, hotel: B.hotel, bank: B.bank, church: B.church, barn: B.barn, cabin: B.cabin, depot: B.depot, waterTower: B.waterTower, windmill: B.windmill, locomotive: B.locomotive, railcar: B.railcar, ranch: B.ranch, gasStation: B.gasStation, stripMall: B.stripMall, streetLight: B.streetLight, powerPole: B.powerPole, telegraphPole: B.telegraphPole, billboard: B.billboard, hwSign: B.hwSign, midrise: B.midrise, evHub: B.evHub, ruinShell: B.ruinShell, rubblePile: B.rubblePile, foundation: B.foundation, spire: B.spire, arch: B.arch, floatPad: B.floatPad, basaltColumns: B.basaltColumns, turbineTower: B.turbineTower, prop: B.prop, ...B2 };
 const DEBRIS = { wood: { density: 520, size: [2.4, 0.22, 0.06], tint: [0.45, 0.35, 0.25], mat: 'wood', aux: [2, 0.5, 1, 0] }, brick: { density: 1800, size: [0.7, 0.4, 0.5], tint: [0.42, 0.18, 0.11], mat: 'masonry', aux: [0, 0, 0, 0] }, stucco: { density: 1600, size: [0.9, 0.5, 0.7], tint: [0.65, 0.6, 0.52], mat: 'plaster', aux: [0, 0, 0, 0] }, concrete: { density: 2200, size: [1.2, 0.6, 1.0], tint: [0.55, 0.55, 0.53], mat: 'plaster', aux: [1, 0, 0, 0] }, steel: { density: 900, size: [1.6, 0.08, 1.0], tint: [0.4, 0.41, 0.42], mat: 'metal', aux: [0, 0.5, 0.7, 0.3] }, pole: { density: 600, size: [1.8, 0.25, 0.25], tint: [0.3, 0.3, 0.3], mat: 'metal', aux: [0, 0.5, 0.6, 0.2] } };
 const PI = Math.PI;
 
@@ -86,172 +88,7 @@ export class Structures {
     return best && best.length === 3 ? best[1] : this.sys.valley.heightAt(best[0], best[1]);
   }
 
-  plan(eraId) {
-    const T = this.town(), sites = [];
-    const add = (key, type, x, z, yaw, p = {}, tags = []) => sites.push({ key, type, x, z, yaw, p, tags });
-    const R = rng(hashStr('plan' + eraId));
-    if (eraId === 'hadean') {
-      const ctx = this.sys.eraContext('hadean');
-      ctx.volcanoes.forEach((v, i) => { for (let j = 0; j < 2; j++) { const a = i * 2.1 + j * 2.6, r = v.r * (0.95 + j * 0.15); add(`basalt:${i}:${j}`, 'basaltColumns', v.x + Math.cos(a) * r, v.z + Math.sin(a) * r, a, { n: 26, h: 7 + j * 4, r: 10 + j * 3, rng: rng(i * 31 + j) }); } });
-      const lake = this.sys.region('lake');
-      if (lake) lake.poly.forEach((p, i) => { if (i % 9 === 0) add(`basaltL:${i}`, 'basaltColumns', p[0] * 1.08 + (lake.center ? -lake.center[0] * 0.08 : 0), p[1] * 1.08 + (lake.center ? -lake.center[1] * 0.08 : 0), i, { n: 18, h: 6, r: 8, rng: rng(500 + i) }); });
-      return sites;
-    }
-    if (eraId === 'dino' || !T) return sites;
-    const railX = T.rail ? this.lineX(T.rail, T.p0[1]) : null, hwX = T.hwy ? this.lineX(T.hwy, T.p0[1]) : null;
-    const mainZ = T.p0[1];
-    const old = [
-      [1, 70, 13, 'falseFront', { stories: 2, sign: 'GENERAL STORE', color: [0.62, 0.55, 0.42], trim: C.white, pat: 0 }],
-      [1, 85, 10, 'falseFront', { sign: 'BARBER', color: C.white, trim: C.red, pat: 0 }],
-      [1, 104, 17, 'hotel', { sign: 'HOTEL', color: [0.75, 0.7, 0.6], trim: C.green }],
-      [1, 121, 11, 'falseFront', { sign: 'ASSAY OFFICE', bare: true, color: C.bare, trim: C.bare, pat: 1 }],
-      [1, 134, 12, 'bank', { sign: 'BANK' }],
-      [1, 164, 11, 'falseFront', { sign: 'POST OFFICE', color: [0.5, 0.56, 0.6], trim: C.white, pat: 0 }],
-      [1, 178, 13, 'falseFront', { stories: 2, sign: 'DRY GOODS', color: [0.55, 0.42, 0.3], trim: C.cream, pat: 0 }],
-      [1, 196, 10, 'falseFront', { sign: 'SHERIFF', bare: true, color: C.bare, pat: 1 }],
-      [-1, 72, 15, 'falseFront', { stories: 2, sign: 'SALOON', color: [0.45, 0.2, 0.12], trim: C.cream, pat: 0, rail: true }],
-      [-1, 89, 10, 'falseFront', { sign: 'GZOWO SPRINGS', color: C.white, trim: C.blue, pat: 0 }],
-      [-1, 103, 12, 'falseFront', { sign: 'DRY GOODS', bare: true, color: C.bare, pat: 1 }],
-      [-1, 118, 10, 'falseFront', { sign: 'BARBER', color: [0.6, 0.62, 0.55], trim: C.white, pat: 0 }],
-      [-1, 132, 12, 'falseFront', { stories: 2, sign: 'HOTEL', color: [0.7, 0.6, 0.45], trim: C.green, pat: 0 }],
-      [-1, 166, 13, 'falseFront', { sign: 'BLACKSMITH', bare: true, color: C.bare, pat: 1 }],
-      [-1, 181, 10, 'falseFront', { sign: 'POST OFFICE', color: C.white, trim: C.red, pat: 0 }],
-    ];
-    const signs2026 = { 'GENERAL STORE': 'GENERAL STORE', BARBER: 'CAFE', HOTEL: 'HOTEL', 'ASSAY OFFICE': 'ANTIQUES', BANK: 'BANK', 'POST OFFICE': 'POST OFFICE', 'DRY GOODS': 'BREWING CO', SHERIFF: 'SHERIFF', SALOON: 'SALOON', 'GZOWO SPRINGS': 'GZOWO SPRINGS', BLACKSMITH: 'DINER' };
-    const paints = [C.white, [0.62, 0.72, 0.68], [0.75, 0.62, 0.42], [0.55, 0.22, 0.15], [0.72, 0.68, 0.6], [0.36, 0.46, 0.52], [0.8, 0.74, 0.58]];
-    const growth = (eraId === '2026' || eraId === '2080' || eraId === 'ruins');
-    if (eraId === '1885' || eraId === '2026' || eraId === '2080' || eraId === 'ruins') {
-      old.forEach(([side, s, w, type, p], i) => {
-        if (!T.free(s, w)) return;
-        const a = T.at(s, side, 3.2), key = `town:${i}`;
-        if (eraId === '1885') add(key, type, a.x, a.z, a.yaw, { ...p, w, seed: i, lit: 0.25, wear: 0.35 }, ['old']);
-        else if (eraId === '2026' || eraId === '2080') add(key, type, a.x, a.z, a.yaw, { ...p, w, seed: i, lit: 0.7, wear: 0.06, bare: false, color: type === 'bank' ? C.brick : paints[i % paints.length], sign: signs2026[p.sign] || p.sign, glow: 0.8, roofTint: [0.32, 0.33, 0.35] }, ['old']);
-        else add(key, type === 'bank' ? 'ruinShell' : 'rubblePile', a.x, a.z, a.yaw, type === 'bank' ? { w, d: 15, h: 5, mat: 'masonry', tint: C.brick, pat: 0, rng: rng(i) } : { w, d: 12, n: 10, tint: [0.3, 0.26, 0.2], mat: 'wood', rng: rng(i) }, ['old']);
-      });
-      const cs = T.cross.length ? T.cross[T.cross.length - 1].s : 300;
-      const ch = T.at(Math.min(cs - 30, 330), 1, 6);
-      if (eraId === '1885') add('town:church', 'church', ch.x, ch.z, ch.yaw, {}, ['old']);
-      if (eraId === '2026' || eraId === '2080') add('town:church', 'church', ch.x, ch.z, ch.yaw, { wear: 0.05 }, ['old']);
-      const lv = T.at(212, -1, 14);
-      if (eraId === '1885') add('town:livery', 'barn', lv.x, lv.z, lv.yaw, { sign: 'LIVERY' }, ['old']);
-      if (eraId === '2026') add('town:livery', 'barn', lv.x, lv.z, lv.yaw, { sign: 'ANTIQUES', wear: 0.15 }, ['old']);
-      if (eraId === '2080') add('town:livery', 'barn', lv.x, lv.z, lv.yaw, { sign: 'VERTICAL FARM', wear: 0.05, color: [0.4, 0.12, 0.08] }, ['old']);
-      if (railX !== null) {
-        const dep = { x: railX - 6.6, z: mainZ + T.hw + 3 + 20 + 3 }, ry = PI / 2;
-        if (eraId === '1885') add('site:depot', 'depot', dep.x, dep.z, ry, { sign: 'GZOWO SPRINGS' }, ['old', 'rail']);
-        if (eraId === '2026' || eraId === '2080') add('site:depot', 'depot', dep.x, dep.z, ry, { sign: 'HISTORIC DEPOT MUSEUM', wear: 0.05, color: [0.7, 0.55, 0.25], glow: 0.6 }, ['old', 'rail']);
-        if (eraId === 'ruins') add('site:depot', 'rubblePile', dep.x, dep.z, ry, { w: 20, d: 7, n: 16, tint: [0.32, 0.26, 0.2], mat: 'wood', rng: rng(77) }, ['old']);
-        if (eraId === '1885') {
-          add('site:watertower', 'waterTower', railX - 7.5, mainZ - T.hw - 16, 0, { sign: 'WATER' }, ['rail']);
-          add('site:loco', 'locomotive', railX, mainZ + T.hw + 60, 0, { sign: 'GZOWO SPRINGS', lamp: 1.2 }, ['rail', 'train']);
-          add('site:car1', 'railcar', railX, mainZ + T.hw + 42.5, 0, {}, ['rail', 'train']);
-          add('site:car2', 'railcar', railX, mainZ + T.hw + 30.9, 0, { passenger: true }, ['rail', 'train']);
-        }
-        if (eraId === '2026' || eraId === '2080') { const lp = T.at(232, -1, 9); add('site:loco', 'locomotive', lp.x, lp.z, lp.yaw + PI / 2, { sign: 'GZOWO SPRINGS', rust: 0.0 }, ['old']); }
-        if (eraId === 'ruins') { const lp = T.at(232, -1, 9); add('site:loco', 'locomotive', lp.x, lp.z, lp.yaw + PI / 2 + 0.2, { rust: 1 }, ['old']); }
-      }
-      if (eraId === '1885' || eraId === '2026' || eraId === '2080') {
-        const PR = rng(hashStr('props' + eraId));
-        old.forEach(([side, s, w, type], i) => {
-          if (!T.free(s, w)) return;
-          const at = (off, along) => T.at(s + along, side, off);
-          if (eraId === '1885') {
-            const a = at(-0.9, -w * 0.3), b = at(-0.9, w * 0.32);
-            if (['hotel', 'falseFront'].includes(type) && i % 2 === 0) add(`prop:hitch:${i}`, 'prop', a.x, a.z, a.yaw, { kind: 'hitch' }, ['old', 'prop']);
-            if (i % 3 === 1) add(`prop:trough:${i}`, 'prop', a.x, a.z, a.yaw, { kind: 'trough' }, ['old', 'prop']);
-            if (i % 3 !== 1) add(`prop:barrels:${i}`, 'prop', b.x, b.z, b.yaw + 0.1, { kind: PR() < 0.5 ? 'barrels' : 'crates', rng: rng(i + 7) }, ['old', 'prop']);
-            if (i % 5 === 2) { const c = at(-3.2, 2); add(`prop:wagon:${i}`, 'prop', c.x, c.z, c.yaw + Math.PI / 2 + (PR() - 0.5) * 0.3, { kind: 'wagon', cover: i % 2 === 0 }, ['old', 'prop']); }
-          } else if (i % 2 === 0) {
-            const a = at(-0.9, -w * 0.25), b = at(-0.9, w * 0.3);
-            add(`prop:bench:${i}`, 'prop', a.x, a.z, a.yaw, { kind: 'bench' }, ['prop']);
-            add(`prop:bin:${i}`, 'prop', b.x, b.z, b.yaw, { kind: eraId === '2080' ? 'planter' : 'bin' }, ['prop']);
-          }
-        });
-        if (eraId === '1885') { const lv = T.at(212, -1, 3); add('prop:hay:1', 'prop', lv.x, lv.z, lv.yaw, { kind: 'hay', rng: rng(3) }, ['old', 'prop']); }
-      }
-      if (eraId === '1885') {
-        const cabins = [[150, 1, 40], [150, 1, 75], [150, -1, 40], [150, -1, 80], [270, 1, 45], [270, -1, 50], [290, 1, 90], [250, -1, 95], [320, -1, 40], [360, 1, 60]];
-        cabins.forEach(([s, side, off], i) => { const a = T.at(s, side, off); if (!T.free(s, 10)) a.x += T.d[0] * 14; add(`cabin:${i}`, 'cabin', a.x, a.z, a.yaw + (i % 2 ? 0.25 : -0.2), { porch: i % 3 !== 2, seed: i, lit: 0.2, bare: i % 2 === 0, color: i % 2 ? C.white : C.bare, pat: i % 2 ? 0 : 1, roofTint: i % 3 ? C.shingle : C.tin, roofPat: i % 3 ? 1 : 0 }, ['old']); });
-        const wm = T.at(240, -1, 70); add('site:windmill', 'windmill', wm.x, wm.z, 0.4, {}, []);
-      }
-      if (growth) {
-        const lots = [];
-        for (const c of T.cross) for (const side of [-1, 1]) for (let k = 0; k < 4; k++) lots.push({ s: c.s, side, off: 30 + k * 34, cross: c });
-        lots.forEach((L, i) => {
-          if (R() < 0.15) return;
-          for (const ss of [-1, 1]) {
-            const cx = T.p0[0] + T.d[0] * (L.s + ss * (L.cross.hw + 9)) + T.n[0] * L.side * (T.hw + L.off), cz = T.p0[1] + T.d[1] * (L.s + ss * (L.cross.hw + 9)) + T.n[1] * L.side * (T.hw + L.off);
-            const yaw = Math.atan2(-ss * T.d[0], -ss * T.d[1]);
-            const key = `lot:${i}:${ss}`;
-            if (eraId === '2026') add(key, 'ranch', cx + T.d[0] * ss * 4, cz + T.d[1] * ss * 4, yaw, { w: 13 + R() * 4, d: 9 + R() * 2, color: [C.stucco, C.stucco2, [0.78, 0.74, 0.66], [0.6, 0.62, 0.58]][i % 4], seed: i, lit: 0.6, roofPat: i % 3 === 0 ? 1 : 2, roofTint: i % 3 === 0 ? [0.25, 0.22, 0.2] : C.tile }, ['growth']);
-            if (eraId === '2080' && (i + (ss > 0 ? 1 : 0)) % 2 === 0) add(key, 'midrise', cx + T.d[0] * ss * 10, cz + T.d[1] * ss * 10, yaw, { w: 22, d: 16, floors: 3 + (i % 3), seed: i, sign: i % 5 === 0 ? 'GZOWO SPRINGS 2080' : null }, ['growth']);
-            if (eraId === 'ruins' && (i + (ss > 0 ? 1 : 0)) % 2 === 0) add(key, 'ruinShell', cx + T.d[0] * ss * 10, cz + T.d[1] * ss * 10, yaw, { w: 22, d: 16, h: (3 + (i % 3)) * 3.6 * 0.8, rng: rng(i * 7 + (ss > 0 ? 1 : 0)), tint: [0.62, 0.62, 0.6], pat: 2, slabs: 2 }, ['growth']);
-          }
-        });
-        const fuel = T.at(Math.max(60, (T.cross[0] ? T.cross[0].s : 140) - 70), -1, 60);
-        if (eraId === '2026') add('site:fuel', 'gasStation', fuel.x, fuel.z, fuel.yaw, { sign1: 'GZOWO FUEL', sign2: '88 MART' }, ['growth']);
-        if (eraId === '2080') add('site:fuel', 'evHub', fuel.x, fuel.z, fuel.yaw, { sign: 'CHARGE  2 MIN' }, ['growth']);
-        if (eraId === 'ruins') add('site:fuel', 'rubblePile', fuel.x, fuel.z, fuel.yaw, { w: 20, d: 14, n: 18, tint: [0.5, 0.5, 0.5], mat: 'metal', aux: [0, 0.8, 0.5, 1], rng: rng(9) }, ['growth']);
-        const mall = T.at(Math.max(60, (T.cross[0] ? T.cross[0].s : 140) - 70), 1, 62);
-        if (eraId === '2026') add('site:mall', 'stripMall', mall.x, mall.z, mall.yaw, { w: 44, signs: ['DINER', 'HARDWARE', 'MOTEL'] }, ['growth']);
-        if (eraId === '2080') add('site:mall', 'midrise', mall.x, mall.z, mall.yaw, { w: 34, d: 18, floors: 6, sign: 'GZOWO TRANSIT', seed: 99 }, ['growth']);
-        if (eraId === 'ruins') add('site:mall', 'ruinShell', mall.x, mall.z, mall.yaw, { w: 34, d: 18, h: 16, rng: rng(99), tint: [0.62, 0.62, 0.6], pat: 2, slabs: 3 }, ['growth']);
-        const sch = T.at(T.cross.length ? T.cross[T.cross.length - 1].s + 40 : 400, 1, 40);
-        if (eraId === '2026') add('site:school', 'stripMall', sch.x, sch.z, sch.yaw, { w: 50, signs: ['SCHOOL', 'LIBRARY'], color: [0.72, 0.66, 0.58] }, ['growth']);
-        if (eraId === '2080') add('site:school', 'midrise', sch.x, sch.z, sch.yaw, { w: 40, d: 20, floors: 3, sign: 'LIBRARY', seed: 55 }, ['growth']);
-        if (eraId === 'ruins') add('site:school', 'ruinShell', sch.x, sch.z, sch.yaw, { w: 40, d: 20, h: 9, rng: rng(55), tint: [0.62, 0.62, 0.6], pat: 2 }, ['growth']);
-      }
-      if (eraId === '2026' || eraId === '2080' || eraId === 'ruins') {
-        for (let s = 40; s < Math.min(T.len - 20, 420); s += 32) for (const side of [-1, 1]) {
-          if (!T.free(s, 3)) continue;
-          const a = T.at(s, side, 0.6);
-          if (eraId === 'ruins') { if (R() < 0.35) add(`light:${s}:${side}`, 'streetLight', a.x, a.z, a.yaw + (R() - 0.5) * 0.6, { dark: true, rust: 1, h: 4 + R() * 4.5 }, []); }
-          else add(`light:${s}:${side}`, 'streetLight', a.x, a.z, a.yaw, { style: eraId === '2080' ? 'future' : 'classic' }, []);
-        }
-      }
-    }
-    if (T.hwy && (eraId === '2026' || eraId === '2080' || eraId === 'ruins')) {
-      const hw = T.hwy;
-      const sideX = (z) => this.lineX(hw, z) + (hw.width / 2 + 9);
-      if (eraId === '2026') {
-        let prev = null;
-        for (let z = -2000; z <= 2000; z += 55) {
-          const x = sideX(z);
-          add(`pp:${z}`, 'powerPole', x, z, PI / 2, { transformer: z % 440 === 0 }, []);
-          if (prev) sites.push({ key: `wire:${z}`, type: 'wires', a: prev, b: [x, z], tags: [] });
-          prev = [x, z];
-        }
-        for (const [z, sign, yaw] of [[-1150, 'VISIT GZOWO SPRINGS', PI], [-650, 'ROADSTER 88  0-60 IN 1.1 S', PI], [450, 'VISIT GZOWO SPRINGS', 0], [1050, 'ROADSTER 88  0-60 IN 1.1 S', 0]]) add(`bb:${z}`, 'billboard', sideX(z) + 22, z, yaw, { sign }, []);
-        add('hws:1', 'hwSign', sideX(mainZ - 600) - 3, mainZ - 600, PI, { sign: 'GZOWO SPRINGS  EXIT 88' }, []);
-        add('hws:2', 'hwSign', sideX(mainZ - 280) - 3, mainZ - 280, PI, { sign: 'MAIN ST  NEXT LEFT' }, []);
-      }
-      if (eraId === '2080' || eraId === 'ruins') {
-        const mx = (z) => this.lineX(hw, z) + hw.width / 2 + 14;
-        for (let z = -2000; z <= 2000; z += 40) sites.push({ key: `mag:${z}`, type: 'maglev', x: mx(z), z, z1: z + 40, x1: mx(z + 40), tags: [], ruin: eraId === 'ruins' });
-        for (const [z, sign, yaw] of [[-900, 'GZOWO TRANSIT', PI], [700, 'CHARGE  2 MIN', 0]]) if (eraId === '2080') add(`bb:${z}`, 'billboard', mx(z) + 26, z, yaw, { sign, glow: 1.5 }, []);
-      }
-    }
-    if (T.rail && eraId !== 'scifi') {
-      sites.push({ key: 'rail', type: 'rail', era: eraId, tags: [] });
-      if (eraId === '1885') for (let z = -2000; z <= 2000; z += 45) add(`tg:${z}`, 'telegraphPole', this.lineX(T.rail, z) + 5.5, z, PI / 2, {}, []);
-    }
-    if (eraId === '2080' || eraId === 'ruins') {
-      const spots = this.sys.pickSpots(9, 260, (x, z) => { const h = this.sys.valley.heightAt(x, z); if (h < 160) return -1; return h / 400 - Math.abs(Math.hypot(x, z) - 1500) / 3000; }, 3);
-      spots.forEach((p, i) => sites.push({ key: `turbine:${i}`, type: 'turbine', x: p.x, z: p.z, yaw: -0.6 + i * 0.07, tags: [], ruin: eraId === 'ruins', broken: eraId === 'ruins' && i % 3 !== 0 }));
-      const lake = this.sys.region('lake');
-      if (lake) sites.push({ key: 'solar', type: 'solar', poly: lake.poly, tags: [], ruin: eraId === 'ruins' });
-    }
-    if (eraId === 'scifi') {
-      const reg = T.reg; let cx = 0, cz = 0; for (const [x, z] of reg.poly) { cx += x; cz += z; } cx /= reg.poly.length; cz /= reg.poly.length;
-      [[0, 0, 165], [-120, 90, 120], [110, -100, 135], [-150, -120, 95], [140, 110, 105]].forEach(([dx, dz, h], i) => add(`spire:${i}`, 'spire', cx + dx, cz + dz, i * 0.7, { h, r: 7 + h / 30 }, ['scifi']));
-      if (T.hwy) add('arch:1', 'arch', this.lineX(T.hwy, 600), 600, 0, { r: 64 }, ['scifi']);
-      const mesa = this.sys.region('mesa');
-      if (mesa) { const c = mesa.center || [mesa.poly.reduce((a, p) => a + p[0], 0) / mesa.poly.length, mesa.poly.reduce((a, p) => a + p[1], 0) / mesa.poly.length]; add('pad:mesa', 'floatPad', c[0], c[1], 0, { r: 22, y: 0.4 }, ['scifi']); }
-      [[-450, 230, 32], [150, -300, 40], [-650, 900, 26]].forEach(([x, z, y], i) => add(`pad:${i}`, 'floatPad', x, z, 0, { r: 15, y }, ['scifi']));
-      for (const rd of this.sys.roadList) if (rd.kind === 'highway' || rd.type === 'loop' || rd.kind === 'road') sites.push({ key: 'glow:' + rd.id, type: 'roadglow', road: rd, tags: [] });
-    }
-    return sites;
-  }
+  plan(eraId) { return planSites(this, eraId, this.year === undefined ? 2026 : this.year, periodInfo(eraId)); }
 
   variant(site, eraId) {
     const ws = this.sys.worldState, st = ws.status(site.key, eraId);
@@ -260,7 +97,7 @@ export class Structures {
     if (st.same) return { ...site, type: 'rubblePile', p: { w: (site.p.w || 10) + 2, d: 12, n: 18, tint: site.p.color || [0.35, 0.3, 0.24], mat: 'wood', rng: rng(hashStr(site.key)) }, destroyed: true };
     if (site.type === 'rubblePile' || site.type === 'ruinShell') return null;
     if (site.tags.includes('prop')) return null;
-    if (site.tags.includes('old') || site.tags.includes('growth')) return { ...site, type: 'foundation', p: { w: site.p.w || 10, d: 14, plaque: ERA_INDEX[eraId] <= ERA_INDEX['2080'] }, destroyed: true };
+    if (site.tags.includes('old') || site.tags.includes('growth') || site.tags.includes('mission')) return { ...site, type: 'foundation', p: { w: site.p.w || site.p.l || 10, d: 14, plaque: PERIOD_INDEX[eraId] >= PERIOD_INDEX['1900'] && PERIOD_INDEX[eraId] <= PERIOD_INDEX['2300'] }, destroyed: true };
     return null;
   }
 
@@ -268,12 +105,13 @@ export class Structures {
     const t0 = performance.now();
     const turning = this.turning || { suppress: new Set() };
     const kit = new Kit(), meta = new Map();
+    kit.signRect = (n) => this.signs.rect(n);
     const V = this.sys.valley, land = this.sys.scatter.land;
     const sites = this.plan(eraId).filter((s) => !s.tags.some((t) => turning.suppress.has(t)) && !this.handed.has(s.key));
-    const extra = { rotors: [], solarCols: [] };
+    const extra = { rotors: [], solarCols: [] }, blocks = [];
     for (const raw of sites) {
-      if (raw.type === 'wires') { const hA = V.heightAt(raw.a[0], raw.a[1]) + 10.2, hB = V.heightAt(raw.b[0], raw.b[1]) + 10.2; kit.at(0, 0, 0, 0); B.wires(kit, raw.a, raw.b, hA, hB, [-1.15, 0, 1.15], 0.9); continue; }
-      if (raw.type === 'rail') { this.buildRail(kit, eraId); continue; }
+      if (raw.type === 'wires') { const wh = raw.h || 10.2, hA = V.heightAt(raw.a[0], raw.a[1]) + wh, hB = V.heightAt(raw.b[0], raw.b[1]) + wh; kit.at(0, 0, 0, 0); B.wires(kit, raw.a, raw.b, hA, hB, wh < 9 ? [-0.65, -0.25, 0.25, 0.65] : [-1.15, 0, 1.15], 0.9); continue; }
+      if (raw.type === 'rail') { this.buildRail(kit, raw); continue; }
       if (raw.type === 'maglev') { this.buildMaglev(kit, raw); continue; }
       if (raw.type === 'turbine') { this.buildTurbine(kit, raw, extra); continue; }
       if (raw.type === 'solar') { this.buildSolar(kit, raw, land); continue; }
@@ -290,7 +128,7 @@ export class Structures {
       meta.set(s.key, { site: s, info, y: foot.y });
       const f = info.foot || [5, 5, 0];
       const c = Math.cos(s.yaw || 0), sn = Math.sin(s.yaw || 0);
-      land.blockRect(s.x + sn * f[2], s.z + c * f[2], f[0], f[1], -(s.yaw || 0), 2.5);
+      const br = [s.x + sn * f[2], s.z + c * f[2], f[0], f[1], -(s.yaw || 0), 2.5]; blocks.push(br); land.blockRect(...br);
     }
     const geos = kit.build();
     const meshes = [];
@@ -301,7 +139,7 @@ export class Structures {
       meshes.push(mesh);
     }
     const ms = performance.now() - t0;
-    return { eraId, meshes, geos, ranges: kit.ranges, colliders: kit.colliders, meta, extra, ms, version: this.sys.worldState.version };
+    return { eraId, meshes, geos, ranges: kit.ranges, colliders: kit.colliders, meta, extra, ms, blocks, version: this.sys.worldState.version };
   }
 
   footprint(s) {
@@ -310,15 +148,16 @@ export class Structures {
     let hi = -Infinity;
     for (const [a, b] of [[-1, -1], [1, -1], [1, 1], [-1, 1], [0, 0]]) { const lx = a * f[0], lz = f[2] + b * f[1]; hi = Math.max(hi, V.heightAt(s.x + lx * c + lz * sn, s.z - lx * sn + lz * c)); }
     if (s.type === 'locomotive' || s.type === 'railcar') { const rail = this.town() && this.town().rail; if (rail && !s.tags.includes('old')) hi = this.roadY(rail, s.z) + 0.35; }
-    if (s.type === 'floatPad' || s.type === 'spire' || s.type === 'arch' || s.type === 'basaltColumns') hi = V.heightAt(s.x, s.z);
+    if (s.type === 'floatPad' || s.type === 'spire' || s.type === 'arch' || s.type === 'basaltColumns' || s.type === 'crystals' || s.type === 'iceSpire' || s.type === 'vents' || s.type === 'canoe' || s.type === 'sluice') hi = V.heightAt(s.x, s.z);
     return { y: hi };
   }
 
-  buildRail(kit, eraId) {
+  buildRail(kit, raw) {
     const rail = this.town().rail, P = rail.points || rail.pts.map((p) => [p[0], this.sys.valley.heightAt(p[0], p[1]), p[1]]);
-    const T = this.town(), near = (z) => Math.abs(z - T.p0[1]) < 500;
-    const rust = eraId === 'ruins' ? 1 : eraId === '1885' ? 0.4 : 0.25;
-    const tieT = eraId === '2026' || eraId === '2080' ? [0.5, 0.49, 0.46] : [0.24, 0.18, 0.12];
+    const T = this.town(), near = (z) => Math.abs(z - T.p0[1]) < 500, y = raw.year || 2026, ruin = raw.ruin;
+    const eraId = ruin ? 'ruins' : y < 1960 ? '1885' : '2026';
+    const rust = ruin ? 1 : y < 1900 ? 0.4 : 0.25;
+    const tieT = eraId === '2026' ? [0.5, 0.49, 0.46] : [0.24, 0.18, 0.12];
     kit.at(0, 0, 0, 0);
     let acc = 0;
     for (let i = 0; i < P.length - 1; i += 2) {
@@ -334,7 +173,7 @@ export class Structures {
       for (acc += L; acc > step; acc -= step) {
         const t = 1 - (acc - step) / L; if (t < 0 || t > 1) continue;
         if (eraId === 'ruins' && Math.sin(acc * 91.7 + i) > 0.3) continue;
-        kit.obox(eraId === '2026' || eraId === '2080' ? 'plaster' : 'wood', a[0] + dx * t, a[1] + dy * t + 0.3, a[2] + dz * t, 2.5, 0.16, 0.24, 0, yaw, 0, { tint: tieT, aux: eraId === '2026' || eraId === '2080' ? [1, 0, 0, 0] : [2, 0.6, 1, 0] });
+        kit.obox(eraId === '2026' ? 'plaster' : 'wood', a[0] + dx * t, a[1] + dy * t + 0.3, a[2] + dz * t, 2.5, 0.16, 0.24, 0, yaw, 0, { tint: tieT, aux: eraId === '2026' ? [1, 0, 0, 0] : [2, 0.6, 1, 0] });
       }
     }
   }
@@ -416,12 +255,21 @@ export class Structures {
     }
   }
 
-  enter(eraId, turning) {
+  enter(eraId, turning, year) {
     this.leave();
-    this.eraId = eraId; this.turning = turning;
+    this.eraId = eraId; this.turning = turning; this.year = year === undefined ? 2026 : year;
     const land = this.sys.scatter.land;
     land.clearBlock();
-    const B0 = this.build(eraId);
+    let sig = 0;
+    for (const [, list] of this.sys.worldState.changes) for (const c of list) if (c.state === 'destroyed' && c.year <= this.year) sig = (sig * 31 + c.t) >>> 0;
+    const ck = [eraId, this.sys.detailKey, sig, [...this.handed].sort().join(','), (turning && turning.notes ? turning.notes.join(',') : '')].join('|');
+    let B0 = this.cache.get(ck);
+    if (B0) { this.cache.delete(ck); this.cache.set(ck, B0); for (const br of B0.blocks) land.blockRect(...br); B0.ms = 0; }
+    else {
+      B0 = this.build(eraId); B0.cached = true;
+      this.cache.set(ck, B0);
+      while (this.cache.size > 6) { const [k0, old] = this.cache.entries().next().value; this.cache.delete(k0); if (old !== this.cur) for (const m of old.meshes) m.geometry.dispose(); }
+    }
     this.cur = B0;
     for (const m of B0.meshes) this.group.add(m);
     const R = this.sys.game.R, w = this.sys.game.phys.world;
@@ -441,18 +289,7 @@ export class Structures {
     this.buildRubble();
   }
 
-  plantFlora(eraId) {
-    const T = this.town(), list = [];
-    if (T && (eraId === '2026' || eraId === '2080')) {
-      for (let s = 56; s < Math.min(T.len - 20, 420); s += 32) for (const side of [-1, 1]) {
-        if (!T.free(s + 16, 4)) continue;
-        const a = T.at(s + 16, side, 1.2), y = this.sys.valley.heightAt(a.x, a.z);
-        list.push({ sp: eraId === '2026' ? 'palm' : 'oak', key: `street:${s}:${side}`, x: a.x, y, z: a.z, s: eraId === '2026' ? 0.85 + ((s * 7) % 5) * 0.06 : 0.55, sy: eraId === '2026' ? 0.85 + ((s * 13) % 7) * 0.05 : 0.55, rot: s * 1.7 });
-      }
-      if (eraId === '2026' && T.hwy) for (let z = -1600; z < 1600; z += 14) { if (Math.abs(z - T.p0[1]) < 520) continue; const x = this.lineX(T.hwy, z) - T.hwy.width / 2 - 70; list.push({ sp: 'eucalyptus', key: `euc:${z}`, x, y: this.sys.valley.heightAt(x, z), z, s: 0.8 + ((z * 7) % 9) / 30, sy: 0.85 + ((z * 3) % 7) / 25, rot: z }); }
-    }
-    this.sys.scatter.plant(eraId, list);
-  }
+  plantFlora(eraId) { this.sys.scatter.plant(eraId, plantedFor(this, eraId, this.year, periodInfo(eraId))); }
 
   setupRotors(list) {
     if (!list.length) { if (this.rotors) this.rotors.mesh.visible = false; return; }
@@ -475,7 +312,7 @@ export class Structures {
 
   leave() {
     const w = this.sys.game.phys.world;
-    if (this.cur) for (const m of this.cur.meshes) { this.group.remove(m); m.geometry.dispose(); }
+    if (this.cur) for (const m of this.cur.meshes) { this.group.remove(m); if (!this.cur.cached) m.geometry.dispose(); }
     this.cur = null;
     for (const c of this.colliders) if (c.col) w.removeCollider(c.col, false);
     this.colliders = [];
@@ -623,4 +460,4 @@ export class Structures {
   debug() { return this.cur ? { meshes: this.cur.meshes.length, colliders: this.colliders.length, buildMs: +this.cur.ms.toFixed(1), sites: this.cur.meta.size, debris: this.debris.length } : {}; }
 }
 
-const BUILD_FOOT = { prop: [0.8, 0.5, 0], falseFront: [6, 9, -8], hotel: [8, 10, -9], bank: [6, 8, -7], church: [5, 9, -9], barn: [7, 10, -10], cabin: [4, 3.5, -3], depot: [11, 4, -3.7], waterTower: [3, 3, 0], windmill: [1, 1, 0], ranch: [7, 5, -5], gasStation: [9, 9, 4], stripMall: [21, 8, -7], midrise: [11, 8, -8], evHub: [15, 7, 7], ruinShell: [11, 8, -8], rubblePile: [5, 5, 0], foundation: [5, 7, -7], streetLight: [0.3, 0.3, 0], powerPole: [0.3, 0.3, 0], telegraphPole: [0.3, 0.3, 0], billboard: [5, 1, 0], hwSign: [3, 0.5, 0], spire: [10, 10, 0], arch: [10, 4, 0], floatPad: [4, 4, 0], basaltColumns: [6, 6, 0], locomotive: [1.5, 9, -2], railcar: [1.5, 5.5, 0], turbineTower: [2, 2, 0] };
+const BUILD_FOOT = { tuleHut: [2.6, 2.6, -2.4], granary: [1, 1, 0], sweatLodge: [4.5, 4.5, -4.2], dryingRack: [1.8, 0.4, 0], canoe: [0.5, 2.5, 0], firePit: [1, 1, 0], missionChurch: [8, 17, -16], arcade: [15, 6, -2], adobeWall: [6, 0.5, 0], adobeHouse: [5, 3.5, -3], corral: [9, 7, -6], tent: [1.8, 2.2, -2], bigTent: [4.6, 7, -7], sluice: [0.8, 7, 0], brickBlock: [6, 9, -7], theatre: [9, 11, -10], derrick: [4, 4, 0], oldStation: [4.5, 6, 0.5], bungalow: [5.5, 6, -3], diner: [9, 6, -3], motel: [24, 6, -2], driveIn: [16, 30, 24], bigBox: [36, 26, -25], cellTower: [1.5, 1.5, 0], tower: [13, 14, -11], crystals: [6, 6, 0], iceSpire: [10, 10, 0], vents: [6, 6, 0], smallLamp: [0.3, 0.3, 0], cobraLight: [0.3, 0.3, 0], prop: [0.8, 0.5, 0], falseFront: [6, 9, -8], hotel: [8, 10, -9], bank: [6, 8, -7], church: [5, 9, -9], barn: [7, 10, -10], cabin: [4, 3.5, -3], depot: [11, 4, -3.7], waterTower: [3, 3, 0], windmill: [1, 1, 0], ranch: [7, 5, -5], gasStation: [9, 9, 4], stripMall: [21, 8, -7], midrise: [11, 8, -8], evHub: [15, 7, 7], ruinShell: [11, 8, -8], rubblePile: [5, 5, 0], foundation: [5, 7, -7], streetLight: [0.3, 0.3, 0], powerPole: [0.3, 0.3, 0], telegraphPole: [0.3, 0.3, 0], billboard: [5, 1, 0], hwSign: [3, 0.5, 0], spire: [10, 10, 0], arch: [10, 4, 0], floatPad: [4, 4, 0], basaltColumns: [6, 6, 0], locomotive: [1.5, 9, -2], railcar: [1.5, 5.5, 0], turbineTower: [2, 2, 0] };

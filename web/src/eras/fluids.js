@@ -1,4 +1,4 @@
-// Roadster 88 era fluids: water and lava surfaces filling valley regions at an era level (dino lake, 1885 shallow lake, hadean lava lake), with animated ripples, crust and glow.
+// Roadster 88 era fluids: water and lava surfaces filling valley regions at a period level (Archean and Cambrian seas, Carboniferous swamp, dino lake, 1885 shallow lake, Hadean lava lake), tinted per period, with animated ripples, crust and glow.
 import * as THREE from 'three/webgpu';
 import { vec3, vec2, float, positionWorld, time, mx_noise_float, mx_worley_noise_vec2, smoothstep, mix, bumpMap, uniform, max, pow } from 'three/tsl';
 
@@ -46,14 +46,10 @@ export class Fluids {
     this.meshes = [];
   }
 
-  set(list, eraId) {
+  set(list, P) {
     for (const m of this.meshes) { this.group.remove(m); m.geometry.dispose(); }
     this.meshes = [];
-    const tints = {
-      dino: [[0.01, 0.04, 0.035], [0.05, 0.09, 0.05], 0.15], 1885: [[0.02, 0.045, 0.05], [0.07, 0.08, 0.06], 0.25],
-      ruins: [[0.015, 0.035, 0.025], [0.05, 0.07, 0.035], 0.4], scifi: [[0.005, 0.02, 0.04], [0.02, 0.05, 0.08], 0],
-    };
-    const t = tints[eraId] || tints.dino;
+    const t = P.water;
     this.U.deep.value.setRGB(...t[0]); this.U.shallow.value.setRGB(...t[1]); this.U.murk.value = t[2];
     for (const f of list) {
       const poly = f.mesh || f.poly;

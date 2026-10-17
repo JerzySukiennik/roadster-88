@@ -162,7 +162,7 @@ export const BRAINS = {
         a.want = dd > 12 ? runSpeed(K) * (0.92 + 0.08 * a.seed) : slow ? trotSpeed(K) * 0.8 : runSpeed(K);
         faceCar(sys, a, 0.9);
         a.cool = (a.cool || rnd(1, 3)) - dt;
-        if (t.d < 9 && a.cool < 0 && K.clips.pounce && !a.action) { a.act('pounce'); a.cool = rnd(2.5, 5); a.speed = Math.max(a.speed, 9); sys.emit('call', a); }
+        if (t.d < 9 && a.cool < 0 && K.clips.pounce && !a.action) { a.act('pounce'); a.cool = rnd(2.5, 5); a.speed = Math.max(a.speed, 9); sys.emit('call', a); sys.emit('pounce', a); }
         if (Math.random() < dt * 0.15 && K.clips.roar && !a.action) { a.act('roar'); sys.emit('call', a); }
         steerGround(sys, a, dt, { turn: 3.2, accel: 9, arrive: 0.2 });
         return;

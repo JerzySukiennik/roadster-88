@@ -1,8 +1,9 @@
-// Roadster 88 causality store: persistent changes keyed by place (destroyed, felled, moved) stamped with the era they happened in and a logical clock, resolved per era so the past rewrites the future, plus flags and a registry for scripted turning points.
-import { ERA_INDEX } from './presets.js';
+// Roadster 88 causality store: persistent changes keyed by place (destroyed, felled, moved) stamped with the period and the exact year they happened in and a logical clock, resolved per year so the past rewrites the future, plus flags and a registry for scripted turning points.
+import { PERIOD_INDEX } from './periods.js';
 
 export class WorldState {
-  constructor() {
+  constructor(now = () => 2026) {
+    this.now = now;
     this.changes = new Map();
     this.flags = new Map();
     this.turningPoints = [];
@@ -12,7 +13,7 @@ export class WorldState {
   }
 
   record(key, eraId, state, data = {}) {
-    const c = { key, era: ERA_INDEX[eraId], eraId, t: ++this.clock, state, data };
+    const c = { key, era: PERIOD_INDEX[eraId], eraId, year: this.now(), t: ++this.clock, state, data };
     let list = this.changes.get(key);
     if (!list) this.changes.set(key, (list = []));
     list.push(c);
@@ -22,19 +23,18 @@ export class WorldState {
     return c;
   }
 
-  effective(key, eraId) {
+  effective(key, eraId, year = this.now()) {
     const list = this.changes.get(key);
     if (!list) return null;
-    const E = ERA_INDEX[eraId];
     let best = null;
-    for (const c of list) if (c.era <= E && (!best || c.t > best.t)) best = c;
+    for (const c of list) if (c.year <= year && (!best || c.t > best.t)) best = c;
     return best;
   }
 
-  status(key, eraId) {
-    const c = this.effective(key, eraId);
+  status(key, eraId, year) {
+    const c = this.effective(key, eraId, year);
     if (!c) return { state: 'intact', since: null };
-    return { state: c.state, since: c.eraId, same: c.era === ERA_INDEX[eraId], data: c.data, t: c.t };
+    return { state: c.state, since: c.eraId, year: c.year, same: c.eraId === eraId, data: c.data, t: c.t };
   }
 
   setFlag(id, eraId, value = true) {
@@ -54,7 +54,7 @@ export class WorldState {
   resolveTurningPoints(eraId) {
     const ctx = { suppress: new Set(), extra: [], notes: [] };
     for (const tp of this.turningPoints) {
-      if (tp.eras && !tp.eras.includes(eraId)) continue;
+      if (tp.eras && !tp.eras(eraId)) continue;
       if (tp.when(this, eraId)) { tp.apply(eraId, ctx, this); ctx.notes.push(tp.id); }
     }
     return ctx;
@@ -75,12 +75,21 @@ export class WorldState {
   }
 }
 
+const between = (a, b) => (id) => PERIOD_INDEX[id] > PERIOD_INDEX[a] && PERIOD_INDEX[id] <= PERIOD_INDEX[b];
+
 export function defaultTurningPoints(ws) {
   ws.registerTurningPoint({
     id: 'railroad_bypass',
-    label: 'The 1885 depot is destroyed, so the railroad bypasses the town and the newer districts are never built.',
-    eras: ['2026', '2080', 'ruins'],
-    when: (w, eraId) => { const s = w.status('site:depot', eraId); return s.state === 'destroyed' && s.since === '1885'; },
+    label: 'The depot is destroyed before 1900, so the railroad bypasses the town and the newer districts are never built.',
+    eras: between('1885', 'ruins'),
+    when: (w, eraId) => { const s = w.status('site:depot', eraId); return s.state === 'destroyed' && s.year < 1900; },
     apply: (eraId, ctx) => { ctx.suppress.add('growth'); },
+  });
+  ws.registerTurningPoint({
+    id: 'mission_lost',
+    label: 'The mission church is destroyed, so the town that grows around it keeps an empty plaza where the church stood.',
+    eras: between('mission', 'ruins'),
+    when: (w, eraId) => { const s = w.status('site:mission', eraId); return s.state === 'destroyed'; },
+    apply: (eraId, ctx) => { ctx.suppress.add('mission'); },
   });
 }

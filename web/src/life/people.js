@@ -1,12 +1,13 @@
 // Roadster 88 life people: town pedestrians on a sidewalk network built from the valley's streets (walk, turn at corners, cross the street after a look, stand and talk in small groups) with era temperament, and their reactions to the car (dodge a car coming at them, flee from speed, cower, gather round a stopped car to look, point, wave or cheer, and react to a time-jump arrival).
-import { TAU, wrap, clamp, rnd, steerGround } from './agents.js';
+import { TAU, wrap, clamp, rnd, random, steerGround } from './agents.js';
 
-const TEMPER = { 1885: { fear: 1.4, curious: 0.35, look: 'idle', arrive: 'cower' }, 2026: { fear: 1.0, curious: 0.8, look: 'point', arrive: 'point' }, 2080: { fear: 0.8, curious: 0.6, look: 'wave', arrive: 'point' }, scifi: { fear: 0.5, curious: 0.4, look: 'idle', arrive: 'idle' }, ruins: { fear: 1.6, curious: 0.2, look: 'idle', arrive: 'cower' } };
+import { TEMPER } from './plans.js';
 
 export class Sidewalks {
   constructor(valley) {
     this.segs = [];
-    const streets = (valley.roads || []).filter((r) => r.kind === 'street');
+    const inner = (r) => r.pts.every(([x, z]) => Math.abs(x) < 2100 && Math.abs(z) < 2100);
+    const streets = (valley.roads || []).filter((r) => r.kind === 'street' && inner(r));
     for (const r of streets) {
       const a = r.pts[0], b = r.pts[r.pts.length - 1], dx = b[0] - a[0], dz = b[1] - a[1], l = Math.hypot(dx, dz);
       const nx = dz / l, nz = -dx / l, off = r.width / 2 + 1.7;
@@ -32,7 +33,17 @@ export class Sidewalks {
 
   at(seg, t) { const S = this.segs[seg]; return [S.a[0] + (S.b[0] - S.a[0]) * t, S.a[1] + (S.b[1] - S.a[1]) * t]; }
   opposite(seg) { const S = this.segs[seg]; return this.segs.findIndex((o) => o.road === S.road && o.side !== S.side); }
-  random() { const i = Math.floor(Math.random() * this.segs.length); return { seg: i, t: Math.random() }; }
+  random() { const i = Math.floor(random() * this.segs.length); return { seg: i, t: random() }; }
+
+  nearest(x, z) {
+    let best = null;
+    for (let i = 0; i < this.segs.length; i++) {
+      const S = this.segs[i], dx = S.b[0] - S.a[0], dz = S.b[1] - S.a[1];
+      const t = clamp(((x - S.a[0]) * dx + (z - S.a[1]) * dz) / (S.len * S.len), 0, 1), d = Math.hypot(x - S.a[0] - dx * t, z - S.a[1] - dz * t);
+      if (!best || d < best.d) best = { seg: i, t, d };
+    }
+    return best;
+  }
 }
 
 export function walker(sys, a, dt) {
@@ -41,7 +52,7 @@ export function walker(sys, a, dt) {
   const walk = K.clips.walk.speed * (0.85 + 0.3 * a.seed), run = K.clips.flee ? K.clips.flee.speed : K.clips.run.speed;
   const t = S.visible ? S.threat(a.x, a.z) : null;
   if (t && t.d < 70 && a.state !== 'dodge' && a.state !== 'down') {
-    const danger = S.speed > 3.5 && t.ttc < 1.7 * T.fear && t.miss < 3.2;
+    const danger = !S.onFoot && S.speed > 3.5 && t.ttc < 1.7 * T.fear && t.miss < 3.2;
     if (danger && (a.dodgeCool || 0) <= 0) {
       const vx = S.vx / (t.v || 1), vz = S.vz / (t.v || 1), rx = a.x - S.x, rz = a.z - S.z;
       const side = (vx * rz - vz * rx) > 0 ? 1 : -1;
@@ -59,7 +70,7 @@ export function walker(sys, a, dt) {
     const k = Math.max(0, 1 - a.st / 0.55);
     a.speed = 0; a.want = 0;
     if (!a.body) { a.x += a.dodge[0] * 4.2 * k * dt; a.z += a.dodge[1] * 4.2 * k * dt; } else a.push = [a.dodge[0] * 4.2 * k, a.dodge[1] * 4.2 * k];
-    if (a.done()) { a.action = null; a.state = sys.eraId === '1885' && Math.random() < 0.5 ? 'cower' : 'flee'; a.st = 0; a.timer = rnd(4, 8); a.yaw = Math.atan2(a.dodge[0], a.dodge[1]); a.push = null; }
+    if (a.done()) { a.action = null; a.state = (TEMPER[sys.eraId] || TEMPER[2026]).arrive === 'cower' && Math.random() < 0.5 ? 'cower' : 'flee'; a.st = 0; a.timer = rnd(4, 8); a.yaw = Math.atan2(a.dodge[0], a.dodge[1]); a.push = null; }
     return;
   }
   if (a.state === 'flee') {
