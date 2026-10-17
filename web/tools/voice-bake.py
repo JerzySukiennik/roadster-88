@@ -134,13 +134,16 @@ def scene(ids):
             a = subprocess.run([FF, '-loglevel', 'error', '-i', os.path.join(out, L['id'] + '.mp3'), '-f', 's16le', '-ar', '24000', '-ac', '1', '-'], capture_output=True, check=True).stdout
             parts.append(a + b'\x00\x00' * int(24000 * (1.2 + 0.6 * (len(parts) % 2))))
         pcm = b''.join(parts)
-    else: pcm = gemini(prompt, voice)
+    else:
+        cache = os.path.join(root, 'Niepotrzebne', 'tts', 'scenes', key + '.pcm')
+        if os.path.exists(cache): pcm = open(cache, 'rb').read(); print(f'  scene {ids[0]}: reusing the cached Gemini take')
+        else:
+            pcm = gemini(prompt, voice)
+            if pcm: os.makedirs(os.path.dirname(cache), exist_ok=True); open(cache, 'wb').write(pcm)
     if not pcm: return 0
     with tempfile.TemporaryDirectory() as td:
         wav = os.path.join(td, 'scene.wav')
         subprocess.run([FF, '-loglevel', 'error', '-y', '-f', 's16le', '-ar', '24000', '-ac', '1', '-i', '-', wav], input=pcm, check=True)
-        keep = os.path.join(root, 'Niepotrzebne', 'tts', 'scenes'); os.makedirs(keep, exist_ok=True)
-        subprocess.run(['cp', wav, os.path.join(keep, ids[0] + '.wav')], check=True)
         if asr[0] is None:
             import whisper
             asr[0] = whisper.load_model('base.en')
