@@ -1,0 +1,322 @@
+{
+ "trex": {
+  "file": "trex.bin",
+  "bytes": 239112,
+  "lods": [
+   9000,
+   2400,
+   600
+  ],
+  "module": "trex.js"
+ },
+ "triceratops": {
+  "file": "triceratops.bin",
+  "bytes": 215248,
+  "lods": [
+   7992,
+   2196,
+   556
+  ],
+  "module": "triceratops.js"
+ },
+ "bird": {
+  "file": "bird.bin",
+  "bytes": 43856,
+  "lods": [
+   1600,
+   420,
+   120
+  ],
+  "module": "bird.js"
+ },
+ "quetzal": {
+  "file": "quetzal.bin",
+  "bytes": 135292,
+  "lods": [
+   5000,
+   1400,
+   358
+  ],
+  "module": "quetzal.js"
+ },
+ "raptor": {
+  "file": "raptor.bin",
+  "bytes": 184908,
+  "lods": [
+   6998,
+   1800,
+   418
+  ],
+  "module": "raptor.js"
+ },
+ "sauropod": {
+  "file": "sauropod.bin",
+  "bytes": 243576,
+  "lods": [
+   9000,
+   2400,
+   700
+  ],
+  "module": "sauropod.js"
+ },
+ "hadrosaur": {
+  "file": "hadrosaur.bin",
+  "bytes": 197608,
+  "lods": [
+   7472,
+   2000,
+   490
+  ],
+  "module": "hadrosaur.js"
+ },
+ "deer": {
+  "file": "deer.bin",
+  "bytes": 134812,
+  "lods": [
+   5000,
+   1300,
+   330
+  ],
+  "module": "deer.js"
+ },
+ "human_f2080": {
+  "file": "human_f2080.bin",
+  "bytes": 141508,
+  "lods": [
+   5198,
+   1300,
+   500
+  ],
+  "module": "human.js"
+ },
+ "human_f2026": {
+  "file": "human_f2026.bin",
+  "bytes": 140264,
+  "lods": [
+   5200,
+   1300,
+   454
+  ],
+  "module": "human.js"
+ },
+ "human_scifi": {
+  "file": "human_scifi.bin",
+  "bytes": 150376,
+  "lods": [
+   5198,
+   1298,
+   946
+  ],
+  "module": "human.js"
+ },
+ "canid": {
+  "file": "canid.bin",
+  "bytes": 121760,
+  "lods": [
+   4500,
+   1200,
+   298
+  ],
+  "module": "canid.js"
+ },
+ "human_m2026": {
+  "file": "human_m2026.bin",
+  "bytes": 137924,
+  "lods": [
+   5200,
+   1300,
+   334
+  ],
+  "module": "human.js"
+ },
+ "human_m2080": {
+  "file": "human_m2080.bin",
+  "bytes": 141684,
+  "lods": [
+   5200,
+   1300,
+   508
+  ],
+  "module": "human.js"
+ },
+ "longhorn": {
+  "file": "longhorn.bin",
+  "bytes": 161620,
+  "lods": [
+   5998,
+   1600,
+   394
+  ],
+  "module": "longhorn.js"
+ },
+ "human_m1885": {
+  "file": "human_m1885.bin",
+  "bytes": 150864,
+  "lods": [
+   5196,
+   1298,
+   976
+  ],
+  "module": "human.js"
+ },
+ "horse": {
+  "file": "horse.bin",
+  "bytes": 173400,
+  "lods": [
+   6494,
+   1700,
+   416
+  ],
+  "module": "horse.js"
+ },
+ "human_f1885": {
+  "file": "human_f1885.bin",
+  "bytes": 140400,
+  "lods": [
+   5200,
+   1300,
+   448
+  ],
+  "module": "human.js"
+ },
+ "drone": {
+  "file": "drone.bin",
+  "bytes": 28880,
+  "lods": [
+   900,
+   258,
+   236
+  ],
+  "module": "vehicles.js"
+ },
+ "pod": {
+  "file": "pod.bin",
+  "bytes": 88332,
+  "lods": [
+   3200,
+   900,
+   240
+  ],
+  "module": "vehicles.js"
+ },
+ "hover": {
+  "file": "hover.bin",
+  "bytes": 86916,
+  "lods": [
+   3190,
+   898,
+   240
+  ],
+  "module": "vehicles.js"
+ },
+ "car_hatch": {
+  "file": "car_hatch.bin",
+  "bytes": 91096,
+  "lods": [
+   3198,
+   1030,
+   240
+  ],
+  "module": "vehicles.js"
+ },
+ "ev2080": {
+  "file": "ev2080.bin",
+  "bytes": 86956,
+  "lods": [
+   3200,
+   894,
+   240
+  ],
+  "module": "vehicles.js"
+ },
+ "car_sedan": {
+  "file": "car_sedan.bin",
+  "bytes": 90392,
+  "lods": [
+   3200,
+   994,
+   240
+  ],
+  "module": "vehicles.js"
+ },
+ "car_suv": {
+  "file": "car_suv.bin",
+  "bytes": 91504,
+  "lods": [
+   3200,
+   1068,
+   236
+  ],
+  "module": "vehicles.js"
+ },
+ "car_pickup": {
+  "file": "car_pickup.bin",
+  "bytes": 88644,
+  "lods": [
+   3200,
+   926,
+   238
+  ],
+  "module": "vehicles.js"
+ },
+ "wagon": {
+  "file": "wagon.bin",
+  "bytes": 85952,
+  "lods": [
+   3160,
+   854,
+   456
+  ],
+  "module": "vehicles.js"
+ },
+ "coach": {
+  "file": "coach.bin",
+  "bytes": 85724,
+  "lods": [
+   3172,
+   898,
+   236
+  ],
+  "module": "vehicles.js"
+ },
+ "truck_semi": {
+  "file": "truck_semi.bin",
+  "bytes": 88076,
+  "lods": [
+   3200,
+   900,
+   240
+  ],
+  "module": "vehicles.js"
+ },
+ "railcar_box": {
+  "file": "railcar_box.bin",
+  "bytes": 86708,
+  "lods": [
+   3190,
+   900,
+   240
+  ],
+  "module": "vehicles.js"
+ },
+ "railcar_pass": {
+  "file": "railcar_pass.bin",
+  "bytes": 92344,
+  "lods": [
+   3200,
+   900,
+   446
+  ],
+  "module": "vehicles.js"
+ },
+ "loco": {
+  "file": "loco.bin",
+  "bytes": 97232,
+  "lods": [
+   3180,
+   1272,
+   364
+  ],
+  "module": "vehicles.js"
+ }
+}
