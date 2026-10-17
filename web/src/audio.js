@@ -181,13 +181,23 @@ export class AudioEngine {
     this.watchT += dt;
     if (this.watchT < 0.4 || this.rebuilding) return;
     this.watchT = 0;
+    if (!this.watchHooks) {
+      this.watchHooks = true;
+      document.addEventListener('visibilitychange', () => { if (!document.hidden && this.ctx && this.ctx.state !== 'running') this.ctx.resume().catch(() => {}); });
+      if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) navigator.mediaDevices.addEventListener('devicechange', () => { if (this.ctx && !this.rebuilding) { console.warn('audio: output device changed, rebuilding'); this.rebuild(); } });
+    }
+    if (this.ctx.state !== 'running' && !document.hidden) { this.ctx.resume().catch(() => {}); return; }
     this.guard.getFloatTimeDomainData(this.guardBuf);
-    for (let i = 0; i < this.guardBuf.length; i++) if (!Number.isFinite(this.guardBuf[i])) { this.rebuild(); return; }
+    let e = 0;
+    for (let i = 0; i < this.guardBuf.length; i++) { const v = this.guardBuf[i]; if (!Number.isFinite(v)) { console.warn('audio: non-finite output'); this.rebuild(); return; } e += v * v; }
+    const expect = (this.motorSynth ? this.motorSynth.level || 0 : 0) + (this.radioOn && this.musicKey && this.buffers.has(this.musicKey) ? this.radioVol * 0.2 : 0);
+    if (expect > 0.03 && Math.sqrt(e / this.guardBuf.length) < 1e-6) { this.quiet = (this.quiet || 0) + 1; if (this.quiet >= 4) { this.quiet = 0; console.warn('audio: silent while sound was expected, rebuilding'); this.rebuild(); } }
+    else this.quiet = 0;
   }
 
   async rebuild() {
     this.rebuilding = true; this.resets++;
-    console.warn('audio: non-finite output, rebuilding the graph', this.resets);
+    console.warn('audio: rebuilding the graph', this.resets);
     const old = this.ctx;
     this.ctx = null; this.ready = false; this.loops.clear(); this.musicKey = null; this.voices = 0; this.boosting = false; this.ambKey = null;
     try { await old.close(); } catch (e) { /* closed */ }
