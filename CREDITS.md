@@ -90,3 +90,41 @@ Seamless 25-40 s mono loops cut, crossfaded and loudness-normalised from freesou
 | rain_loop | steady outdoor rain, 30 s loop | https://freesound.org/people/unfa/sounds/177479/ | CC0 |
 | wind_storm_loop | howling storm wind, 30 s loop | https://freesound.org/people/Fission9/sounds/521736/ | CC0 |
 | thunder (3 variants) | deep thunder, thunderclap, distant peal | https://freesound.org/people/SholeColtis/sounds/683420/ ; https://freesound.org/people/Fission9/sounds/534023/ ; https://freesound.org/people/bastipictures/sounds/243782/ | CC0 |
+
+## Period ambience and radio (Agent E, 2026-10-17)
+Ambience: seamless 34 s loops cut, crossfaded and loudness-normalised from freesound previews (CC0, no attribution required). Radio: 57-85 s loops cut and crossfaded from the full tracks; every period id has a `music_<id>` catalog key that points at one of these files or at an earlier era track (jurassic and paleo share music_dino, 2050 shares music_2080, distant shares music_scifi).
+
+| key | content | source | licence |
+|---|---|---|---|
+| amb_shore | surf on a rocky beach (Archean to Devonian shores) | https://freesound.org/people/DylanTheFish/sounds/463250/ | CC0 |
+| amb_wind | cold winter wind (Snowball Earth, Ice Age, next ice age) | https://freesound.org/people/klangfabrik/sounds/117513/ | CC0 |
+| amb_swamp | frogs and insects in a night swamp (Carboniferous) | https://freesound.org/people/Danjocross/sounds/503206/ | CC0 |
+| amb_desert | gentle wind on an open desert plain (Permian, Triassic, Pangaea, dying Earth) | https://freesound.org/people/dhallcomposer/sounds/697217/ | CC0 |
+| amb_native | deep woods birds in spring (native villages, rewilded valley) | https://freesound.org/people/kvgarlic/sounds/151598/ | CC0 |
+| amb_alien | dark jungle atmosphere (distant future) | https://freesound.org/people/szegvari/sounds/578056/ | CC0 |
+| amb_savanna | wind in the grass (Miocene grassland) | https://freesound.org/people/strangy/sounds/176252/ | CC0 |
+
+| file | track | used for | licence |
+|---|---|---|---|
+| music_deep | "Lightless Dawn" by Kevin MacLeod (incompetech.com) | radio for archean, protero, cambrian, devonian | CC-BY 4.0, https://incompetech.com/music/royalty-free/index.html |
+| music_ice | "Frozen Star" by Kevin MacLeod (incompetech.com) | radio for snowball, iceage, glacial | CC-BY 4.0, https://incompetech.com/music/royalty-free/index.html |
+| music_desert | "Desert of Lost Souls" by Kevin MacLeod (incompetech.com) | radio for permian, triassic, pangaea | CC-BY 4.0, https://incompetech.com/music/royalty-free/index.html |
+| music_carbon | "Ossuary 6 - Air" by Kevin MacLeod (incompetech.com) | radio for carbon | CC-BY 4.0, https://incompetech.com/music/royalty-free/index.html |
+| music_native | "Rite of Passage" by Kevin MacLeod (incompetech.com) | radio for native, miocene, 3000 | CC-BY 4.0, https://incompetech.com/music/royalty-free/index.html |
+| music_mission | "Sardana" by Kevin MacLeod (incompetech.com) | radio for mission | CC-BY 4.0, https://incompetech.com/music/royalty-free/index.html |
+| music_1849 | "Hillbilly Swing" by Kevin MacLeod (incompetech.com) | radio for 1849 | CC-BY 4.0, https://incompetech.com/music/royalty-free/index.html |
+| music_1900 | "The Entertainer" by Kevin MacLeod (incompetech.com) | radio for 1900 | CC-BY 4.0, https://incompetech.com/music/royalty-free/index.html |
+| music_1920 | "Hep Cats" by Kevin MacLeod (incompetech.com) | radio for 1920, 1940 | CC-BY 4.0, https://incompetech.com/music/royalty-free/index.html |
+| music_1950 | "Sock Hop" by Kevin MacLeod (incompetech.com) | radio for 1950 | CC-BY 4.0, https://incompetech.com/music/royalty-free/index.html |
+| music_1970 | "Funk Game Loop" by Kevin MacLeod (incompetech.com) | radio for 1970 | CC-BY 4.0, https://incompetech.com/music/royalty-free/index.html |
+| music_1990 | "Newer Wave" by Kevin MacLeod (incompetech.com) | radio for 1990 | CC-BY 4.0, https://incompetech.com/music/royalty-free/index.html |
+| music_2000 | "Hyperfun" by Kevin MacLeod (incompetech.com) | radio for 2000 | CC-BY 4.0, https://incompetech.com/music/royalty-free/index.html |
+| music_future | "Equatorial Complex" by Kevin MacLeod (incompetech.com) | radio for 2150, 2300 | CC-BY 4.0, https://incompetech.com/music/royalty-free/index.html |
+| music_dying | "Dark Times" by Kevin MacLeod (incompetech.com) | radio for dying | CC-BY 4.0, https://incompetech.com/music/royalty-free/index.html |
+
+Licensed under Creative Commons: By Attribution 4.0 License, http://creativecommons.org/licenses/by/4.0/
+
+## Avatar animations
+| File | Source | Used for | Licence |
+|---|---|---|---|
+| assets/driver/anims/ual.json, ual.bin | Universal Animation Library and Universal Animation Library 2 (Standard) by Quaternius, https://quaternius.itch.io/universal-animation-library | on-foot motion (idle, walk, jog, sprint, jumps, carry, throw, knock-down, get up, death, actions), retargeted to the avatar by web/tools/anim-bake.mjs | CC0 1.0 |

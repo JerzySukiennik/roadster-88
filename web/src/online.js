@@ -121,6 +121,7 @@ class Remote {
       this.walk.pose.x = P[0] + (F[0] - P[0]) * k; this.walk.pose.y = P[1] + (F[1] - P[1]) * k; this.walk.pose.z = P[2] + (F[2] - P[2]) * k;
       let dy = F[3] - P[3]; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
       this.walk.yaw = P[3] + dy * k; this.walk.speed = F[4]; this.walk.grounded = !!F[5]; this.walk.tumble = F[6] || 0;
+      this.walk.vy = F[7] || 0; this.walk.swim = !!F[8]; this.walk.dead = !!(this.flags & 2048);
       this.foot = this.walk;
     } else this.foot = null;
     return true;
@@ -268,7 +269,7 @@ class Remote {
     } else if (this.foot) {
       if (d.root.parent !== g.gfx.scene) d.attach(g.gfx.scene, true);
       d.setHeadVisible(true);
-      d.walkPose(this.walk, dt, { camYaw: this.walk.yaw, ground: g.valley ? (x, z) => g.valley.heightAt(x, z) : null });
+      d.walkPose(this.walk, dt, { camYaw: this.walk.yaw, ground: g.valley ? (x, z) => g.valley.heightAt(x, z) : null, overlay: this.flags & 4096 ? 'Walk_Carry_Loop' : null });
     } else {
       if (d.root.parent !== this.view.root) d.attach(this.view.root, false);
       d.setHeadVisible(true);
@@ -417,14 +418,14 @@ export class Online {
     if (!this.me || !F) return;
     const th = s.thrusters;
     const nowMs = performance.now();
-    const flags = (nowMs - (this.departAt || -1e9) < 2500 ? 128 : 0) | (nowMs - (this.arriveAt || -1e9) < 2500 ? 256 : 0) | (s.brakeOn ? 1 : 0) | (g.car.view.doorTarget > 0.5 ? 2 : 0) | (g.settings.wing ? 4 : 0) | (g.settings.roof ? 0 : 8) | (th.deploy > 0.5 ? 16 : 0) | (th.sideDeploy > 0.5 ? 32 : 0) | (w.active ? 64 : 0);
+    const flags = (nowMs - (this.departAt || -1e9) < 2500 ? 128 : 0) | (nowMs - (this.arriveAt || -1e9) < 2500 ? 256 : 0) | (s.brakeOn ? 1 : 0) | (g.car.view.doorTarget > 0.5 ? 2 : 0) | (g.settings.wing ? 4 : 0) | (g.settings.roof ? 0 : 8) | (th.deploy > 0.5 ? 16 : 0) | (th.sideDeploy > 0.5 ? 32 : 0) | (w.active ? 64 : 0) | (g.player && g.player.dead ? 2048 : 0) | (g.interact && g.interact.held ? 4096 : 0);
     const gone = g.tc.state === 'gone';
     const d = {
       n: this.name, o: g.store.get('outfit', 0), t: Math.round(Date.now() + this.offset),
       c: [r3(s.pos.x), r3(s.pos.y), r3(s.pos.z), r3(s.q.x), r3(s.q.y), r3(s.q.z), r3(s.q.w), r2(s.vel.x), r2(s.vel.y), r2(s.vel.z)],
       k: [Math.round(s.steerAngle * 100), flags], z: pack(th), p: g.car.paint || g.settings.paint,
     };
-    if (w.active) d.f = [r3(w.pos.x), r3(w.pos.y), r3(w.pos.z), r3(w.yaw), r2(w.speed), w.grounded ? 1 : 0, r2(w.tumble)];
+    if (w.active) d.f = [r3(w.pos.x), r3(w.pos.y), r3(w.pos.z), r3(w.yaw), r2(w.speed), w.grounded ? 1 : 0, r2(w.tumble), r2(w.vel.y), w.swim ? 1 : 0];
     if (g.ride) d.r = g.ride;
     if (g.tc.armed || g.tc.state === 'departing') d.dy = g.tc.destination.year;
     if (g.car.given) d.k[1] |= 512;

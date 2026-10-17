@@ -40,6 +40,11 @@ html, body { margin: 0; height: 100%; background: #000; overflow: hidden; font-f
 .gaze.on { display: block; }
 .gaze.hot { transform: scale(1.8); background: #fff; }
 .flash { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+.prompt { position: fixed; left: 50%; bottom: 120px; transform: translate(-50%, 8px); display: flex; align-items: center; gap: 10px; padding: 8px 16px 8px 8px; border-radius: 999px; background: rgba(14, 15, 18, 0.5); border: 1px solid var(--line); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); color: var(--ink); font-size: 14px; font-weight: 500; opacity: 0; pointer-events: none; transition: opacity 0.16s ease, transform 0.2s cubic-bezier(0.2, 0.7, 0.2, 1); z-index: 4; }
+.prompt.on { opacity: 1; transform: translate(-50%, 0); }
+.pk { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 8px; background: rgba(255, 255, 255, 0.92); color: #111; font-size: 13px; font-weight: 700; }
+.fade { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; z-index: 5; }
+.fade-msg { position: fixed; left: 50%; top: 42%; transform: translate(-50%, -50%); color: rgba(255, 255, 255, 0.9); font-size: 15px; font-weight: 500; letter-spacing: 0.24em; text-transform: uppercase; text-shadow: 0 1px 18px rgba(0, 0, 0, 0.7); opacity: 0; pointer-events: none; z-index: 6; white-space: nowrap; }
 .hint { position: fixed; left: 50%; top: 22px; transform: translateX(-50%); font-size: 13px; font-weight: 500; letter-spacing: 0.02em; color: var(--ink); background: rgba(20, 20, 22, 0.42); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); padding: 8px 14px; border-radius: 999px; opacity: 0; transition: opacity 0.4s ease; pointer-events: none; white-space: nowrap; }
 .hint.on { opacity: 1; }
 

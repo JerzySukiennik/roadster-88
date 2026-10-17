@@ -2,6 +2,7 @@
 import * as THREE from 'three/webgpu';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { Animator } from './anim.js';
 
 const BASE = '../assets/driver/';
 const REGION = { torso: 0, neck: 1, arms: 2, forearms: 3, hands: 4, thighs: 5, shins: 6, feet: 7 };
@@ -50,6 +51,8 @@ export class Driver {
     for (const s of ['Left', 'Right']) this.len[s] = { leg1: d(s + 'UpLeg', s + 'Leg'), leg2: d(s + 'Leg', s + 'Foot'), arm1: d(s + 'Arm', s + 'ForeArm'), arm2: d(s + 'ForeArm', s + 'Hand') };
     this.restWorldQ = new Map();
     for (const [n, b] of this.bones) this.restWorldQ.set(n, b.getWorldQuaternion(Q()));
+    this.restWorldP = new Map();
+    for (const [n, b] of this.bones) this.restWorldP.set(n, b.getWorldPosition(V()));
     this.hipRest = this.bones.get('Hips').getWorldPosition(V());
     this.ankleH = Math.max(0.05, this.bones.get('LeftFoot').getWorldPosition(V()).y);
     await this.setOutfit(outfitIndex);
@@ -175,8 +178,41 @@ export class Driver {
     }
   }
 
+  motionPose(w, dt, opt) {
+    const root = this.root, A = this.anim;
+    root.position.set(w.pose.x, w.pose.y, w.pose.z);
+    root.quaternion.setFromAxisAngle(Y, w.yaw);
+    if (!this.motionOn) { this.resetPose(); A.reset(); this.motionOn = true; this.drop = 0; }
+    A.update({ speed: w.speed, grounded: w.grounded || !!w.swim, vy: w.vy !== undefined ? w.vy : (w.vel ? w.vel.y : 0), tumble: w.tumble, dead: w.dead }, dt, { ...opt, swim: !!w.swim });
+    root.updateMatrixWorld(true);
+    const fwd = Z.clone().applyQuaternion(root.quaternion), up = Y;
+    const neck = this.bones.get('Neck'), head = this.bones.get('Head');
+    if (neck && head && (A.mode === 'loco' || A.mode === 'land') && opt.camYaw !== undefined) {
+      let hy = opt.camYaw - w.yaw; hy = Math.atan2(Math.sin(hy), Math.cos(hy));
+      const k = Math.abs(hy) > 2.2 ? 0 : 1; hy = Math.max(-1, Math.min(1, hy)) * k;
+      this.lookK = (this.lookK || 0) + (hy - (this.lookK || 0)) * Math.min(1, dt * 6);
+      this.rotateWorld(neck, up, this.lookK * 0.3); this.rotateWorld(head, up, this.lookK * 0.4);
+    }
+    const ground = opt.ground;
+    if (ground && w.grounded && (A.mode === 'loco' || A.mode === 'land' || A.mode === 'action')) {
+      const ry = root.position.y, hips = this.bones.get('Hips');
+      const feet = ['Left', 'Right'].map((s) => { const f = this.bones.get(s + 'Foot'), p = f.getWorldPosition(V()); return { s, f, p, q: f.getWorldQuaternion(Q()), d: Math.max(-0.4, Math.min(0.4, ground(p.x, p.z) - ry)) }; });
+      const want = Math.min(0, feet[0].d, feet[1].d);
+      this.drop += (want - this.drop) * Math.min(1, dt * 12);
+      if (Math.abs(this.drop) > 0.004 || Math.abs(feet[0].d) > 0.01 || Math.abs(feet[1].d) > 0.01) {
+        hips.position.y += this.drop; hips.updateMatrixWorld(true);
+        for (const ft of feet) {
+          const L = this.len[ft.s], target = ft.p.clone(); target.y += ft.d;
+          this.twoBone(this.bones.get(ft.s + 'UpLeg'), this.bones.get(ft.s + 'Leg'), ft.f, target, fwd, L.leg1, L.leg2);
+          this.setWorldQuat(ft.f, ft.q);
+        }
+      }
+    }
+  }
+
   pose(view, dt, opt) {
     if (!this.ready) return;
+    this.motionOn = false;
     const seat = view.n.Seat_Driver, gl = view.n.Grip_L, gr = view.n.Grip_R;
     if (!seat) return;
     const root = view.root;
@@ -251,6 +287,8 @@ export class Driver {
 
   walkPose(w, dt, opt) {
     if (!this.ready) return;
+    if (!this.anim && !this.animLoading) { this.animLoading = true; Animator.create(this).then((a) => { this.anim = a; }).catch((e) => console.warn('avatar motion failed', e)); }
+    if (this.anim) return this.motionPose(w, dt, opt);
     const root = this.root, sp = w.speed, run = Math.min(1, Math.max(0, (sp - 2.2) / 3.5)), amp = Math.min(1, sp / 0.9);
     root.position.set(w.pose.x, w.pose.y, w.pose.z);
     this.spin = w.tumble > 0 && !w.grounded ? (this.spin || 0) + dt * 7 : (this.spin || 0) * Math.max(0, 1 - dt * 10);

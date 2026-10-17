@@ -38,7 +38,7 @@ const Z0 = -1500, X0 = -900;
 await A.page.evaluate(([x, z]) => window.__r88.tg(x, z, 0, 0), [X0, Z0]);
 await B.page.evaluate(([x, z]) => window.__r88.tg(x + 9, z - 30, 0, 0), [X0, Z0]);
 await wait(2500);
-check('paint seen by B', await B.page.evaluate((u) => { const r = window.__r88.game.online.remotes.get(u); return r && r.viewPaint === 'red'; }, uidA));
+check('paint seen by B', await B.page.evaluate((u) => { const r = window.__r88.game.online.remotes.get(u); return r && r.viewPaint === 'red'; }, uidA), await B.page.evaluate((u) => { const g = window.__r88.game, r = g.online.remotes.get(u); return { has: !!r, paint: r && r.paint, view: r && r.viewPaint, fps: +(1000 / (g.frames.slice(-30).reduce((a, b) => a + b, 0) / 30)).toFixed(0), remotes: g.online.remotes.size }; }, uidA));
 
 await A.page.evaluate(([x, z]) => window.__r88.tg(x, z, 0, 39.4), [X0, Z0]);
 await A.page.evaluate(() => window.__r88.keys('KeyW'));
@@ -97,7 +97,7 @@ await A.page.evaluate(() => { const g = window.__r88.game, s = g.car.sim; s.tele
 await wait(1500);
 await B.page.evaluate(() => window.__r88.tap('KeyF'));
 await wait(800);
-check('B gets out of the ride', await B.page.evaluate(() => window.__r88.game.walker.active && !window.__r88.game.ride));
+check('B gets out of the ride', await B.page.evaluate(() => window.__r88.game.walker.active && !window.__r88.game.ride), await B.page.evaluate(() => { const g = window.__r88.game, r = g.ride && g.online.remotes.get(g.ride); return { ride: !!g.ride, tc: g.tc.state, rv: r ? +r.vel.length().toFixed(1) : null, hint: document.getElementById('hint').textContent, dead: !!g.player.dead, fps: +(1000 / (g.frames.slice(-30).reduce((a, b) => a + b, 0) / 30)).toFixed(0) }; }));
 
 await A.page.evaluate(() => window.__r88.tap('KeyF'));
 await wait(900);

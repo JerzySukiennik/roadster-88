@@ -15,6 +15,7 @@ import { Menu } from './menu.js';
 import { Walker } from './walker.js';
 import { Online } from './online.js';
 import { YearInput } from './yearInput.js';
+import { Interact } from './interact.js';
 import { AudioEngine } from './audio.js';
 import { DamageSystem } from './damage.js';
 import { Cockpit } from './render/cockpit.js';
@@ -51,6 +52,8 @@ class Game {
     this.layout = MAP === 'plate' ? buildLayout() : null;
     this.phys = new PhysicsWorld(RAPIER, this.tu, this.layout);
     this.walker = new Walker(this);
+    this.player = this.makePlayer();
+    this.interact = new Interact(this);
     progress(0.35, 'Sky');
     this.sky = new SkySystem(this.gfx, this.gfx.preset);
     if (params.has('envoff')) this.sky.envOff = true;
@@ -95,6 +98,7 @@ class Game {
     }
     this.spawn(sp, sy);
     if (this.valley) { await this.loadEras(); await this.loadLife(); }
+    await this.loadSpace();
     this.input = new Input($('view'));
     this.hud = new Hud($('hud'));
     this.rig = new CameraRig(this.gfx.camera, this.tu);
@@ -145,11 +149,25 @@ class Game {
     this.applyEra(true);
   }
 
+  async loadSpace() {
+    if (params.has('nospace')) return;
+    try {
+      const mod = await import('./space/space.js');
+      this.space = mod.createSpace(this);
+    } catch (e) { this.space = null; if (params.has('debug') && !String(e && e.message).includes('Failed to fetch')) console.warn('space module not loaded:', e && e.message); }
+  }
+
   async loadLife() {
     if (params.has('nolife')) return;
     try {
       const mod = await import('./life/life.js');
       this.life = new mod.LifeSystem(this, this.valley, this.eras);
+      const emit = this.life.emit.bind(this.life);
+      this.life.emit = (type, a) => {
+        emit(type, a);
+        const w = this.walker;
+        if ((type === 'bite' || type === 'pounce') && a && w.active && !w.dead && Math.hypot(a.x - w.pos.x, a.z - w.pos.z) < 2.6 + ((a.K && a.K.meta && a.K.meta.length) || 2) * 0.35) this.player.kill('dino', a);
+      };
       if (this.life.setEra) this.life.setEra(this.eraId());
     } catch (e) { this.life = null; if (params.has('debug')) console.warn('life module not loaded:', e && e.message); }
   }
@@ -276,6 +294,78 @@ class Game {
     return h ? h.timeOfImpact : null;
   }
 
+  makePlayer() {
+    const g = this;
+    return {
+      dead: null,
+      get onFoot() { return g.walker.active; },
+      get pos() { return g.walker.active ? g.walker.pos : g.car.sim.pos; },
+      get vel() { return g.walker.active ? g.walker.vel : g.car.sim.vel; },
+      kill(cause, src) { g.killPlayer(cause, src); },
+      died(cause, src) { g.onDeath(cause, src); },
+    };
+  }
+
+  killPlayer(cause, src) {
+    if (this.player.dead || !this.started || this.tc.busy) return;
+    if (this.ride) this.exitRide(true);
+    if (this.walker.active) { this.walker.die(cause, src); return; }
+    const car = this.car;
+    if (!car.sim.wreck) { car.sim.wreck = true; this.wrecks.push(car); }
+    this.onDeath(cause, src);
+  }
+
+  onDeath(cause, src) {
+    if (this.player.dead) return;
+    const at = this.walker.active ? { ...this.walker.pos } : { x: this.car.sim.pos.x, y: this.car.sim.pos.y, z: this.car.sim.pos.z };
+    this.player.dead = { cause, t: 0, at };
+    const msg = { car: 'Hit by a car', fall: 'Fell too far', dino: 'Caught by a predator', lava: 'Burned in lava', water: 'Drowned' }[cause] || 'You died';
+    $('fadeMsg').textContent = msg;
+    this.audio.play(cause === 'lava' ? 'tc_crackle' : 'impact_light', { gain: 1, inside: true });
+    if (this.rig) this.rig.addImpact(0.8);
+    this.online.send();
+  }
+
+  deathStep(dt) {
+    const d = this.player.dead; if (!d) return;
+    d.t += dt;
+    const o = d.t < 1.6 ? 0 : d.t < 2.4 ? (d.t - 1.6) / 0.8 : d.t < 3.0 ? 1 : Math.max(0, 1 - (d.t - 3.0) / 0.7);
+    $('fade').style.opacity = o.toFixed(3);
+    $('fadeMsg').style.opacity = d.t < 0.6 ? '0' : String(Math.min(1, (d.t - 0.6) / 0.5) * (d.t > 3.0 ? o : 1));
+    if (d.t >= 2.8 && !d.respawned) { d.respawned = true; this.respawnPlayer(d.at); }
+    if (d.t >= 3.8) { this.player.dead = null; $('fade').style.opacity = '0'; this.online.send(); }
+  }
+
+  dryGround(x, z) {
+    const V = this.valley; if (!V) return { x, z, y: this.groundHeight(x, z, 50) ?? 0 };
+    const ok = (px, pz) => !(V.fluidAt && V.fluidAt(px, pz)) && V.normalAt(px, pz).y > 0.88;
+    for (let r = 0; r <= 260; r += r < 20 ? 4 : 12) for (let k = 0, n = r ? Math.ceil(r / 3) : 1; k < n; k++) {
+      const a = k / n * Math.PI * 2, px = x + Math.cos(a) * r, pz = z + Math.sin(a) * r;
+      if (ok(px, pz) && ok(px + 4, pz) && ok(px - 4, pz)) return { x: px, z: pz, y: V.heightAt(px, pz) };
+    }
+    return { x, z, y: V.heightAt(x, z) };
+  }
+
+  respawnPlayer(at) {
+    const p = this.dryGround(at.x, at.z), yaw = this.rig.footYaw || 0;
+    const s = this.valley ? this.valley.safeSpawnAt(p.x, p.z, p.y + 0.1) : [p.x, p.y + 0.1, p.z];
+    const c = this.car, cs = c.sim;
+    const keep = !cs.wreck && !c.given && cs.enabled && Math.hypot(cs.pos.x - s[0], cs.pos.z - s[2]) < 80 && !(this.valley && this.valley.fluidAt && this.valley.fluidAt(cs.pos.x, cs.pos.z));
+    if (!keep) {
+      const side = [s[0] + Math.cos(yaw) * 4.5, s[1] + 0.4, s[2] - Math.sin(yaw) * 4.5];
+      const g = this.groundHeight(side[0], side[2], side[1] + 6); if (g !== null) side[1] = g + 0.08;
+      const old = this.car, car = this.spawn(side, yaw);
+      if (old.given) this.dropCar(old);
+      car.sim.flight.assist = this.settings.assist;
+    }
+    if (this.walker.active) this.walker.leave();
+    this.walker.enter(s[0], s[1], s[2], yaw);
+    this.driver.attach(this.gfx.scene, true); this.driver.root.visible = true;
+    this.rig.mode = 'foot'; this.rig.footYaw = yaw; this.rig.footPitch = 0.22; this.rig.footInit = false; this.rig.hold = null;
+    this.gfx.cut();
+    this.hint('F to get in', 2);
+  }
+
   hint(text, sec = 2.5) {
     const h = $('hint'); h.textContent = text; h.classList.add('on');
     clearTimeout(this.hintT); this.hintT = setTimeout(() => h.classList.remove('on'), sec * 1000);
@@ -284,14 +374,14 @@ class Game {
   handleKeys() {
     const I = this.input;
     if (I.hit('Escape') && this.menu.mode !== 'title') this.setPaused(!this.paused);
-    if (this.paused) return;
+    if (this.paused || this.player.dead) return;
     if (I.hit('KeyF')) { if (this.ride) this.exitRide(); else if (this.walker.active) this.enterCar(); else this.exitCar(); }
     if (this.ride) {
       if (I.hit('KeyC')) { this.rig.mode = this.rig.mode === 'chase' ? 'fpp' : 'chase'; this.rig.fppYaw = 0; this.rig.fppPitch = 0; this.gfx.cut(); }
       if (I.hit('KeyT')) this.hint('Your driver sets the year', 1.6);
       return;
     }
-    if (this.walker.active) { if (I.hit('KeyR')) this.spawnNearWalker(); return; }
+    if (this.walker.active) { if (I.hit('KeyR')) this.spawnNearWalker(); if (I.hit('KeyE')) this.interact.use(); return; }
     if (I.hit('KeyC')) { this.rig.mode = this.rig.mode === 'chase' ? 'fpp' : 'chase'; this.rig.fppYaw = 0; this.rig.fppPitch = 0; this.gfx.cut(); }
     if (I.hit('KeyR')) this.respawn();
     if (I.hit('KeyT')) this.toggleArm();
@@ -472,8 +562,15 @@ class Game {
       if (c === this.car && gone) { c.sim.readState(); continue; }
       c.sim.preStep(dt, c === this.car && !this.walker.active && !this.ride ? inp : this.walker.parked);
     }
+    this.interact.preStep(dt);
     if (this.walker.active) this.walker.step(dt, this.input, this.rig.footYaw);
+    else if (!this.ride && this.valley && this.valley.fluidAt && !this.player.dead) {
+      const s = this.car.sim, l = this.valley.fluidAt(s.pos.x, s.pos.z);
+      if (l && l.kind === 'lava' && s.pos.y < l.level + 0.6) this.killPlayer('lava');
+    }
+    this.deathStep(dt);
     this.online.preStep(dt);
+    if (this.space && !this.spaceBroken) { try { this.space.preStep(dt); } catch (e) { this.spaceBroken = true; console.error('space.preStep failed', e); } }
     if (this.valley) this.valley.preStep(dt, this.cars);
     this.phys.thrustOnProps(this.car.sim, dt);
     this.phys.step((a, b, f) => this.damage.onContact(a, b, f));
@@ -598,6 +695,7 @@ class Game {
     }
     if (this.walker.active) this.walker.interpolate(alpha);
     this.online.update(fdt);
+    if (this.space && !this.spaceBroken) { try { this.space.update(fdt); } catch (e) { this.spaceBroken = true; console.error('space.update failed', e); } }
     let rideR = null, rs = null;
     if (this.ride) {
       rideR = this.online.remotes.get(this.ride) || null;
@@ -613,12 +711,13 @@ class Game {
     const st = this.chaseState(fdt);
     this.menu.update(fdt);
     if (this.pendingHold) { this.rig.hold = this.pendingHold; this.pendingHold = null; this.gfx.cut(); }
-    if (this.walker.active) this.rig.updateFoot(fdt, this.walker.pose, (o, d, l) => this.camRay(o, d, l));
+    if (this.walker.active) this.rig.updateFoot(fdt, this.walker.pose, (o, d, l) => this.camRay(o, d, l), this.walker);
     else if (rs) {
       if (this.rig.mode === 'fpp' && rideR) this.rig.updateFpp(fdt, this.rideEye(rideR.view, this._eye || (this._eye = new THREE.Vector3())), rideR.quat, rs, null);
       else this.rig.updateChase(fdt, rs, now / 1000, (o, d, l) => this.camRay(o, d, l));
     } else if (this.rig.mode === 'chase') this.rig.updateChase(fdt, st, now / 1000, (o, d, l) => this.camRay(o, d, l));
     else { this.car.view.root.updateMatrixWorld(true); this.rig.updateFpp(fdt, this.car.view.eyeWorld(new THREE.Vector3()), this.car.pose.quat, st, this.screenFocus()); }
+    if (this.debugCam) { const c = this.gfx.camera, d = this.debugCam(); c.position.copy(d.pos); c.lookAt(d.look); if (d.fov) { c.fov = d.fov; c.updateProjectionMatrix(); } }
     const chase = this.rig.mode !== 'fpp';
     const ownCab = !chase && !this.ride, cm = (rideR && rideR.mats) || this.car.mats || this.mats;
     if (this.cabinGlass !== !chase || this.cabinMats !== cm) { if (this.cabinMats && this.cabinMats !== cm) CarView.setCabinView(this.cabinMats, false); CarView.setCabinView(cm, !chase); this.cabinGlass = !chase; this.cabinMats = cm; }
@@ -628,11 +727,13 @@ class Game {
     this.placeLamps();
     const hit = !ownCab ? (this.cockpit.hit = null) : this.cockpit.gaze(this.gfx.camera);
     const clicks = this.input.consumeClicks();
+    if (this.walker.active && clicks && !this.paused) this.interact.click();
+    this.interact.update();
     if (ownCab && clicks && !this.paused && this.cockpit.tap() && this.driver.ready) this.driver.touch(hit.point);
     if (this.driver.ready && this.walker.active) {
-      this.driver.setHeadVisible(true);
+      this.driver.setHeadVisible(!this.rig.footClose);
       const v = this.valley;
-      this.driver.walkPose(this.walker, fdt, { camYaw: this.rig.footYaw, ground: v ? (x, z) => v.heightAt(x, z) : null });
+      this.driver.walkPose(this.walker, fdt, { camYaw: this.rig.footYaw, ground: v ? (x, z) => v.heightAt(x, z) : null, overlay: this.interact.held && this.interact.pending === null ? 'Walk_Carry_Loop' : null });
     } else if (this.driver.ready && this.ride) {
       const d = this.driver;
       if (rideR) {
@@ -727,6 +828,8 @@ class Game {
       valley() { const v = g.valley; if (!v) return null; const s = v.view.stats; return { chunks: s.chunks, tris: s.tris, built: s.built, cache: v.view.cache.size, era: v.era, surface: v.surfaceAt(g.car.sim.pos.x, g.car.sim.pos.z), region: (v.regionAt(g.car.sim.pos.x, g.car.sim.pos.z) || {}).id || null, h: v.heightAt(g.car.sim.pos.x, g.car.sim.pos.z), eras: !!g.eras }; },
       era(id) { if (g.eras) g.eras.apply(id, { instant: true }); else if (g.valley) g.valley.setEraTerrain(id); if (g.life) g.life.setEra(id); },
       click() { g.input.clicks++; },
+      item(kind = 'crate') { const w = g.walker, p = w.active ? w.pos : g.car.sim.pos, f = w.active ? { x: Math.sin(w.yaw), z: Math.cos(w.yaw) } : { x: 0, z: 3 }; return g.interact.spawnItem(kind, { x: p.x + f.x * 1.6, y: p.y + 0.6, z: p.z + f.z * 1.6 }); },
+      kill(cause = 'fall') { g.player.kill(cause); },
     };
   }
 }

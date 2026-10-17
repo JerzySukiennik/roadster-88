@@ -4,7 +4,7 @@ import { PAINTS } from './render/carMaterials.js';
 import { PRESETS } from './render/gfx.js';
 import { OUTFITS } from './render/driver.js';
 
-const KEYS = [['W', 'Drive, rear thrust'], ['S', 'Brake, reverse, retro'], ['A  D', 'Steer, yaw'], ['Shift', 'Boost'], ['Shift + S', 'Retro brake'], ['Space', 'Tap to hop, hold to lift'], ['Ctrl', 'Descend'], ['Arrows', 'Pitch and roll'], ['Mouse', 'Look'], ['Click', 'Touch the screen (cockpit)'], ['C', 'Cockpit or chase camera'], ['Y', 'Type a destination year'], ['T', 'Arm time circuits'], ['F', 'Get out or get in'], ['R', 'New Roadster'], ['Esc', 'Menu'], ['On foot', 'W A S D walk, Shift run, Space jump']];
+const KEYS = [['W', 'Drive, rear thrust'], ['S', 'Brake, reverse, retro'], ['A  D', 'Steer, yaw'], ['Shift', 'Boost'], ['Shift + S', 'Retro brake'], ['Space', 'Tap to hop, hold to lift'], ['Ctrl', 'Descend'], ['Arrows', 'Pitch and roll'], ['Mouse', 'Look'], ['Click', 'Touch the screen (cockpit)'], ['C', 'Cockpit or chase camera'], ['Y', 'Type a destination year'], ['T', 'Arm time circuits'], ['F', 'Get out or get in'], ['R', 'New Roadster'], ['Esc', 'Menu'], ['On foot', 'W A S D walk, Shift run, Space jump'], ['E', 'Pick up, drop, use (on foot)'], ['Click', 'Throw what you carry']];
 const SWATCH = { red: '#a3121a', white: '#e9e8e4', black: '#111214', silver: '#6c7078', blue: '#173a8a' };
 
 function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; }
