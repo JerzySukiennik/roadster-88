@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Roadster 88</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23111'/%3E%3Ctext x='16' y='22' font-family='Helvetica' font-size='15' font-weight='700' fill='%23fff' text-anchor='middle'%3E88%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.webgpu.js",
+    "three/webgpu": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.webgpu.js",
+    "three/tsl": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.tsl.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/",
+    "@dimforge/rapier3d-compat": "https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.21.0/dist/rapier.mjs"
+  }
+}
+</script>
+</head>
+<body>
+<canvas id="view"></canvas>
+<div id="hud" class="hud">
+  <div class="hud-speed"><div id="speed" class="digits"></div><div id="tc" class="tc"><svg viewBox="0 0 44 44"><circle class="tc-track" cx="22" cy="22" r="19"/><circle id="tcArc" class="tc-arc" cx="22" cy="22" r="19"/></svg><div id="tcYear" class="tc-year"></div></div></div>
+  <div class="hud-dots" id="dots"></div>
+</div>
+<div id="yearIn" class="year-in"><div class="yi-label">Destination year</div><div id="yiVal" class="yi-val"></div><div id="yiSub" class="yi-sub"></div></div>
+<div id="gaze" class="gaze"></div>
+<div id="flash" class="flash"></div>
+<div id="storyObj" class="story-obj"><div id="soCh" class="so-ch"></div><div id="soText" class="so-text"></div><div id="soMeta" class="so-meta"></div></div>
+<div id="storyWp" class="story-wp"><div class="wp-dot"></div><div id="wpDist" class="wp-dist"></div></div>
+<div id="storyRadio" class="story-radio"><div id="srWho" class="sr-who"></div><div id="srText" class="sr-text"></div></div>
+<div id="storyDlg" class="story-dlg"><div id="sdWho" class="sd-who"></div><div id="sdText" class="sd-text"></div><div id="sdChoices" class="sd-choices"></div><div id="sdHint" class="sd-hint">E to continue</div></div>
+<div id="storyTitle" class="story-title"><div id="stMain" class="st-main"></div><div id="stSub" class="st-sub"></div></div>
+<div id="prompt" class="prompt"><span class="pk">E</span><span id="promptText"></span></div>
+<div id="fade" class="fade"></div>
+<div id="fadeMsg" class="fade-msg"></div>
+<div id="hint" class="hint"></div>
+<div id="loading" class="loading"><div class="ld-title">Roadster 88</div><div class="ld-bar"><div id="ldBar"></div></div><div id="ldText" class="ld-text">Loading</div></div>
+<div id="menu" class="menu hidden">
+  <div class="menu-shade"></div>
+  <div class="menu-side">
+    <div class="menu-brand"><div class="menu-title">Roadster<span>88</span></div><div class="menu-tag">Gzowo Space Program</div></div>
+    <nav id="menuNav" class="menu-nav"></nav>
+    <div id="menuFoot" class="menu-foot"></div>
+  </div>
+  <div id="menuPanel" class="menu-panel"></div>
+</div>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
