@@ -184,6 +184,7 @@ export class SkySystem {
 
   setTime(month, day, hour) {
     this.lastTime = [month, day, hour];
+    if (this.external) return;
     const E = this.era;
     const { el, az } = solarPosition(month, day, hour);
     this.state.el = el; this.state.az = az;

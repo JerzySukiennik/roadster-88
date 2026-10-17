@@ -1,4 +1,4 @@
-// Roadster 88 cockpit displays: Tesla-style centre touchscreen (Time Circuits with rolling digits, presets and keypad, Map, Car, Radio) and the small driver cluster, drawn on 2D canvases as textures; gaze-ray hit testing for FPP taps.
+// Roadster 88 cockpit displays: Tesla-style centre touchscreen (Time Circuits with rolling digits, presets and keypad, Map, Car, Radio, Space) and the small driver cluster, drawn on 2D canvases as textures; gaze-ray hit testing for FPP taps.
 import * as THREE from 'three/webgpu';
 import { texture, uv, uniform, vec3 } from 'three/tsl';
 import { ERAS, formatYear, monthName, pad2, eraOf, cloneDate, clampDate } from '../sim/timetravel.js';
@@ -120,11 +120,13 @@ export class Cockpit {
     const hov = this.hit ? (this.find(this.hit.x, this.hit.y) || {}).id || null : null;
     if (hov !== this.hover) { this.hover = hov; this.dirty = true; }
     const animating = this.updateRoll(dt);
-    const live = animating || this.app === 'map' || tc.armed || tc.busy;
+    const sp = this.g.space;
+    const spLive = !!(sp && (sp.state === 'armed' || sp.state === 'armedReturn' || sp.busy));
+    const live = animating || this.app === 'map' || tc.armed || tc.busy || spLive;
     this.timer -= dt; this.clTimer -= dt;
     const hk = this.hit ? Math.round(this.hit.x / 5) * 10000 + Math.round(this.hit.y / 5) : -1;
     if (hk !== this.lastHk) { this.lastHk = hk; this.dirty = true; }
-    if (this.timer <= 0 && (this.dirty || live || this.timer < -1)) { this.draw(); this.dirty = false; this.timer = fpp ? (live || this.hit ? 1 / 30 : 1 / 8) : 0.5; }
+    if (this.timer <= 0 && (this.dirty || live || this.timer < -1)) { this.draw(); this.dirty = false; this.timer = fpp ? (live || this.hit ? (sp && sp.active && this.app === 'map' && !this.hit ? 1 / 6 : 1 / 30) : 1 / 8) : 0.5; }
     if (this.clTimer <= 0) { this.drawCluster(); this.clTimer = fpp ? 1 / 20 : 1 / 4; }
     this.bright.value = 1.3 + 4.2 * (1 - this.g.sky.state.night);
   }
@@ -167,8 +169,9 @@ export class Cockpit {
     g.textAlign = 'right';
     g.fillText(`${eraOf(p.year).label} · ${formatYear(p.year)}`, W - 32, 34);
     g.textAlign = 'left';
-    if (this.app === 'tc') this.drawTC(g); else if (this.app === 'map') this.drawMap(g); else if (this.app === 'car') this.drawCar(g); else this.drawRadio(g);
+    if (this.app === 'tc') this.drawTC(g); else if (this.app === 'map') this.drawMap(g); else if (this.app === 'car') this.drawCar(g); else if (this.app === 'space') this.drawSpace(g); else this.drawRadio(g);
     const apps = [['tc', 'Time Circuits'], ['map', 'Map'], ['car', 'Car'], ['radio', 'Radio']];
+    if (this.g.space) apps.push(['space', this.g.space.active ? 'Earth' : 'Space']);
     g.fillStyle = '#08090b'; g.fillRect(0, H - 96, W, 96);
     g.fillStyle = C.line; g.fillRect(0, H - 96, W, 1);
     apps.forEach(([id, label], i) => {
@@ -193,6 +196,7 @@ export class Cockpit {
     if (id === 'tc') { g.arc(x, y, 12, 0, Math.PI * 2); g.moveTo(x, y); g.lineTo(x, y - 8); g.moveTo(x, y); g.lineTo(x + 6, y + 3); }
     else if (id === 'map') { g.moveTo(x - 13, y - 9); g.lineTo(x - 4, y - 12); g.lineTo(x + 4, y - 9); g.lineTo(x + 13, y - 12); g.lineTo(x + 13, y + 9); g.lineTo(x + 4, y + 12); g.lineTo(x - 4, y + 9); g.lineTo(x - 13, y + 12); g.closePath(); }
     else if (id === 'car') { rr(g, x - 15, y - 3, 30, 10, 4); g.moveTo(x - 9, y - 3); g.lineTo(x - 5, y - 10); g.lineTo(x + 6, y - 10); g.lineTo(x + 10, y - 3); }
+    else if (id === 'space') { g.arc(x, y, 9, 0, Math.PI * 2); g.moveTo(x + 17, y - 2); g.ellipse(x, y, 17, 6, -0.35, 0, Math.PI * 2); }
     else { g.arc(x, y + 2, 9, Math.PI, 0); g.moveTo(x - 13, y + 2); g.lineTo(x - 13, y + 10); g.moveTo(x + 13, y + 2); g.lineTo(x + 13, y + 10); }
     g.stroke();
   }
@@ -294,7 +298,7 @@ export class Cockpit {
   }
 
   drawMap(g) {
-    if (this.g.valley) this.drawValleyMap(g); else this.drawPlateMap(g);
+    if (this.g.space && this.g.space.active) this.drawOrbitMap(g); else if (this.g.valley) this.drawValleyMap(g); else this.drawPlateMap(g);
   }
 
   drawValleyMap(g) {
@@ -379,6 +383,104 @@ export class Cockpit {
     g.restore();
     g.font = `500 15px ${FONT}`; g.fillStyle = C.dim; g.fillText('Test plate · 1.4 × 2.3 km', mx + 18, my + 30);
     g.fillText(`${Math.round(s.pos.x)} , ${Math.round(s.pos.z)}`, mx + 18, my + 54);
+  }
+
+  drawSpace(g) {
+    const sp = this.g.space, st = sp.state, inSpace = sp.active;
+    const armed = st === 'armed' || st === 'armedReturn', going = st === 'launch' || st === 'reentry';
+    const x = 40, y = 80, w = 700, h = 520;
+    g.fillStyle = C.panel; rr(g, x, y, w, h, 22); g.fill();
+    g.font = `600 14px ${FONT}`; g.fillStyle = C.faint; g.textBaseline = 'alphabetic'; g.textAlign = 'left';
+    g.fillText(inSpace ? 'DESTINATION · EARTH' : 'DESTINATION · SPACE', x + 32, y + 46);
+    g.font = `300 46px ${FONT}`; g.fillStyle = C.ink;
+    g.fillText(inSpace ? 'Back to Earth' : 'Low Earth orbit', x + 32, y + 104);
+    g.font = `400 18px ${FONT}`; g.fillStyle = C.dim;
+    g.fillText(inSpace ? 'Re-entry, landing on the ground under you (or a map pick)' : '400 km up, same date and time as now', x + 32, y + 138);
+    const bx = x + 32, by = y + 180, bw = w - 64, bh = 200;
+    const hot = this.btn('space_go', bx, by, bw, bh, () => this.g.space.press());
+    g.fillStyle = armed ? 'rgba(255,182,72,0.16)' : going ? 'rgba(62,139,255,0.14)' : hot ? 'rgba(255,255,255,0.09)' : 'rgba(255,255,255,0.05)';
+    rr(g, bx, by, bw, bh, 20); g.fill();
+    if (armed) { g.strokeStyle = C.amber; g.lineWidth = 2.5; rr(g, bx + 1, by + 1, bw - 2, bh - 2, 19); g.stroke(); }
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = `600 44px ${FONT}`; g.fillStyle = armed ? C.amber : going ? C.blue : C.ink;
+    const big = going ? (st === 'launch' ? 'LAUNCHING' : 'RE-ENTRY') : armed ? 'ARMED' : inSpace ? 'EARTH' : 'SPACE';
+    g.fillText(big, bx + bw / 2, by + bh / 2 - 18);
+    g.font = `500 18px ${FONT}`; g.fillStyle = C.dim;
+    g.fillText(going ? 'Hold on' : armed ? 'Tap again to go' : 'Tap to arm', bx + bw / 2, by + bh / 2 + 34);
+    if (armed) {
+      const hc = this.btn('space_cancel', bx + bw - 150, by + bh + 22, 150, 54, () => this.g.space.cancel());
+      g.fillStyle = hc ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.06)'; rr(g, bx + bw - 150, by + bh + 22, 150, 54, 27); g.fill();
+      g.font = `500 18px ${FONT}`; g.fillStyle = C.ink; g.fillText('Cancel', bx + bw - 75, by + bh + 49);
+    }
+    g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+    g.font = `400 16px ${FONT}`; g.fillStyle = C.faint; g.fillText('Same as pressing O twice', bx, by + bh + 56);
+    const ix = 770, iw = W - 40 - ix;
+    g.fillStyle = C.panel; rr(g, ix, y, iw, h, 22); g.fill();
+    const I = sp.info();
+    const rows = inSpace ? [
+      ['ALTITUDE', `${Math.round(I.alt / 1000).toLocaleString('en-US')} km`],
+      ['ERA', `${I.label}`],
+      [I.picked ? 'LANDING TARGET' : 'LANDING', I.landingName || '-'],
+      ['DRIVE', I.cruise > 1 ? `${Math.round(I.cruise / 1000).toLocaleString('en-US')} km/s` : I.sunlit ? 'Off · daylight' : 'Off · Earth shadow'],
+    ] : [['ARRIVAL', '400 km'], ['ERA', eraOf(this.g.tc.present.year).label], ['TIME', `${pad2(this.g.tc.present.hour)}:${pad2(this.g.tc.present.minute)}`], ['CO-OP', 'Friends in orbit see you']];
+    rows.forEach(([k, v], i) => {
+      const ry = y + 52 + i * 92;
+      g.font = `600 13px ${FONT}`; g.fillStyle = C.faint; g.fillText(k, ix + 28, ry);
+      let fs = 32; do { g.font = `300 ${fs}px ${FONT}`; fs -= 2; } while (fs > 18 && g.measureText(v).width > iw - 56);
+      g.fillStyle = C.ink; g.fillText(v, ix + 28, ry + 40);
+    });
+    g.font = `400 15px ${FONT}`; g.fillStyle = C.dim;
+    const tips = inSpace ? ['S turns you around, W burns', 'Hold X: orbital drive', 'Map app: pick a landing spot'] : ['No gravity up there', 'You keep drifting until you burn', 'back the other way'];
+    tips.forEach((t, i) => g.fillText(t, ix + 28, y + h - 90 + i * 26));
+  }
+
+  drawOrbitMap(g) {
+    const sp = this.g.space, I = sp.info();
+    const mx = 40, my = 70, mw = W - 80, mh = H - 96 - 90;
+    g.fillStyle = '#05070b'; rr(g, mx, my, mw, mh, 18); g.fill();
+    const iw = Math.min(mw - 300, (mh - 20) * 2), ih = iw / 2, ix = mx + 14, iy = my + (mh - ih) / 2;
+    g.save(); rr(g, ix, iy, iw, ih, 12); g.clip();
+    if (sp.thumb) g.drawImage(sp.thumb, ix, iy, iw, ih); else { g.fillStyle = '#0d2446'; g.fillRect(ix, iy, iw, ih); }
+    g.strokeStyle = 'rgba(255,255,255,0.08)'; g.lineWidth = 1;
+    for (let k = 1; k < 12; k++) { g.beginPath(); g.moveTo(ix + iw * k / 12, iy); g.lineTo(ix + iw * k / 12, iy + ih); g.stroke(); }
+    for (let k = 1; k < 6; k++) { g.beginPath(); g.moveTo(ix, iy + ih * k / 6); g.lineTo(ix + iw, iy + ih * k / 6); g.stroke(); }
+    const toXY = (lat, lon) => [ix + (lon + 180) / 360 * iw, iy + (90 - lat) / 180 * ih];
+    const [vx, vy] = toXY(35.1, -117.9);
+    g.fillStyle = 'rgba(255,255,255,0.8)'; g.beginPath(); g.arc(vx, vy, 3.5, 0, Math.PI * 2); g.fill();
+    if (I.home) { const [hx, hy] = toXY(I.home.lat, I.home.lon); g.strokeStyle = 'rgba(255,255,255,0.85)'; g.lineWidth = 1.5; g.beginPath(); g.arc(hx, hy, 7, 0, Math.PI * 2); g.stroke(); }
+    if (I.track) {
+      g.strokeStyle = 'rgba(90,170,255,0.55)'; g.lineWidth = 2; g.setLineDash([6, 5]); g.beginPath();
+      let px = null;
+      for (const p of I.track) { const [x, y] = toXY(p.lat, p.lon); if (px === null || Math.abs(x - px) > iw / 2) g.moveTo(x, y); else g.lineTo(x, y); px = x; }
+      g.stroke(); g.setLineDash([]);
+    }
+    if (I.sub) {
+      const [cx, cy] = toXY(I.sub.lat, I.sub.lon);
+      g.fillStyle = C.blue; g.beginPath(); g.arc(cx, cy, 8, 0, Math.PI * 2); g.fill(); g.strokeStyle = '#fff'; g.lineWidth = 2; g.stroke();
+    }
+    if (I.landing && I.picked) {
+      const [tx, ty] = toXY(I.landing.lat, I.landing.lon);
+      g.strokeStyle = C.amber; g.lineWidth = 2.5; g.beginPath(); g.arc(tx, ty, 13, 0, Math.PI * 2); g.moveTo(tx - 20, ty); g.lineTo(tx + 20, ty); g.moveTo(tx, ty - 20); g.lineTo(tx, ty + 20); g.stroke();
+    }
+    g.restore();
+    this.btn('orbit_pick', ix, iy, iw, ih, () => { const h = this.hit; if (!h) return; this.g.space.setTarget(90 - (h.y - iy) / ih * 180, (h.x - ix) / iw * 360 - 180); });
+    const tx0 = ix + iw + 26;
+    g.font = `600 13px ${FONT}`; g.fillStyle = C.faint; g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+    g.fillText('ALTITUDE', tx0, my + 50);
+    g.font = `300 34px ${FONT}`; g.fillStyle = C.ink; g.fillText(`${Math.round(I.alt / 1000).toLocaleString('en-US')} km`, tx0, my + 90);
+    g.font = `600 13px ${FONT}`; g.fillStyle = C.faint; g.fillText(I.picked ? 'LANDING TARGET' : 'LANDING (UNDER YOU)', tx0, my + 150);
+    let fs = 24; const ln = I.landingName || '';
+    do { g.font = `400 ${fs}px ${FONT}`; fs -= 1; } while (fs > 14 && g.measureText(ln).width > W - 60 - tx0);
+    g.fillStyle = C.ink; g.fillText(ln, tx0, my + 182);
+    g.font = `400 15px ${FONT}`; g.fillStyle = C.dim;
+    ['Tap the map to pick', 'where you land.', 'Then Earth: tap twice.'].forEach((t, i) => g.fillText(t, tx0, my + 240 + i * 24));
+    const pill = (id, y, label, fn) => {
+      const hc = this.btn(id, tx0, y, 170, 50, fn);
+      g.fillStyle = hc ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.06)'; rr(g, tx0, y, 170, 50, 25); g.fill();
+      g.font = `500 16px ${FONT}`; g.fillStyle = C.ink; g.textAlign = 'center'; g.fillText(label, tx0 + 85, y + 31); g.textAlign = 'left';
+    };
+    if (I.home) pill('orbit_home', my + 330, 'Where I left', () => { this.g.space.setTarget(I.home.lat, I.home.lon); this.dirty = true; });
+    if (I.picked) pill('orbit_clear', my + 394, 'Under me', () => { this.g.space.target = null; this.dirty = true; });
   }
 
   drawCar(g) {

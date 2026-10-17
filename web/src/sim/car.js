@@ -1,4 +1,4 @@
-// Roadster 88 car simulation: Rapier rigid body with raycast suspension, slip-based combined tyre model with implicit wheel spin, AWD powertrain (TC, ABS, regen, torque reallocation), aero and the thruster flight computer. Pure JS, Rapier is injected.
+// Roadster 88 car simulation: Rapier rigid body with raycast suspension, slip-based combined tyre model with implicit wheel spin, AWD powertrain (TC, ABS, regen, torque reallocation), aero and the thruster flight computer, plus a microgravity step for space (no gravity, drag or tyres). Pure JS, Rapier is injected.
 import { V3, Quat, clamp, smoothstep, moveTowards, DEG, MPH, yawOf } from './math.js';
 import { Thrusters } from './thrusters.js';
 import { FlightComputer } from './flight.js';
@@ -409,12 +409,37 @@ export class CarSim {
     if (this.wreck) inp = WRECK_INPUT;
     this.input = inp;
     this.steps++;
+    if (this.env.space) { this.spaceStep(dt, inp); return; }
+    if (this.zeroG) { this.body.setGravityScale(1, true); this.zeroG = false; this.flight.mode = 'ballistic'; }
     this.steering(dt, inp);
     this.suspension(dt);
     this.powertrain(dt, inp);
     this.tyres(dt);
     this.aero();
     this.thrust(dt, inp);
+    const J = this._a.copy(this.forceAcc).scale(dt), Jt = this._b.copy(this.torqueAcc).scale(dt);
+    this.body.applyImpulse({ x: J.x, y: J.y, z: J.z }, true);
+    this.body.applyTorqueImpulse({ x: Jt.x, y: Jt.y, z: Jt.z }, true);
+  }
+
+  spaceStep(dt, inp) {
+    if (!this.zeroG) { this.body.setGravityScale(0, true); this.zeroG = true; }
+    const S = this.tu.suspension;
+    this.steering(dt, inp);
+    this.contacts = 0; this.clearance = 99;
+    for (const w of this.wheels) {
+      w.contact = false; w.load = 0; w.compression = 0; w.prevCompression = 0; w.length = S.rest_length; w.hitCollider = null;
+      w.fx = 0; w.fy = 0; w.kappa = 0; w.slip = 0; w.slipVel = 0; w.alpha = 0; w.tc = 1; w.abs = 1; w.drive = 0; w.brake = 0; w.regen = 0;
+      w.omega *= 1 - Math.min(1, 0.25 * dt); w.spin += w.omega * dt;
+    }
+    this.motorForce = 0; this.regenForce = 0; this.load = 0; this.brakeOn = 0; this.parkedT = 0; this.motorRpm = 0;
+    const th = this.thrusters;
+    this.flight.update(dt, inp, { space: true, q: this.q, vel: this.vel, speed: this.speed, fwdSpeed: this.fwdSpeed, angLocal: this.angLocal, mass: this.mass, inertia: this.inertia, com: this.comLocal, contacts: 0, clearance: 99 });
+    for (const n of th.all) { n.groundGain = 1; n.groundDist = 99; }
+    th.update(dt, this.comLocal);
+    this.forceAcc.add(this._c.copy(th.totalForce).applyQuat(this.q));
+    this.torqueAcc.add(this._d.copy(th.totalTorque).applyQuat(this.q));
+    if (this.flight.fineT && !inp.park) this.torqueAcc.add(this._e.copy(this.flight.fineT).applyQuat(this.q));
     const J = this._a.copy(this.forceAcc).scale(dt), Jt = this._b.copy(this.torqueAcc).scale(dt);
     this.body.applyImpulse({ x: J.x, y: J.y, z: J.z }, true);
     this.body.applyTorqueImpulse({ x: Jt.x, y: Jt.y, z: Jt.z }, true);

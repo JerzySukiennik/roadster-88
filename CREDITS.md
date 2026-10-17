@@ -137,6 +137,23 @@ Licensed under Creative Commons: By Attribution 4.0 License, http://creativecomm
 | assets/earth/biome_1k.png | derived from assets/space/earth_day_jul_4k.webp (NASA Blue Marble imagery) | vegetation, desert and ice classes per landing point | public domain |
 | tool | web/tools/earth-bake.py (sources in Niepotrzebne/earth-src, not committed) | builds the files above | |
 
+## Space mode imagery and data (space agent, 2026-10-17)
+
+Baked into `assets/space/` by `Niepotrzebne/space/bake_space.py` (resized, recompressed to WebP; the star list to a small binary).
+
+| Files | Source | Author | Licence |
+|---|---|---|---|
+| earth_day_{jan,jul}_{8k,4k}.webp, earth_thumb_*.webp | Blue Marble Next Generation, January and July 2004 (world.200401 / world.200407, 21600 x 10800) | NASA Earth Observatory, Reto Stöckli | Public domain (NASA imagery) |
+| earth_day_* alpha channel | Water mask from `assets/earth/mask_8k.png` (Natural Earth 10 m ocean and lakes, see Earth terrain data) | Natural Earth | Public domain |
+| earth_night_{8k,4k}.webp | Black Marble 2016 (BlackMarble_2016_3km) | NASA Earth Observatory, Joshua Stevens, Miguel Román | Public domain (NASA imagery) |
+| earth_clouds_{8k,4k}.webp | Blue Marble clouds (cloud_combined_8192) | NASA Earth Observatory / Visible Earth | Public domain (NASA imagery) |
+| earth_elev_4k.webp | GEBCO_08 land elevation and bathymetry as published with Blue Marble (gebco_08_rev_elev / gebco_08_rev_bath) | NASA Visible Earth, GEBCO | Public domain (NASA release) |
+| paleo_*.webp | PALEOMAP PaleoDEMs, 6 arc-minute (Scotese, C.R. and Wright, N. 2018, PALEOMAP Paleodigital Elevation Models for the Phanerozoic), Zenodo 5460860 | Christopher R. Scotese, Nicky Wright | CC BY 4.0 |
+| moon_{4k,2k}.webp, moon_elev.webp | CGI Moon Kit (LROC colour and LOLA elevation), SVS 4720 | NASA Scientific Visualization Studio, Ernie Wright | Public domain (NASA) |
+| milkyway_2k.webp | Deep Star Maps 2020, Milky Way layer (milkyway_2020_4k), SVS 4851 | NASA/Goddard Scientific Visualization Studio | Public domain (NASA); Gaia DR2 data ESA/Gaia/DPAC (CC BY-SA 3.0 IGO) |
+| stars.bin | Yale Bright Star Catalogue, 5th revised edition (V/50) | Hoffleit and Warren, via CDS Strasbourg | Public domain |
+| (streamed, not stored) nadir detail tiles | NASA GIBS WMTS, layers BlueMarble_NextGeneration (2004-08-01) and VIIRS_Black_Marble (2016-01-01), EPSG:4326, 500 m, from gibs.earthdata.nasa.gov | NASA Global Imagery Browse Services (EOSDIS) | Public domain (NASA imagery, no restrictions on reuse) |
+
 ## Story voices
 | File | Source | Used for | Licence |
 |---|---|---|---|

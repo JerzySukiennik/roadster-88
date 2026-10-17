@@ -1,6 +1,8 @@
-// Roadster 88 flight computer: maps player intent to thrust (ground boost, retro, hop, hover, ballistic air) and runs flight assist (attitude hold, rate damping) through the control allocator.
+// Roadster 88 flight computer: maps player intent to thrust (ground boost, retro, hop, hover, ballistic air, microgravity in space) and runs flight assist (attitude hold, rate damping, retrograde turn in space) through the control allocator.
 import { V3, Quat, clamp, smoothstep, DEG, MPH } from './math.js';
 import { Allocator } from './allocator.js';
+
+export const SPACE = { yaw: 45, pitch: 50, roll: 80, kd: 6.0, kp: 2.4, main: 0.55, lift: 0.6, minSpeed: 0.25, fine: 2.5, fineBelow: 0.05 };
 
 export class FlightComputer {
   constructor(tuning, thrusters) {
@@ -17,6 +19,7 @@ export class FlightComputer {
   }
 
   update(dt, inp, s) {
+    if (s.space) { this.spaceUpdate(dt, inp, s); return; }
     const T = this.T, F = this.F, th = this.th;
     const g = this.tu.gravity, m = s.mass;
     const grounded = s.contacts >= 2;
@@ -126,6 +129,44 @@ export class FlightComputer {
     } else if (!direct) {
       this.alloc.clear();
     }
+  }
+
+  spaceUpdate(dt, inp, s) {
+    const th = this.th, I = s.inertia, w = s.angLocal, S = SPACE;
+    this.mode = 'space'; this.prevLift = inp.lift; this.airT += dt; this.groundedT = 0; this.retro = -1;
+    if (inp.park) { this.alloc.clear(); return; }
+    th.requestFront(); th.requestSide();
+    const fw = this._fw.set(0, 0, 0);
+    if (inp.boost || inp.throttle) fw.z = th.maxRear() * (inp.boost ? 1 : S.main);
+    if (inp.lift) fw.y = th.maxSide() * S.lift;
+    const cmd = this._e.set(inp.pitch * S.pitch * DEG, inp.steer * S.yaw * DEG, inp.roll * S.roll * DEG);
+    const free = this._v.set(inp.pitch ? 1 : 0, inp.steer ? 1 : 0, inp.roll ? 1 : 0);
+    if (inp.brake && s.speed > S.minSpeed) {
+      const d = this._lf.copy(s.vel).applyQuatInv(s.q).scale(-1 / s.speed);
+      const yawErr = Math.atan2(d.x, d.z), pitchErr = -Math.atan2(d.y, Math.hypot(d.x, d.z));
+      this.retro = Math.acos(clamp(d.z, -1, 1));
+      if (!inp.pitch) { cmd.x = clamp(pitchErr * S.kp * (Math.abs(yawErr) < 1.2 ? 1 : 0.25), -S.pitch * DEG, S.pitch * DEG); free.x = 1; }
+      if (!inp.steer) { cmd.y = clamp(yawErr * S.kp, -S.yaw * DEG, S.yaw * DEG); free.y = 1; }
+      if (fw.z > 0) fw.z *= clamp((0.6 - this.retro) / 0.4, 0, 1) * clamp(s.speed / 2.5, 0.12, 1);
+    } else if (inp.brake && fw.z > 0) fw.z = 0;
+    const k = this.assist ? S.kd : 4;
+    const want = this.wantT.set(0, 0, 0);
+    if (this.assist || free.x) want.x = I.pitch * k * (cmd.x - w.x);
+    if (this.assist || free.y) want.y = I.yaw * k * (cmd.y - w.y);
+    if (this.assist || free.z) want.z = I.roll * k * (cmd.z - w.z);
+    this.debug.yawCmd = cmd.y;
+    const fine = this.fineT || (this.fineT = new V3());
+    fine.set(0, 0, 0);
+    if (this.assist) {
+      const e = this._er || (this._er = new V3());
+      e.set(cmd.x - w.x, cmd.y - w.y, cmd.z - w.z);
+      if (Math.abs(e.x) < S.fineBelow) fine.x = I.pitch * S.fine * e.x;
+      if (Math.abs(e.y) < S.fineBelow) fine.y = I.yaw * S.fine * e.y;
+      if (Math.abs(e.z) < S.fineBelow) fine.z = I.roll * S.fine * e.z;
+    }
+    if (!this.assist && !free.x && !free.y && !free.z && fw.lenSq() === 0) { this.alloc.clear(); return; }
+    this.wantF.copy(fw);
+    this.alloc.solve(this.wantF, this.wantT, s.com);
   }
 
   grip(fw, v, fh, m) {
