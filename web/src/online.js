@@ -68,6 +68,8 @@ class Remote {
     if (d.ck) { this.ck = d.ck; this.ckT = (d.t || 0) / 1000; this.j = d.j || 0; }
     if (d.dg) this.dgPending = d.dg;
     if (d.xc !== undefined) this.xcPending = d.xc || [];
+    if (d.lf) { this.lf = d.lf; this.lfNew = true; }
+    if (d.le) this.le = (this.le || []).concat(d.le).slice(-40);
     this.name = String(d.n || '').slice(0, 20); this.outfit = d.o | 0; this.last = now; this.paint = PAINTS[d.p] ? d.p : 'white'; this.ride = d.r || null; this.dy = typeof d.dy === 'number' ? d.dy : null;
     const fl = (d.k && d.k[1]) || 0, was = this.lastFl === undefined ? 0 : this.lastFl;
     if ((fl & 128) && !(was & 128) && this.lastFl !== undefined) { this.departed = true; this.pendingFx = 'depart'; }
@@ -455,7 +457,8 @@ export class Online {
     const F = this.F, id = this.roomId();
     if (id === this.room) return;
     this.leaveRoom(false);
-    this.room = id; this.joinAt = Math.round(Date.now() + this.offset);
+    this.room = id; this.joinAt = Math.round(Date.now() + this.offset); this.lifeLead = undefined;
+    if (this.g.life && this.g.life.seed) this.g.life.seed(id);
     const ref = F.ref(this.db, `roadster88/world/${id}`);
     this.me = F.child(ref, this.uid);
     F.onDisconnect(this.me).remove();
@@ -493,6 +496,9 @@ export class Online {
     const P = g.tc.present; d.j = this.joinAt; d.ck = [P.year, P.month, P.day, P.hour, P.minute];
     const dg = this.damageNet(nowMs); if (dg) d.dg = dg;
     if (nowMs - (this.xcAt || 0) > 1000) { this.xcAt = nowMs; d.xc = this.extrasNet(); }
+    const life = g.life;
+    if (life && life.netExport && this.lifeLead === true) { this.lfTick = !this.lfTick; if (this.lfTick) d.lf = life.netExport(60, this.players().map((q) => [q.x, q.z])); }
+    if (life && life.netEvents && this.lifeLead === false) { const ev = life.netEvents(); if (ev && ev.length) d.le = ev; }
     if (gone) return;
     F.set(this.me, d).catch(() => {});
   }
@@ -523,6 +529,23 @@ export class Online {
       if (out.length >= 3) break;
     }
     return out.length ? out : 0;
+  }
+
+  players() {
+    const g = this.g, w = g.walker, me = w.active ? w.pos : g.car.sim.pos, mv = w.active ? w.vel : g.car.sim.vel;
+    const out = [{ x: me.x, y: me.y, z: me.z, vx: mv.x, vz: mv.z, onFoot: w.active, uid: this.uid || 'me', local: true }];
+    for (const r of this.remotes.values()) { if (!r.view && !r.foot) continue; const p = r.foot ? r.walk.pose : r.pos; out.push({ x: p.x, y: p.y, z: p.z, vx: r.vel.x, vz: r.vel.z, onFoot: !!r.foot, uid: r.uid }); }
+    return out;
+  }
+
+  leaderRemote() { let L = null; for (const r of this.remotes.values()) if (r.j && r.j < this.joinAt && (!L || r.j < L.j)) L = r; return L; }
+
+  lifeNet() {
+    const life = this.g.life; if (!life || !life.netLeader || !this.joinAt) return;
+    const lead = this.remotes.size ? !this.leaderRemote() : null;
+    if (lead !== this.lifeLead) { this.lifeLead = lead; life.netLeader(lead); }
+    if (lead === false) { const R = this.leaderRemote(); if (R && R.lfNew) { R.lfNew = false; life.netImport(R.lf); } }
+    else if (lead === true) for (const r of this.remotes.values()) if (r.le && r.le.length) { for (const e of r.le) life.netHit(e[0], [e[1], e[2], e[3]]); r.le = []; }
   }
 
   syncClock() {
@@ -608,6 +631,7 @@ export class Online {
     this.sendT += dt;
     if (this.sendT >= RATE) { this.sendT = 0; this.send(); }
     this.clockT = (this.clockT || 0) + dt; if (this.clockT > 1) { this.clockT = 0; this.syncClock(); }
+    this.lifeNet();
     const g = this.g, now = performance.now() / 1000, cam = g.gfx.camera.position, night = g.sky ? g.sky.state.night : 0;
     for (const [uid, r] of this.remotes) {
       if (now - r.last > STALE / 1000) { r.dispose(false); this.remotes.delete(uid); continue; }

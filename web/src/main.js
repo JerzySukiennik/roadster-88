@@ -182,6 +182,7 @@ class Game {
 
   arriveValley() {
     this.applyEra(false);
+    if (this.life && this.life.seed && this.online && this.online.status === 'online') this.life.seed(this.online.roomId());
     if (this.life && !this.lifeBroken) { try { this.life.setEra(this.eraId()); } catch (e) { this.lifeBroken = true; console.error('life.setEra failed', e); } }
     const sim = this.car.sim, p = sim.pos;
     const s = this.valley.safeSpawnAt(p.x, p.z, p.y, { body: sim.body, rot: sim.body.rotation() });
