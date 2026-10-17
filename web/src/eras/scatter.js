@@ -1,9 +1,9 @@
-// Roadster 88 era scatter: per-period flora and rock plans (floraplans.js) placed deterministically over the valley and, streamed tile by tile around the camera, over the whole mega map outside it (keeping off water, roads and the city) in natural clumps and clearings, every instance with its own variant, age, scale, lean and hue, streamed around the camera as near cards (one instanced mesh per variant) and far impostors (one atlas, flipped and tinted per instance), trunk and rock colliders around the car, and breakable trees that fall as rigid bodies and stay felled in the causality world state.
+// Roadster 88 era scatter: per-period flora and rock plans (floraplans.js) placed deterministically over the valley (or, on the real Earth, wild plans by climate streamed over the landing patch) and, streamed tile by tile around the camera, over the whole mega map outside it (keeping off water, roads and the city) in natural clumps and clearings, every instance with its own variant, age, scale, lean and hue, streamed around the camera as near cards (one instanced mesh per variant) and far impostors (one atlas, flipped and tinted per instance), trunk and rock colliders around the car, and breakable trees that fall as rigid bodies and stay felled in the causality world state.
 import * as THREE from 'three/webgpu';
 import { FloraLib, SPECIES, rockGeometry, farGeometry } from './flora.js';
 import { Land, F } from './land.js';
 import { rng, hash2i, hashStr, inPoly } from './lib.js';
-import { plansFor, planKey, smooth } from './floraplans.js';
+import { plansFor, planKey, smooth, wildPlansFor } from './floraplans.js';
 import { periodInfo } from './periods.js';
 import { GROUP, groups } from '../sim/car.js';
 
@@ -18,7 +18,7 @@ const STYLE = { oak: [0.06, 1, 1], cottonwood: [0.04, 0.8, 1], magnolia: [0.05, 
 const GROUND = new Set(['grass', 'dryGrass', 'fern', 'horsetail', 'reed', 'flowers', 'moss', 'wheat', 'tundra', 'alienFern']);
 
 const ROCK = { rock: { h: 1, r: 1, trunk: 0, rock: true }, boulder: { h: 3, r: 1, trunk: 0, rock: true }, stromatolite: { h: 1, r: 1.2, trunk: 0, rock: true } };
-const TALL_TILE = 128, GROUND_TILE = 32, INNER = 2048, BLOCKED_SURF = new Set(['water', 'asphalt', 'concrete', 'sidewalk', 'deck', 'pavement', 'rail', 'steel', 'tunnel']);
+const TALL_TILE = 128, GROUND_TILE = 32, INNER = 2048, EARTH_H = 29952, BLOCKED_SURF = new Set(['water', 'asphalt', 'concrete', 'sidewalk', 'deck', 'pavement', 'rail', 'steel', 'tunnel']);
 
 export class Scatter {
   constructor(sys) {
@@ -42,9 +42,39 @@ export class Scatter {
     this.counts = {};
     const B = sys.valley.bounds, half = B ? Math.max(INNER, Math.min(8192, Math.max(-B.x0, B.x1, -B.z0, B.z1))) : INNER;
     const H = typeof location !== 'undefined' && /[?&]noouter\b/.test(location.search) ? INNER : half;
-    this.LO = -H; this.HI = H; this.queue = []; this.queued = new Set();
+    this.LO = -H; this.HI = H; this.valleyH = H; this.earth = null; this.queue = []; this.queued = new Set(); this.warmQ = []; this.warmDraw = null;
     this._m = new THREE.Matrix4(); this._q = new THREE.Quaternion(); this._v = new THREE.Vector3(); this._s = new THREE.Vector3(); this._box = new THREE.Box3();
   }
+
+  setEarth(info) {
+    this.earth = info || null;
+    const H = this.earth ? EARTH_H : this.valleyH;
+    this.LO = -H; this.HI = H;
+    this.queue.length = 0; this.queued.clear();
+  }
+
+  undrawn(M) { return [...M.near.slice(0, this.earth ? 2 : M.near.length), M.far].filter((im) => im && !im.userData.drawn); }
+
+  prewarm(list) {
+    for (const sp of list) { if (!SPECIES[sp] && !ROCK[sp]) continue; if (this.undrawn(this.meshFor(sp)).length && !this.warmQ.includes(sp)) this.warmQ.push(sp); }
+  }
+
+  warmNext() {
+    const g = this.sys.game, W = this.warmDraw;
+    if (W) { for (const im of W.ims) { im.userData.drawn = true; im.count = 0; im.visible = false; } this.warmDraw = null; this.dirty = true; this.warmed = (this.warmed || 0) + 1; return; }
+    if (!g.started) return;
+    while (this.warmQ.length) {
+      const M = this.meshFor(this.warmQ.shift());
+      const ims = this.undrawn(M).filter((im) => im.count === 0);
+      if (!ims.length) continue;
+      const c = g.gfx.camera, d = (this._w || (this._w = new THREE.Vector3())).set(0, 0, -1).applyQuaternion(c.quaternion), x = c.position.x + d.x * 4, y = c.position.y + d.y * 4, z = c.position.z + d.z * 4;
+      for (const im of ims) { im.instanceMatrix.array.set([0.001, 0, 0, 0, 0, 0.001, 0, 0, 0, 0, 0.001, 0, x, y, z, 1]); im.count = 1; im.visible = true; im.instanceMatrix.clearUpdateRanges(); im.instanceMatrix.needsUpdate = true; }
+      this.warmDraw = { M, ims };
+      return;
+    }
+  }
+
+  blockedAt(x, z) { return !this.earth && this.land.blocked(x, z); }
 
   get land() { if (!this._land) this._land = new Land(this.sys.valley, this.sys.roadList); return this._land; }
 
@@ -96,7 +126,23 @@ export class Scatter {
   }
 
   sample(x, z, ctx) {
-    const V = this.sys.valley, L = this.land;
+    const V = this.sys.valley;
+    if (this.earth) {
+      const h = V.heightAt(x, z), n = V.normalAt(x, z, this._v), E = V.earth;
+      let wet = 1, depth = -99, shore = 99, surf;
+      if (E && E.waterAt) {
+        const w = E.waterAt(x, z), on = w.cover >= 0.02 && w.level > -9000;
+        if (on && h < w.level) { depth = w.level - h; wet = 0; surf = 'water'; }
+        else { if (on) shore = Math.max(0, h - w.level) * 4; surf = V.surfaceAt ? V.surfaceAt(x, z) : 'grass'; }
+      } else {
+        const fl = V.fluidAt ? V.fluidAt(x, z) : null;
+        if (fl) { depth = fl.level - h; wet = 0; surf = 'water'; } else { if (h < 12) shore = Math.max(0, h) * 4; surf = V.surfaceAt ? V.surfaceAt(x, z) : 'grass'; }
+      }
+      if (surf === 'water') wet = 0;
+      const slope = 1 - n.y;
+      return { x, z, h: h - this.earth.ref, ha: h, surf, slope, flag: slope > 0.35 ? F.MASSIF : 0, road: 0, blocked: false, n1: fbm2(x / 420, z / 420, 11), n2: fbm2(x / 70, z / 70, 23), wet, depth, shore };
+    }
+    const L = this.land;
     const h = V.heightAt(x, z);
     const n = V.normalAt(x, z, this._v);
     const flag = L.flag(x, z);
@@ -134,7 +180,7 @@ export class Scatter {
       const T = this.traits(plan.sp, rv, ra, rt, rh, rb, rf);
       const s = (plan.scale[0] + (plan.scale[1] - plan.scale[0]) * sr) * T.k;
       const sink = rockish ? s * 0.35 : 0.05 + Math.abs(T.tilt) * 2;
-      out.push({ x, y: g.h - sink, z, rot, s, sy: rockish ? s * (0.6 + sq * 0.6) * (plan.squash || 1) : s * (0.88 + sq * 0.24), key, c: rockish ? [0.86 + c0 * 0.22, 0.88 + c1 * 0.18, 0.84 + (c0 + c1) * 0.1] : [0.95 + c0 * 0.1, 0.95 + c1 * 0.1, 0.95 + (c0 + c1) * 0.05], sp: plan.sp, v: T.v, tilt: rockish ? 0 : T.tilt, h: T.h, b: T.b, bw: T.bw, f: T.f });
+      out.push({ x, y: (g.ha === undefined ? g.h : g.ha) - sink, z, rot, s, sy: rockish ? s * (0.6 + sq * 0.6) * (plan.squash || 1) : s * (0.88 + sq * 0.24), key, c: rockish ? [0.86 + c0 * 0.22, 0.88 + c1 * 0.18, 0.84 + (c0 + c1) * 0.1] : [0.95 + c0 * 0.1, 0.95 + c1 * 0.1, 0.95 + (c0 + c1) * 0.05], sp: plan.sp, v: T.v, tilt: rockish ? 0 : T.tilt, h: T.h, b: T.b, bw: T.bw, f: T.f });
     }
     return out;
   }
@@ -151,13 +197,15 @@ export class Scatter {
     this.removed = new Set();
     for (const c of this.sys.worldState.keysChangedIn(eraId)) if (c.state !== 'intact') this.removed.add(c.key);
     const t0 = performance.now();
-    this.pools = [];
-    for (const plan of plansFor(eraId, year)) {
+    this.pools = []; this.counts = {};
+    const E = this.earth, plans = E ? wildPlansFor(eraId, year, E.climate, periodInfo(eraId).age, E.cell) : plansFor(eraId, year);
+    const live = this.sys.game.started;
+    for (const plan of plans) {
       const M = this.meshFor(plan.sp);
       this.setVisible(M, true);
       const lazy = !plan.far;
-      const pool = { plan, M, tall: !lazy, lazy, tsize: plan.ground ? GROUND_TILE : 64, tiles: new Map(), near: plan.near * Math.sqrt(this.sys.detail), far: (plan.far || 0) * Math.min(1, 0.6 + 0.4 * this.sys.detail) };
-      if (!lazy) {
+      const pool = { plan, M, tall: !lazy, lazy, tsize: plan.ground ? GROUND_TILE : 64, tiles: new Map(), near: plan.near * Math.sqrt(this.sys.detail) * (E ? 0.85 : 1), far: Math.min(E ? 1400 : 1e9, (plan.far || 0) * Math.min(1, 0.6 + 0.4 * this.sys.detail)) };
+      if (!lazy && !E) {
         const ck = eraId + ':' + planKey(plan);
         let tiles = this.genCache.get(ck);
         if (!tiles) {
@@ -172,9 +220,10 @@ export class Scatter {
         }
         pool.tiles = tiles;
       }
+      if (live && this.undrawn(M).length) { pool.hold = true; this.setVisible(M, false); }
       this.pools.push(pool);
     }
-    for (const p of this.planted.get(eraId) || []) {
+    for (const p of E ? [] : this.planted.get(eraId) || []) {
       if (this.removed.has(p.key)) continue;
       let pool = this.pools.find((q) => q.plan.sp === p.sp && q.planted);
       if (!pool) { const M = this.meshFor(p.sp, true); this.setVisible(M, true); const def = M.def; pool = { plan: { sp: p.sp, seed: 'planted' }, M, tall: true, planted: true, tiles: new Map(), near: (def.h > 6 ? 190 : 230) * Math.sqrt(this.sys.detail), far: def.h > 6 ? 2000 : 0 }; this.pools.push(pool); }
@@ -239,11 +288,12 @@ export class Scatter {
     const counts = this.counts || {};
     for (const pool of this.pools) {
       const M = pool.M;
+      if (pool.hold) continue;
       const hasFar = !!M.far && doFar;
       let nn = 0, nf = 0;
       const nearR = pool.near, farR = M.far ? Math.max(pool.far, nearR) : nearR, nearR2 = nearR * nearR, farR2 = farR * farR, farIn = Math.max(0, nearR - 32), farIn2 = farIn * farIn;
       const reach = hasFar ? farR : nearR;
-      const Vn = this.oneVariant ? 1 : M.near.length, nbs = this._nbs || (this._nbs = []), fb = this._fb || (this._fb = []);
+      const Vn = this.oneVariant ? 1 : this.earth ? Math.min(2, M.near.length) : M.near.length, nbs = this._nbs || (this._nbs = []), fb = this._fb || (this._fb = []);
       for (let v = 0; v < Vn; v++) (nbs[v] || (nbs[v] = [])).length = 0;
       fb.length = 0;
       const visitTile = (t) => {
@@ -251,7 +301,7 @@ export class Scatter {
         if (d - t.half * 1.42 > reach) return;
         if (d > t.half * 1.5 + 40) { this._box.min.set(t.x - t.half, t.y0 - 5, t.z - t.half); this._box.max.set(t.x + t.half, t.y1 + 5, t.z + t.half); if (!this.frustum.intersectsBox(this._box)) return; }
         for (const it of t.list) {
-          if (removed.has(it.key) || (!pool.planted && land.blocked(it.x, it.z))) continue;
+          if (removed.has(it.key) || (!pool.planted && this.blockedAt(it.x, it.z))) continue;
           const ex = it.x - cx, ez = it.z - cz, d2 = ex * ex + ez * ez;
           if (doNear && d2 < nearR2) nbs[Vn > 1 ? (it.v || 0) % Vn : 0].push(it, pool.tall ? 1 : 1 - smooth(nearR2 * 0.55, nearR2, d2));
           if (hasFar && d2 >= farIn2 && d2 < farR2) fb.push(it);
@@ -297,7 +347,7 @@ export class Scatter {
       const k = tz * nT + tx;
       if (pool.tiles.has(k)) continue;
       const x = this.LO + (tx + 0.5) * T, z = this.LO + (tz + 0.5) * T;
-      if (Math.abs(x) < INNER && Math.abs(z) < INNER) continue;
+      if (!this.earth && Math.abs(x) < INNER && Math.abs(z) < INNER) continue;
       if (Math.hypot(x - cx, z - cz) > reach + T) continue;
       const qk = pool.plan.seed + pool.plan.sp + k;
       if (this.queued.has(qk)) continue;
@@ -320,16 +370,18 @@ export class Scatter {
       n++;
     }
     if (n) this.outerDirty = (this.outerDirty || 0) + n;
-    if (this.outerDirty > 24 || (!this.queue.length && this.outerDirty)) { this.outerDirty = 0; this.dirty = true; }
+    if (this.outerDirty > (this.earth ? 60 : 24) || (!this.queue.length && this.outerDirty)) { this.outerDirty = 0; this.dirty = true; }
     for (const pool of this.pools) {
-      if (!pool.tall || pool.planted || pool.tiles.size < 6000) continue;
+      if (!pool.tall || pool.planted || pool.tiles.size < (this.earth ? 1500 : 6000)) continue;
       const cam = this.lastFarCam;
-      for (const [k, t] of pool.tiles) if ((Math.abs(t.x) > INNER || Math.abs(t.z) > INNER) && Math.hypot(t.x - cam.x, t.z - cam.z) > 3200) pool.tiles.delete(k);
+      for (const [k, t] of pool.tiles) if ((this.earth || Math.abs(t.x) > INNER || Math.abs(t.z) > INNER) && Math.hypot(t.x - cam.x, t.z - cam.z) > 3200) pool.tiles.delete(k);
     }
   }
 
   flush(im, n) {
+    if (this.warmDraw && this.warmDraw.ims.includes(im) && n === 0) return;
     im.count = n; im.visible = n > 0;
+    if (n > 0) im.userData.drawn = true;
     if (!n) return;
     for (const [a, w] of [[im.instanceMatrix, 16], [im.instanceColor, 3], [im.geometry.attributes.ivar, 4]]) { a.clearUpdateRanges(); a.addUpdateRange(0, n * w); a.needsUpdate = true; }
   }
@@ -343,7 +395,7 @@ export class Scatter {
       if (!def.trunk && !def.rock) continue;
       for (const [, t] of pool.tiles) {
         if (Math.abs(t.x - car.x) > rad + t.half || Math.abs(t.z - car.z) > rad + t.half) continue;
-        for (const it of t.list) { if (this.removed.has(it.key) || (!pool.planted && this.land.blocked(it.x, it.z))) continue; const dx = it.x - car.x, dz = it.z - car.z; if (dx * dx + dz * dz < rad2 && (!def.rock || it.s > 0.55)) want.set(it.key, { it, def, sp: pool.plan.sp }); }
+        for (const it of t.list) { if (this.removed.has(it.key) || (!pool.planted && this.blockedAt(it.x, it.z))) continue; const dx = it.x - car.x, dz = it.z - car.z; if (dx * dx + dz * dz < rad2 && (!def.rock || it.s > 0.55)) want.set(it.key, { it, def, sp: pool.plan.sp }); }
       }
     }
     for (const [k, c] of this.colliders) if (!want.has(k)) { w.removeCollider(c, false); this.colliders.delete(k); }
@@ -418,8 +470,10 @@ export class Scatter {
   }
 
   restoreFelled(eraId) {
+    const pre = this.earth ? this.earth.cell + ':' : null;
     for (const c of this.sys.worldState.keysChangedIn(eraId)) {
       if (c.state !== 'felled' || c.eraId !== eraId || !c.data.final || !c.data.sp) continue;
+      if (pre ? !c.key.startsWith(pre) : c.key[0] === 'E') continue;
       const m = this.felledMesh(c.data.sp, c.data);
       const f = c.data.final; m.position.set(f[0], f[1], f[2]); m.quaternion.set(f[3], f[4], f[5], f[6]); m.scale.set(c.data.s || 1, c.data.sy || 1, c.data.s || 1);
       this.group.add(m); this.statics.push(m);
@@ -429,6 +483,8 @@ export class Scatter {
   update(dt, cam) {
     if (!this.eraId) return;
     const g = this.sys.game;
+    const held = this.warmDraw ? null : this.pools.find((p) => p.hold);
+    if (held) { for (const q of this.pools) if (q.M === held.M) q.hold = false; this.dirty = true; }
     const fwd = this._v.set(0, 0, -1).applyQuaternion(g.gfx.camera.quaternion);
     const moved = cam.distanceTo(this.lastCam), turned = fwd.angleTo(this.lastFwd);
     const sp = g.car ? g.car.sim.speed : 0;
@@ -440,6 +496,7 @@ export class Scatter {
       const t0 = performance.now(); this.rebuild(cam, true, doFar); this.rebuildMs = performance.now() - t0;
     }
     this.drainOuter(g.started ? 1.5 : 50);
+    if (!held) this.warmNext();
     if (g.car) {
       const p = g.car.sim.pos;
       if (Math.hypot(p.x - this.lastCar.x, p.z - this.lastCar.z) > 10) { this.lastCar.set(p.x, p.y, p.z); this.updateColliders(p); }

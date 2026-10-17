@@ -1,4 +1,4 @@
-// Roadster 88 era system: swaps the valley between the periods of the timeline (terrain palette and deltas, ground rules, the city style of the year, sky and fog, fluids, flora, props, structures, ambient key), keeps the causality world state per year and streams era content around the camera.
+// Roadster 88 era system: swaps the valley between the periods of the timeline (terrain palette and deltas, ground rules, the city style of the year, sky and fog, fluids, flora, props, structures, ambient key), keeps the causality world state per year and streams era content around the camera; on the real Earth (valley.onLocation) it hides everything built for the valley and streams wild flora by climate and period instead.
 import * as THREE from 'three/webgpu';
 import { periodInfo, cityFor, detailKey, PERIOD_IDS } from './periods.js';
 import { WorldState, defaultTurningPoints } from './worldstate.js';
@@ -8,6 +8,7 @@ import { Scatter } from './scatter.js';
 import { Structures } from './structures.js';
 import { Library, inPoly, distToPolyline } from './lib.js';
 import { Weather, greenness, seasonOf } from './weather.js';
+import { wildSpecies } from './floraplans.js';
 import { eraOf, PERIODS } from '../sim/timetravel.js';
 
 const DETAIL = { low: 0.35, medium: 0.6, high: 1, ultra: 1.35 };
@@ -35,6 +36,37 @@ export class EraSystem {
     this.handed = new Set();
     this.camPos = new THREE.Vector3();
     this.stats = { applyMs: 0, cityMs: 0 };
+    this.earth = null; this.locKey = 'valley';
+    if (valley.onLocation) valley.onLocation((loc) => this.setLocation(loc));
+    if (valley.prefetchLocation && !valley.prefetchLocation.eras) {
+      const f = valley.prefetchLocation.bind(valley);
+      const w = (lat, lon, ...a) => { try { if (Math.abs(lat - 35.1) > 0.1 || Math.abs(lon + 117.9) > 0.12) this.prewarmEarth(); } catch (e) { console.warn('eras prewarm', e); } return f(lat, lon, ...a); };
+      w.eras = true; valley.prefetchLocation = w;
+    }
+    if (valley.location && valley.location.mode === 'earth') this.setLocation(valley.location, true);
+  }
+
+  prewarmEarth() {
+    if (!this.eraId) return;
+    this.scatter.prewarm(wildSpecies(this.eraId, this.year, periodInfo(this.eraId).age));
+    const L = this.game.life;
+    if (L && L.prewarmWild) L.prewarmWild(this.eraId);
+  }
+
+  setLocation(loc, quiet) {
+    const earth = !!(loc && loc.mode === 'earth');
+    const o = earth && loc.origin, cell = earth ? 'E' + (o ? `${o.lat}_${o.lon}` : loc.tileKey) : null;
+    const key = earth ? cell : 'valley';
+    if (key === this.locKey) return;
+    this.locKey = key;
+    const r = this.valley.regions && this.valley.regions[0], climate = earth ? loc.climate || (r && r.climate) || null : null;
+    this.earth = earth ? { cell, climate: climate || { zone: 'temperate', veg: 0.5, arid: 0.3, ice: 0, snowLine: 3000, lon: loc.lon, elevation: 0 }, ref: climate ? climate.elevation || 0 : 0 } : null;
+    this.scatter.setEarth(this.earth);
+    if (quiet || !this.eraId) return;
+    const t0 = performance.now();
+    this.apply(this.eraId, { force: true, year: this.year });
+    this.weather.roll(this.eraId, { instant: true });
+    this.stats.locationMs = performance.now() - t0;
   }
 
   regions(id) { return (this.valley.regions || []).filter((r) => r.id === id); }
@@ -58,6 +90,7 @@ export class EraSystem {
   }
 
   eraContext(eraId) {
+    if (this.earth) return { eraId, fluids: [], bumps: [], volcanoes: [], herd: [], earth: true };
     if (this.cache.has(eraId)) return this.cache.get(eraId);
     const P = periodInfo(eraId), ctx = { eraId, fluids: [], bumps: [], volcanoes: [], herd: [] };
     for (const f of P.fluids) {
@@ -138,8 +171,9 @@ export class EraSystem {
     lap('ctx');
     if (V.setEraTerrain && !(samePeriod && !opts.force)) V.setEraTerrain(eraId, { fluids: ctx.fluids.map((f) => ({ kind: f.kind, region: f.region, level: f.level, poly: f.mesh })), bumps: ctx.bumps, natural: P.natural, loop: P.loop, tracks: P.tracks });
     lap('terrain');
-    this.city = cityFor(eraId, year);
-    if (V.setCity) { try { V.setCity(this.city); } catch (e) { console.warn('valley.setCity failed', e); } }
+    const E = this.earth;
+    this.city = E ? { style: 'none', density: 0, height: 0, year } : cityFor(eraId, year);
+    if (V.setCity && !E) { try { V.setCity(this.city); } catch (e) { console.warn('valley.setCity failed', e); } }
     lap('city'); this.stats.cityMs = T.city;
     for (const v of ctx.volcanoes) v.y = V.heightAt(v.x, v.z);
     for (const h of ctx.herd) h.y = V.heightAt(h.x, h.z) - 0.5;
@@ -150,7 +184,8 @@ export class EraSystem {
     this.skyfx.build(eraId, ctx, P, year);
     lap('sky');
     this.turning = this.worldState.resolveTurningPoints(eraId);
-    this.structures.enter(eraId, this.turning, year);
+    if (E) { this.structures.leave(); this.structures.eraId = eraId; this.structures.year = year; if (this.structures.rotors) this.structures.rotors.mesh.visible = false; this.scatter.plant(eraId, []); }
+    else this.structures.enter(eraId, this.turning, year);
     lap('structures');
     this.scatter.enter(eraId, year);
     lap('flora');
@@ -337,7 +372,7 @@ export class EraSystem {
   }
 
   debug() {
-    return { era: this.eraId, year: this.year, label: eraOf(this.year).label, detail: this.detailKey, city: this.city, applyMs: +this.stats.applyMs.toFixed(1), steps: this.stats.steps, changes: this.worldState.log.length, scatter: this.scatter.debug(), structures: this.structures.debug(), weather: this.weather.debug(), turning: this.turning ? this.turning.notes : [] };
+    return { era: this.eraId, year: this.year, label: eraOf(this.year).label, location: this.earth ? { cell: this.earth.cell, zone: this.earth.climate.zone, veg: this.earth.climate.veg, ref: this.earth.ref, ms: Math.round(this.stats.locationMs || 0) } : 'valley', detail: this.detailKey, city: this.city, applyMs: +this.stats.applyMs.toFixed(1), steps: this.stats.steps, changes: this.worldState.log.length, scatter: this.scatter.debug(), structures: this.structures.debug(), weather: this.weather.debug(), turning: this.turning ? this.turning.notes : [] };
   }
 }
 

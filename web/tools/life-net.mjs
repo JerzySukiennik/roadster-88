@@ -51,10 +51,11 @@ const goYear = (p, year) => p.evaluate(async (year) => {
 const id = await goYear(A, YEAR); await goYear(B, YEAR);
 const key = 'valley_' + id;
 const seed = (p) => p.evaluate(async (key) => {
-  const L = window.__r88.game.life;
-  L.netLeader(false); L.seed(key);
+  const g = window.__r88.game, L = g.life;
+  if (g.online) g.online.lifeNet = () => {};
+  L.netLeader(false); L.seed(key); L.swapKey = null;
   await L.setEra(window.__r88.game.eraId());
-  for (let i = 0; i < 200 && !(L.ready && L.spawnSeed === key); i++) await new Promise((r) => setTimeout(r, 50));
+  for (let i = 0; i < 200 && !(L.ready && L.spawnSeed === L.seedKey); i++) await new Promise((r) => setTimeout(r, 50));
   return [...L.netMap.values()].map((a) => [a.netId, a.kind, a.x, a.z]);
 }, key);
 const [sa, sb] = await Promise.all([seed(A), seed(B)]);

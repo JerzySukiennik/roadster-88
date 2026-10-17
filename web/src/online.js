@@ -17,7 +17,7 @@ const CONFIG = {
   messagingSenderId: '658227201482',
   appId: '1:658227201482:web:627b44e3c4c2988bc4bb33',
 };
-const RATE = 0.1, LEAD = 0.01, MAXEX = 0.5, STALE = 20000, NEAR = 70, FAR = 900;
+const RATE = 0.1, LEAD = 0.01, MAXEX = 0.35, STALE = 20000, NEAR = 70, FAR = 900;
 const r3 = (v) => Math.round(v * 1000) / 1000, r2 = (v) => Math.round(v * 100) / 100;
 const B36 = '0123456789abcdefghijklmnopqrstuvwxyz';
 

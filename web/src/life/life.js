@@ -11,6 +11,7 @@ import { Sidewalks, walker, reactArrival, pet } from './people.js';
 import { Traffic } from './traffic.js';
 import { spawn, welcome, kindsFor, DETAIL as SPAWN_DETAIL } from './populate.js';
 import { NET_STALE, assignIds, exportPoses, importPoses, netPose, netResume, softDown } from './net.js';
+import { SQ, wildPlan, wildKinds, spawnSquare, squareKey } from './wild.js';
 import { trafficOf } from './plans.js';
 import { periodInfo } from '../eras/periods.js';
 import { PERIODS } from '../sim/timetravel.js';
@@ -58,19 +59,26 @@ export class LifeSystem {
     this._n = { x: 0, y: 1, z: 0 };
     this.townC = (valley.region && valley.region('town') && valley.region('town').center) || [-1210, -200];
     this.wcache = new Map();
-    this.toWarm = []; this.warming = false;
+    this.toWarm = []; this.warming = 0;
     this.seedKey = null; this.spawnSeed = null; this.netRole = null; this.netMap = new Map(); this.netQ = []; this.frameNo = 0;
+    this.wild = null; this.squares = new Map(); this.wildT = 0;
+    if (valley.onLocation) valley.onLocation(() => { if (this.eraId) this.setEra(this.eraId); });
   }
+
+  locKey() { const L = this.V.location; return L && L.mode === 'earth' ? 'E' + (L.origin ? `${L.origin.lat}_${L.origin.lon}` : L.tileKey) : 'valley'; }
+
+  climate() { const L = this.V.location, r = this.V.regions && this.V.regions[0]; return (L && L.climate) || (r && r.climate) || null; }
 
   async kind(id) {
     if (this.kinds.has(id)) return this.kinds.get(id);
     if (this.pending.has(id)) return this.pending.get(id);
     const p = (async () => {
       const [mod, data] = await Promise.all([SPECIES[id](), loadBin(id)]);
-      const k = new Kind(this, data, mod, LOOKS[id] || LOOKS[id.split('_')[0]], { shadowLods: 1 });
+      const k = new Kind(this, data, mod, LOOKS[id] || LOOKS[id.split('_')[0]], { shadowLods: this.game.gfx.backend === 'WebGL2' ? 0 : 1 });
       k.size = Math.max(mod.meta.length || 1, mod.meta.height || 1);
+      k.active = !this.game.started;
       this.kinds.set(id, k);
-      this.toWarm.push(k);
+      if (!k.active) this.toWarm.push(k);
       return k;
     })();
     this.pending.set(id, p);
@@ -85,8 +93,8 @@ export class LifeSystem {
   }
 
   async preload(eraId) {
-    const year = this.yearFor(eraId), ids = kindsFor(eraId, year);
-    for (const k of trafficKinds(trafficOf(eraId, year))) ids.add(k);
+    const year = this.yearFor(eraId), wild = this.locKey() !== 'valley', ids = wild ? wildKinds(wildPlan(eraId, year, this.climate(), periodInfo(eraId).age)) : kindsFor(eraId, year);
+    if (!wild) for (const k of trafficKinds(trafficOf(eraId, year))) ids.add(k);
     await Promise.all([...ids].map((id) => this.kind(id).catch((e) => console.warn('life kind', id, e))));
     return ids;
   }
@@ -96,7 +104,7 @@ export class LifeSystem {
     this.wcache = new Map();
     this.agents = []; this.groups = []; this.solo = []; this.people = []; this.obstacles = [];
     this.traffic = new Traffic(this);
-    this.netMap = new Map();
+    this.netMap = new Map(); this.squares = new Map();
   }
 
   async setEra(eraId) {
@@ -104,9 +112,11 @@ export class LifeSystem {
   }
 
   async swap(eraId) {
-    const year = this.yearFor(eraId), key = eraId + ':' + Math.floor(year / 5);
-    if (key === this.swapKey && this.agents.length && (!this.seedKey || this.spawnSeed === this.seedKey)) return;
+    const year = this.yearFor(eraId), loc = this.locKey(), wild = loc !== 'valley', key = loc + ':' + eraId + ':' + Math.floor(year / 5), tag = wild ? loc : this.seedKey;
+    if (key === this.swapKey && (wild || this.agents.length) && (!tag || this.spawnSeed === tag)) return;
     this.eraId = eraId; this.swapKey = key; this.year = year;
+    if (wild) return this.swapWild(eraId, year, loc);
+    this.wild = null;
     const P = periodInfo(eraId), seedKey = this.seedKey;
     const rng = (part) => (seedKey ? seeded(seedKey + '|' + eraId + '|' + part) : null);
     this.spawnSeed = seedKey;
@@ -144,7 +154,85 @@ export class LifeSystem {
     if (S && this.netRole !== 'follow') welcome(this, eraId, S.pos.x, S.pos.z, S.yaw());
     if (this.game.tc && this.game.tc.state === 'arriving') this.sense.tcState = 'gone';
     this.ready = true;
-    if (this.seedKey && this.seedKey !== this.spawnSeed) this.setEra(this.eraId);
+    if (this.locKey() === 'valley' && this.seedKey && this.seedKey !== this.spawnSeed) this.setEra(this.eraId);
+  }
+
+  async swapWild(eraId, year, loc) {
+    const P = periodInfo(eraId), plan = wildPlan(eraId, year, this.climate(), P.age);
+    this.spawnSeed = loc;
+    this.townAvoid = false; this.roadAvoid = false; this.trafficSpec = null;
+    const ver = ++this.version;
+    this.ready = false;
+    this.clear();
+    this.wild = { plan, base: loc, eraId, detail: Math.min(1, SPAWN_DETAIL[this.preset] || 1) };
+    for (const id of wildKinds(plan)) {
+      if (this.kinds.has(id)) continue;
+      await this.kind(id).catch((e) => console.warn('life kind', id, e));
+      await new Promise((r) => setTimeout(r, 16));
+      if (ver !== this.version) return;
+    }
+    if (ver !== this.version) return;
+    const t0 = performance.now();
+    this.wildT = 0; this.wildUpdate(0, true);
+    this.stats.wildMs = performance.now() - t0;
+    const S = this.game.car && this.game.car.sim;
+    if (S && this.netRole !== 'follow') welcome(this, eraId, S.pos.x, S.pos.z, S.yaw());
+    if (this.game.tc && this.game.tc.state === 'arriving') this.sense.tcState = 'gone';
+    this.ready = true;
+    if (this.locKey() !== loc) this.setEra(this.eraId);
+  }
+
+  async prewarmWild(eraId) {
+    if (this.prewarmingWild) return;
+    this.prewarmingWild = true;
+    try {
+      const year = this.yearFor(eraId), age = periodInfo(eraId).age, ids = new Set();
+      for (const zone of ['tropical', 'arid', 'temperate', 'continental', 'polar', 'alpine']) for (const lon of [-100, 10]) for (const k of wildKinds(wildPlan(eraId, year, { zone, veg: 0.6, ice: 0, lon }, age))) ids.add(k);
+      for (const id of ids) { if (this.kinds.has(id)) continue; await this.kind(id).catch(() => {}); await new Promise((r) => setTimeout(r, 30)); }
+    } finally { this.prewarmingWild = false; }
+  }
+
+  wildUpdate(dt, force) {
+    const W = this.wild; if (!W) return;
+    this.wildT -= dt; if (this.wildT > 0 && !force) return;
+    this.wildT = 1;
+    const S = this.game.car && this.game.car.sim, sp = this.V.spawn && this.V.spawn.pos;
+    const A = force && sp ? [[sp[0], sp[2]]] : [[this.camPos.x, this.camPos.z]];
+    if (!force && S) A.push([S.pos.x, S.pos.z]);
+    if (this.netRole !== 'follow') for (const p of this.sense.players) if (p !== this.sense.me) A.push([p.x, p.z]);
+    if (!force && !this.squares.has(squareKey(Math.floor(A[0][0] / SQ), Math.floor(A[0][1] / SQ)))) force = true;
+    const want = new Map(), lim = 18;
+    for (const [x, z] of A) {
+      const ci = Math.floor(x / SQ), cj = Math.floor(z / SQ);
+      for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) { const i = ci + di, j = cj + dj; if (Math.abs(i) <= lim && Math.abs(j) <= lim) want.set(squareKey(i, j), [i, j]); }
+    }
+    let made = 0;
+    for (const [k, [i, j]] of want) {
+      if (this.squares.has(k)) continue;
+      if (!force && made >= 3) break;
+      const Q = spawnSquare(this, W.plan, i, j, W.base, W.eraId, W.detail);
+      for (const a of Q.agents) {
+        a.K = this.kinds.get(a.kind) || null;
+        if (!a.fly && a.ground !== false) a.y = this.V.heightAt(a.x, a.z);
+        a.tx = a.x; a.tz = a.z; a.prev = null; a.fade = 1;
+        if (a.K) { a.clip = a.K.clips.idle ? 'idle' : a.K.clips.glide ? 'glide' : Object.keys(a.K.clips)[0]; a.t = Math.random(); }
+        this.netMap.set(a.netId, a);
+      }
+      this.agents.push(...Q.agents); this.groups.push(...Q.groups); this.solo.push(...Q.solo);
+      this.squares.set(k, Q); made++;
+    }
+    const drop = new Set();
+    for (const [k, Q] of this.squares) {
+      if (A.some(([x, z]) => Math.max(Math.abs(Math.floor(x / SQ) - Q.i), Math.abs(Math.floor(z / SQ) - Q.j)) <= 2)) continue;
+      if (Q.agents.some((a) => a.body || a.down || a.net)) continue;
+      for (const a of Q.agents) { drop.add(a); this.netMap.delete(a.netId); }
+      this.squares.delete(k);
+    }
+    if (drop.size) {
+      const keep = (a) => !drop.has(a);
+      this.agents = this.agents.filter(keep); this.solo = this.solo.filter(keep);
+      this.groups = this.groups.filter((g) => !g.members.some((m) => drop.has(m)));
+    }
   }
 
   cull() {
@@ -169,7 +257,7 @@ export class LifeSystem {
     key = key ? String(key).replace(/_[a-z0-9]{2,8}$/, '') || String(key) : null;
     if (key === this.seedKey) return;
     this.seedKey = key;
-    if (key && this.ready && this.eraId && this.spawnSeed !== key) this.setEra(this.eraId);
+    if (key && this.ready && this.eraId && !this.wild && this.spawnSeed !== key) this.setEra(this.eraId);
   }
 
   netLeader(on) {
@@ -247,12 +335,13 @@ export class LifeSystem {
   }
 
   terrainBits(x, z) {
-    const ix = Math.round(x / 4), iz = Math.round(z / 4), key = ix * 4096 + iz;
+    const ix = Math.round(x / 4), iz = Math.round(z / 4), key = ix * 16384 + iz;
     let b = this.wcache.get(key);
     if (b !== undefined) return b;
     const V = this.V, cx = ix * 4, cz = iz * 4;
     b = 0;
-    if (Math.abs(cx) > 1940 || Math.abs(cz) > 1940 || (V.fluidAt && V.fluidAt(cx, cz)) || V.heightAt(cx, cz) > 160) b = 3;
+    const lim = this.wild ? 29000 : 1940;
+    if (Math.abs(cx) > lim || Math.abs(cz) > lim || (V.fluidAt && V.fluidAt(cx, cz)) || (!this.wild && V.heightAt(cx, cz) > 160)) b = 3;
     else { const n = V.normalAt(cx, cz, this._n); if (n.y < 0.82) b = 3; else if (n.y < 0.9) b = 2; }
     if (this.wcache.size > 400000) this.wcache.clear();
     this.wcache.set(key, b);
@@ -275,7 +364,7 @@ export class LifeSystem {
     return null;
   }
 
-  randomPoint(cx, cz, r) { const ang = random() * Math.PI * 2, d = r * Math.sqrt(random()); return [clamp(cx + Math.sin(ang) * d, -1900, 1900), clamp(cz + Math.cos(ang) * d, -1900, 1900)]; }
+  randomPoint(cx, cz, r) { const ang = random() * Math.PI * 2, d = r * Math.sqrt(random()), L = this.wild ? 29000 : 1900; return [clamp(cx + Math.sin(ang) * d, -L, L), clamp(cz + Math.cos(ang) * d, -L, L)]; }
 
   emit(type, a) { if (a && (type === 'bite' || type === 'pounce')) a.target = this.sense.uid; if (this.events.length > 64) this.events.shift(); this.events.push({ type, kind: a && a.kind, t: this.time }); this.audio.cue(type, a); }
 
@@ -369,15 +458,19 @@ export class LifeSystem {
 
   warmNext() {
     const g = this.game, gx = g.gfx;
-    if (this.warming || !this.toWarm.length || !g.started || !gx.renderer.compileAsync) return;
+    if (!this.toWarm.length || !g.started || (this.warming || 0) >= 2) return;
     const k = this.toWarm.shift();
-    if (k.lods.some((l) => l.n > 0)) return;
-    this.warming = true;
-    k.warm(gx.renderer, gx.camera, gx.scene).finally(() => { this.warming = false; });
+    if (k.active) return;
+    if (!gx.renderer.compileAsync) { k.active = true; return; }
+    this.warming = (this.warming || 0) + 1;
+    const done = () => { if (!k.active) { k.active = true; this.warming--; } };
+    k.warm(gx.renderer, gx.camera, gx.scene).then(done, done);
+    setTimeout(done, 4000);
   }
 
   update(dt, camPos) {
     this.warmNext();
+    if (this.wild && this.ready) this.wildUpdate(this.game.paused ? 0 : dt);
     const tc = this.game.tc;
     if (tc && tc.armed && tc.destination) { const id = eraOf(tc.destination.year).id; if (id !== this.preloaded) { this.preloaded = id; this.preload(id); } }
     if (!this.ready) return;
@@ -465,7 +558,7 @@ export class LifeSystem {
     for (const k of this.kinds.values()) k.begin();
     const det = this.detail;
     for (const a of this.agents) {
-      const K = a.K; if (!K || a.hide) continue;
+      const K = a.K; if (!K || a.hide || !K.active) continue;
       const s = K.size * a.scale;
       const d = Math.hypot(a.x - cp.x, a.y - cp.y, a.z - cp.z);
       a.dist = d;
@@ -494,7 +587,7 @@ export class LifeSystem {
     for (const a of this.agents) by[a.kind] = (by[a.kind] || 0) + 1;
     let imported = 0;
     for (const a of this.agents) if (a.net) imported++;
-    return { era: this.eraId, net: { role: this.netRole, seed: this.seedKey, ids: this.netMap.size, imported, queued: this.netQ.length }, agents: this.agents.length, groups: this.groups.length, people: this.people.length, cars: this.traffic.cars.length, bodies: this.stats.bodies, hits: this.stats.hits, simMs: +this.stats.sim.toFixed(2), drawMs: +this.stats.draw.toFixed(2), by, drawn: [...this.kinds.values()].filter((k) => k.lods.some((l) => l.n)).map((k) => `${k.id}:${k.stats().join('/')}`) };
+    return { era: this.eraId, where: this.wild ? { cell: this.wild.base, squares: this.squares.size, kinds: [...wildKinds(this.wild.plan)], spawnMs: +(this.stats.wildMs || 0).toFixed(1) } : 'valley', net: { role: this.netRole, seed: this.seedKey, ids: this.netMap.size, imported, queued: this.netQ.length }, agents: this.agents.length, groups: this.groups.length, people: this.people.length, cars: this.traffic.cars.length, bodies: this.stats.bodies, hits: this.stats.hits, simMs: +this.stats.sim.toFixed(2), drawMs: +this.stats.draw.toFixed(2), by, drawn: [...this.kinds.values()].filter((k) => k.lods.some((l) => l.n)).map((k) => `${k.id}:${k.stats().join('/')}`) };
   }
 }
 

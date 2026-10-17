@@ -162,12 +162,13 @@ export class Kind {
 
   async warm(renderer, camera, scene) {
     const cam = camera.position;
-    this.warmup = true;
     this.begin();
     for (let i = 0; i < this.lods.length; i++) this.push(i, cam.x, cam.y - 400, cam.z, 0, 0, 0, 0.001, 0, 0, 0, 0, 0, null, null);
     this.end();
-    try { await renderer.compileAsync(this.group, camera, scene); } catch (e) { /* compile on first draw instead */ }
-    this.warmup = false;
+    let p;
+    try { p = renderer.compileAsync(this.group, camera, scene); } catch (e) { p = null; }
+    this.begin(); this.end();
+    try { await p; } catch (e) { /* compiles on first draw instead */ }
   }
 
   row(clip, t) {

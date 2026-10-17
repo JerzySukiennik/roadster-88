@@ -96,11 +96,12 @@ export function spawn(sys, eraId, preset, year) {
 }
 
 export function welcome(sys, eraId, x, z, yaw) {
-  const S = WELCOME[eraId];
+  const S = WELCOME[eraId] || (sys.wild ? [] : null);
   const res = [];
   if (S) {
-    const kind = S[Math.floor(random() * S.length)];
-    const g0 = sys.groups.find((q) => q.kind === kind && q.brain === 'grazer') || sys.groups.find((q) => S.includes(q.kind) && q.brain === 'grazer');
+    const kind = S.length ? S[Math.floor(random() * S.length)] : null;
+    const big = () => sys.groups.filter((q) => q.brain === 'grazer' && q.members.length > 2).sort((p, q) => Math.hypot(p.cx - x, p.cz - z) - Math.hypot(q.cx - x, q.cz - z))[0];
+    const g0 = sys.groups.find((q) => q.kind === kind && q.brain === 'grazer') || sys.groups.find((q) => S.includes(q.kind) && q.brain === 'grazer') || (sys.wild ? big() : null);
     for (let tries = 0; tries < 40 && g0; tries++) {
       const a = yaw + rnd(-0.4, 0.4) * (1 + tries / 20), d = rnd(85, 130), hx = x + Math.sin(a) * d, hz = z + Math.cos(a) * d;
       const probe = g0.members[0];

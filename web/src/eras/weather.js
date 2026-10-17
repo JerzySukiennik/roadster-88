@@ -2,7 +2,7 @@
 import * as THREE from 'three/webgpu';
 import { uniform, vec2, vec3, float, uv, instancedBufferAttribute, cameraPosition, time, fract, smoothstep, sin, length, max, mx_noise_float } from 'three/tsl';
 import { fxMaterial } from '../render/gfx.js';
-import { periodInfo, climateTable } from './periods.js';
+import { periodInfo, climateTable, climateKinds } from './periods.js';
 
 export const WEATHER_KINDS = ['clear', 'clouds', 'overcast', 'fog', 'rain', 'storm', 'snow', 'dust', 'ash'];
 
@@ -26,7 +26,7 @@ export const greenness = (month) => GREEN[Math.max(0, Math.min(11, month - 1))];
 
 export function kindsFor(eraId) { return periodInfo(eraId).kinds; }
 
-function table(eraId, season) { return climateTable(eraId, season); }
+function table(eraId, season, zone) { return climateTable(eraId, season, zone); }
 
 const NEXT = { clear: ['clouds'], clouds: ['clear', 'overcast'], overcast: ['clouds', 'rain', 'fog'], fog: ['overcast', 'clouds'], rain: ['overcast', 'storm'], storm: ['rain'], snow: ['overcast'], dust: ['clear'], ash: ['clear', 'storm'] };
 
@@ -103,11 +103,11 @@ export class Weather {
     const g = this.sys.game, month = g.tc ? g.tc.present.month : 10;
     const R = this.sharedRng() || Math.random;
     this.eraId = eraId; this.month = month;
-    const season = seasonOf(month), kinds = kindsFor(eraId);
+    const zone = this.sys.earth ? this.sys.earth.climate.zone : null, season = seasonOf(month), kinds = zone ? climateKinds(eraId, zone) : kindsFor(eraId);
     this.api.kinds = kinds; this.api.season = periodInfo(eraId).seasonless ? 'none' : season;
     let kind = this.override && kinds.includes(this.override) ? this.override : null;
     if (!kind) {
-      const T = table(eraId, season); let r = R(), acc = 0; kind = 'clear';
+      const T = table(eraId, season, zone); let r = R(), acc = 0; kind = 'clear';
       for (const [k, p] of Object.entries(T)) { acc += p; if (r < acc) { kind = k; break; } }
       if (opts.kind && kinds.includes(opts.kind)) kind = opts.kind;
     }

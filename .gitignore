@@ -9,3 +9,4 @@ godot/ext/
 __pycache__/
 *.pyc
 model2/
+.env

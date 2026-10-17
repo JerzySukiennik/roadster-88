@@ -249,7 +249,12 @@ export function periodInfo(id) {
   };
 }
 
-export function climateTable(id, season) { const P = periodInfo(id); return { ...CLIMATE[P.climate](season) }; }
+const ZONE_CLIMATE = { tropical: 'tropic', arid: 'desert', temperate: 'green', continental: 'steppe', polar: 'frozen', alpine: 'steppe' };
+const zoneClimate = (P, zone) => (zone && (P.age === 'early' || P.age === 'human' || P.age === 'post') && ZONE_CLIMATE[zone]) || P.climate;
+
+export function climateTable(id, season, zone) { const P = periodInfo(id); return { ...CLIMATE[zoneClimate(P, zone)](season) }; }
+
+export function climateKinds(id, zone) { const P = periodInfo(id); return KINDS[zoneClimate(P, zone)] || P.kinds; }
 
 export function cityFor(id, year) { const c = city(id, year); return { ...c, density: Math.round(c.density * 100) / 100, height: Math.round(c.height), year }; }
 

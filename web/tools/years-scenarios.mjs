@@ -1,5 +1,5 @@
 // Roadster 88 year harness scenarios: a sheet with one frame per period of the timeline (or any typed years), a real time jump to a typed year through the time circuits at 88 mph, and driving frame times per period with a fresh car.
-// usage: node web/tools/harness.mjs years|yearjump|yearperf --map=valley  (env YEARS=1957,-300000000 picks years, IDS=carbon,1950 picks periods, VP=vista overrides the view)
+// usage: node web/tools/harness.mjs years|yearjump|yearperf|wild --map=valley (wild: SPOTS=name:lat:lon:year,... lands on the real Earth)  (env YEARS=1957,-300000000 picks years, IDS=carbon,1950 picks periods, VP=vista overrides the view)
 export function yearsScenarios(h) {
   const { R, wait, shot, stats, reset, tele, keys, release, state } = h;
   const periods = () => R(() => import('/web/src/sim/timetravel.js').then((tt) => tt.PERIODS.map((p) => ({ id: p.id, year: p.date.year, month: p.date.month, day: p.date.day, hour: p.date.hour }))));
@@ -57,7 +57,100 @@ export function yearsScenarios(h) {
     if (process.env.IDS) { const ids = process.env.IDS.split(','); return all.filter((p) => ids.includes(p.id)); }
     return all;
   };
+  const land = (s) => R(async (s) => {
+    const g = window.__r88.game, V = g.valley, t0 = performance.now();
+    const res = await V.setLocation(s.lat, s.lon, { year: s.year });
+    const ms = performance.now() - t0;
+    const sp = V.spawn; g.car.sim.teleport(sp.pos, sp.yaw, 0); g.capture(g.car); g.capture(g.car); g.rig.initialized = false; g.gfx.cut();
+    return { mode: res.mode, ms: Math.round(ms), d: res.ms, climate: V.location.climate, eras: g.eras.debug().location, erasMs: Math.round(g.eras.stats.locationMs || 0), struct: !!g.eras.structures.cur };
+  }, s);
+  const earthCheck = () => R(() => {
+    const g = window.__r88.game, V = g.valley, L = g.life, S = g.eras.scatter, c = g.gfx.camera.position;
+    let fl = 0, fmax = 0, fn = 0;
+    for (const pool of S.pools) for (const t of pool.tiles.values()) { if (Math.hypot(t.x - c.x, t.z - c.z) > 300) continue; for (const it of t.list) { if (pool.M.rock) continue; const d = Math.abs(it.y - V.heightAt(it.x, it.z)); fn++; if (d > 0.6) fl++; fmax = Math.max(fmax, d); } }
+    let an = 0, abad = 0; const by = {};
+    for (const a of L.agents) { if (!a.K) continue; by[a.kind] = (by[a.kind] || 0) + 1; if (a.fly || a.down) continue; an++; if (Math.abs(a.y - V.heightAt(a.x, a.z)) > 1.5) abad++; }
+    const wet = L.agents.filter((a) => !a.fly && V.fluidAt && V.fluidAt(a.x, a.z)).length;
+    return { flora: { near: fn, floating: fl, maxDy: +fmax.toFixed(2), counts: S.counts }, life: { where: L.debug().where, agents: L.agents.length, people: L.people.length, cars: L.traffic.cars.length, ground: an, offGround: abad, inWater: wet, by }, struct: !!g.eras.structures.cur, fluids: g.eras.fluids && g.eras.fluids.list ? g.eras.fluids.list.length : null };
+  });
+  const profInstall = () => R(() => {
+    const g = window.__r88.game, P = window.__prof = { frames: [], cur: null, acc: {}, calls: {}, lt: [] };
+    const add = (k, ms) => { if (P.cur) P.cur[k] = (P.cur[k] || 0) + ms; P.acc[k] = (P.acc[k] || 0) + ms; P.calls[k] = (P.calls[k] || 0) + 1; };
+    const wrap = (obj, name, key) => { const f = obj && obj[name]; if (typeof f !== 'function' || f.__w) return; const w = function (...a) { const t = performance.now(); try { return f.apply(this, a); } finally { add(key, performance.now() - t); } }; w.__w = true; obj[name] = w; };
+    const gl = g.gfx.renderer.backend && g.gfx.renderer.backend.gl;
+    if (gl) for (const n of ['compileShader', 'linkProgram', 'getProgramParameter', 'getShaderParameter', 'texImage2D', 'texSubImage2D', 'texImage3D', 'texSubImage3D', 'texStorage2D', 'bufferData', 'bufferSubData', 'generateMipmap']) wrap(gl, n, 'gl.' + n);
+    const E = g.eras, S = E.scatter, L = g.life, V = g.valley;
+    wrap(E, 'setLocation', 'eras.setLocation'); wrap(E, 'apply', 'eras.apply'); wrap(S, 'enter', 'scatter.enter'); wrap(S, 'rebuild', 'scatter.rebuild'); wrap(S, 'drainOuter', 'scatter.drain'); wrap(S, 'meshFor', 'scatter.meshFor'); wrap(S, 'updateColliders', 'scatter.colliders');
+    wrap(L, 'swapWild', 'life.swapWild'); wrap(L, 'wildUpdate', 'life.wildUpdate'); wrap(L, 'update', 'life.update'); wrap(L, 'warmNext', 'life.warmNext');
+    wrap(V, 'enterEarth', 'valley.enterEarth'); wrap(V, 'update', 'valley.update');
+    wrap(g.gfx.renderer, 'render', 'renderer.render');
+    const B = g.gfx.renderer.backend; P.pipes = [];
+    if (B && B.createRenderPipeline && !B.createRenderPipeline.__w) { const f = B.createRenderPipeline; const w = function (ro, promises) { const t = performance.now(); try { return f.call(this, ro, promises); } finally { const o = ro.object, m = ro.material; const rc = ro.context, rt = rc && rc.renderTarget; P.pipes.push({ t: Math.round(t), ms: Math.round((performance.now() - t) * 10) / 10, async: !!promises, obj: (o.userData && o.userData.k) || o.name || o.type, mat: m.name || m.type, cam: ro.camera && (ro.camera.name || ro.camera.type), rt: rt ? (rt.texture && rt.texture.name) || rt.width + 'x' + rt.height + (rt.isWebGLCubeRenderTarget || rt.isCubeRenderTarget ? 'cube' : '') : 'screen', cap: o.instanceMatrix ? o.instanceMatrix.count : null, key: String(ro.getCacheKey ? ro.getCacheKey() : '').slice(0, 24) }); } }; w.__w = true; B.createRenderPipeline = w; }
+    const fr = g.frame;
+    g.frame = function (...a) { P.cur = { t: Math.round(performance.now()) }; const t = performance.now(); try { return fr.apply(this, a); } finally { P.cur.ms = Math.round(performance.now() - t); if (P.cur.ms > 40) P.frames.push(P.cur); P.cur = null; } };
+    try { new PerformanceObserver((l) => { for (const e of l.getEntries()) P.lt.push([Math.round(e.startTime), Math.round(e.duration)]); }).observe({ entryTypes: ['longtask'] }); } catch (e) { /* no longtask api */ }
+    return !!gl;
+  });
+  const profDump = (label, since) => R((a) => {
+    const P = window.__prof, r = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Math.round(v * 10) / 10]));
+    const fr = P.frames.filter((f) => f.t >= a.since).sort((x, y) => y.ms - x.ms).slice(0, 8).map((f) => { const o = { at: f.t - a.since, ms: f.ms }; for (const [k, v] of Object.entries(f)) if (k !== 't' && k !== 'ms' && v > 2) o[k] = Math.round(v); return o; });
+    const lt = P.lt.filter((x) => x[0] >= a.since - 50).map((x) => [x[0] - a.since, x[1]]);
+    const pipes = (P.pipes || []).filter((p) => p.t >= a.since - 50).map((p) => ({ ...p, t: p.t - a.since }));
+    const out = { label: a.label, acc: r(P.acc), calls: P.calls, worst: fr, longtasks: lt.slice(0, 20), ltSum: lt.reduce((s, x) => s + x[1], 0), pipes: pipes.slice(0, 40), pipeN: pipes.length };
+    P.acc = {}; P.calls = {};
+    return out;
+  }, { label, since });
   return {
+    async wildprof() {
+      const spots = (process.env.SPOTS || 'amazon:-3.4:-62.2:2026,taiga:61:99:2026').split(',').map((q) => { const [n, la, lo, y] = q.split(':'); return { n, lat: +la, lon: +lo, year: +y }; });
+      await R(() => { const g = window.__r88.game; g.player.kill = () => {}; g.player.died = () => {}; });
+      console.log('gl wrapped', await profInstall());
+      await goYear({ year: spots[0].year }); await wait(3000);
+      await R(() => { window.__prof.acc = {}; window.__prof.calls = {}; });
+      for (const s of spots) {
+        if (process.env.PREFETCH) { await R((s) => window.__r88.game.valley.prefetchLocation(s.lat, s.lon), s); await wait(Number(process.env.PREFETCH)); console.log('  prefetch', JSON.stringify(await profDump('prefetch ' + s.n, 0))); }
+        const t0 = await R(() => Math.round(performance.now()));
+        const r = await land(s);
+        console.log('land', s.n, JSON.stringify({ ms: r.ms, d: r.d, erasMs: r.erasMs, zone: r.climate && r.climate.zone }));
+        await wait(8000);
+        console.log('  prof', JSON.stringify(await profDump(s.n, t0)));
+      }
+    },
+    async wild() {
+      const spots = (process.env.SPOTS || 'amazon:-3.4:-62.2:2026,alps:46.55:9.9:2026,sahara:23.4:12.5:2026,taiga:61:99:2026,kenya:-2.3:37.4:1885,antarctic:-77.6:166.5:2026,alpsdino:46.55:9.9:-68000000,taigaice:61:99:-20000').split(',').map((q) => { const [n, la, lo, y] = q.split(':'); return { n, lat: +la, lon: +lo, year: +y }; });
+      await R(() => { const g = window.__r88.game; g.player.kill = () => {}; g.player.died = () => {}; });
+      const rows = [];
+      for (const s of spots) {
+        await goYear({ year: s.year });
+        const r = await land(s);
+        console.log('land', s.n, JSON.stringify(r));
+        await R(() => window.__r88.orbit(0.6, 0.12));
+        await wait(2500);
+        const tq = Date.now();
+        for (let i = 0; i < 40; i++) { const q = await R(() => window.__r88.game.eras.scatter.queue.length); if (!q) break; await wait(500); }
+        console.log('  flora streamed in', ((Date.now() - tq) / 1000 + 2.5).toFixed(1), 's');
+        const c = await earthCheck();
+        console.log('  check', JSON.stringify(c));
+        await shot(`earth_${s.n}_car`);
+        if (await frame('herd')) { await wait(1500); await shot(`earth_${s.n}_herd`); await unframe(); }
+        await reset(); await wait(2500); const st = await stats(`earth ${s.n}`);
+        if (process.env.AB) {
+          const tog = (on) => R((on) => { const g = window.__r88.game; g.eras.scatter.group.visible = on; g.life.root.visible = on; }, on);
+          const prof = () => R(() => { const t = window.__r88.state(); return JSON.stringify({ gpu: t.gpu && +t.gpu.toFixed(1), prof: t.prof && Object.fromEntries(Object.entries(t.prof).map(([k, v]) => [k, +v.toFixed(1)])), calls: t.calls, rebuild: +(window.__r88.game.eras.scatter.rebuildMs || 0).toFixed(2), life: +window.__r88.game.life.stats.sim.toFixed(2) }); });
+          await tog(false); await wait(1500); await reset(); await wait(2500); await stats(`earth ${s.n} without E flora+life`); console.log('   ', await prof());
+          await tog(true); await wait(1500); await reset(); await wait(2500); await stats(`earth ${s.n} with E flora+life`); console.log('   ', await prof());
+          console.log('  draws', JSON.stringify(await R(() => { const g = window.__r88.game, r = g.gfx.renderer.info; return { calls: r.render.calls, tris: r.render.triangles, gpu: window.__r88.state().gpu }; })));
+        }
+        rows.push({ name: `earth_${s.n}_car`, herd: `earth_${s.n}_herd`, label: `${s.n} ${s.year} ${r.climate ? r.climate.zone : ''}`, p50: st.p50, p95: st.p95 });
+      }
+      await goYear({ year: 2026 });
+      const back = await land({ lat: 35.1, lon: -117.9, year: 2026 });
+      await wait(4000);
+      const c = await earthCheck();
+      console.log('back to valley', JSON.stringify(back), JSON.stringify({ struct: c.struct, life: c.life.where, agents: c.life.agents, people: c.life.people, cars: c.life.cars }));
+      await shot('earth_back_valley');
+      console.log('SHEET', JSON.stringify(rows));
+    },
     async years() {
       const rows = [];
       for (const p of await list()) {

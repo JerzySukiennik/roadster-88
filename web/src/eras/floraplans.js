@@ -1,4 +1,4 @@
-// Roadster 88 flora plans: which plants and rocks grow in every period and where (shores, washes, groves, slopes, lakebeds), built from small plan factories, with details that change with the year inside a period (first land plants in the Ordovician, Archaeopteris forests in the late Devonian, flowering plants spreading through the Cretaceous).
+// Roadster 88 flora plans: which plants and rocks grow in every period and where (shores, washes, groves, slopes, lakebeds), built from small plan factories, with details that change with the year inside a period (first land plants in the Ordovician, Archaeopteris forests in the late Devonian, flowering plants spreading through the Cretaceous), plus the wild sets for the real Earth (biomes by climate zone in human and future times, the period's own flora in deep time, kept below the tree line and off snow, ice and water).
 import { F } from './land.js';
 import { hash2i } from './lib.js';
 
@@ -90,3 +90,83 @@ export function plansFor(id, year) {
 }
 
 export function planKey(p) { return `${p.seed}:${p.sp}:${p.density}`; }
+
+const TALL = new Set(['oak', 'conifer', 'palm', 'magnolia', 'eucalyptus', 'cottonwood', 'treefern', 'ginkgo', 'lepido', 'calamites', 'archaeop', 'prototax', 'alienTree', 'deadTree', 'cycad', 'orange']);
+const veg = (d, v) => d * (0.25 + 1.1 * v);
+const BIOME = {
+  tropical: (c) => {
+    const t = [0.82, 1.08, 0.78];
+    return [
+      groveTree('palm', veg(3, c.veg), { seed: 'Tpalm', wild: true, base: 0.35, far: 2300, maxH: 1e9, tint: t }),
+      groveTree('magnolia', veg(5.5, c.veg), { seed: 'Tbroad', wild: true, base: 0.3, far: 2000, slope: 0.5, maxH: 1e9, tint: t }),
+      groveTree('treefern', veg(6, c.veg), { seed: 'Ttf', wild: true, base: 0.3, far: 900, slope: 0.5, maxH: 1e9, tint: t }),
+      ground('fern', veg(420, c.veg), { seed: 'Tfern', wild: true, scale: [0.9, 1.8], tint: t }),
+      ground('grass', veg(240, c.veg), { seed: 'Tgrass', wild: true, tint: t }),
+      bushes('shrub', veg(34, c.veg), { seed: 'Tshrub', wild: true, tint: t }),
+      reeds('reed', 220), rocks(8, { any: true }), boulders(0.5, { any: true }),
+    ];
+  },
+  arid: (c) => [
+    ...(c.lon < -30 ? [{ ...cactus(veg(3, c.veg), 'Acact'), w: (g) => wild(g, 0.2) * smooth(0.45, 0.7, g.n2) * flat(g, 0.45) }] : []),
+    { ...dead(veg(0.12, c.veg), 'Adead'), w: (g) => wild(g) * flat(g, 0.4) },
+    bushes('sage', veg(26, c.veg), { seed: 'Asage', wild: true }),
+    ground('dryGrass', veg(220, c.veg), { seed: 'Agrass', wild: true, scale: [0.55, 1.0] }),
+    rocks(18, { any: true }), boulders(1.2, { any: true, base: 0.35 }),
+  ],
+  temperate: (c) => [
+    oak({ d: veg(3.2, c.veg), seed: 'Woak', wild: true, lo: 0.32, hi: 0.52, slope: 0.4, maxH: 1e9 }),
+    conifer({ d: veg(1.4, c.veg), seed: 'Wcon', wild: true, lo: 0.55, hi: 0.7, maxH: 1e9 }),
+    shoreTree('cottonwood', veg(5, c.veg), { seed: 'Wcotton', wild: true, s1: 18 }),
+    bushes('shrub', veg(30, c.veg), { seed: 'Wshrub', wild: true }),
+    ground('grass', veg(380, c.veg), { seed: 'Wgrass', wild: true, scale: [0.8, 1.4] }),
+    { ...meadow('flowers', veg(110, c.veg), { seed: 'Wflower' }), w: (g) => wild(g, 0.5) * smooth(0.5, 0.68, g.n1) * smooth(0.3, 0.6, g.n2) * flat(g, 0.35) },
+    reeds('reed', 200), rocks(10, { any: true }), boulders(0.8, { any: true }),
+  ],
+  continental: (c) => [
+    conifer({ d: veg(6, c.veg), seed: 'Ccon', wild: true, lo: 0.3, hi: 0.5, slope: 0.6, maxH: 1e9, scale: [0.7, 1.5] }),
+    { ...dead(veg(0.2, c.veg), 'Cdead'), w: (g) => wild(g) * flat(g, 0.45) },
+    bushes('shrub', veg(22, c.veg), { seed: 'Cshrub', wild: true, tint: [0.85, 0.9, 0.85] }),
+    ground('tundra', veg(300, c.veg), { seed: 'Ctundra', wild: true }),
+    ground('moss', veg(260, c.veg), { seed: 'Cmoss', wild: true }),
+    reeds('reed', 140), rocks(14, { any: true }), boulders(1.2, { any: true, base: 0.35 }),
+  ],
+  polar: (c) => [
+    ...(c.ice < 0.5 ? [ground('tundra', veg(160, c.veg), { seed: 'Ptundra', wild: true, patch: 0.45 }), ground('moss', veg(140, c.veg), { seed: 'Pmoss', wild: true })] : []),
+    rocks(24, { any: true, squash: 1.2 }), boulders(1.6, { any: true, base: 0.4 }),
+  ],
+  alpine: (c) => [
+    conifer({ d: veg(2.2, c.veg), seed: 'Lcon', wild: true, lo: 0.45, hi: 0.62, slope: 0.6, maxH: 1e9, scale: [0.6, 1.2] }),
+    bushes('shrub', veg(16, c.veg), { seed: 'Lshrub', wild: true, tint: [0.85, 0.92, 0.85] }),
+    ground('tundra', veg(260, c.veg), { seed: 'Ltundra', wild: true }),
+    { ...meadow('flowers', veg(60, c.veg), { seed: 'Lflower' }), w: (g) => wild(g, 0.5) * smooth(0.55, 0.7, g.n1) * flat(g, 0.4) },
+    rocks(34, { any: true }), boulders(2.4, { any: true, base: 0.45 }),
+  ],
+};
+const COLDER = { tropical: 'temperate', arid: 'arid', temperate: 'continental', continental: 'polar', polar: 'polar', alpine: 'alpine' };
+
+function earthMul(sp, g, c, tree) {
+  if (g.wet < 0.3) return 0;
+  const rocky = sp === 'rock' || sp === 'boulder' || sp === 'stromatolite';
+  if (g.surf === 'snow' || g.surf === 'ice') return rocky ? 0.6 : 0;
+  if (rocky) return 1;
+  if (g.ha > c.snowLine) return 0;
+  if (TALL.has(sp) && g.ha > tree) return 0;
+  if (g.surf === 'rock') return TALL.has(sp) ? 0.25 : 0.4;
+  if (g.surf === 'sand') return sp === 'palm' || sp === 'cactus' || sp === 'dryGrass' || sp === 'reed' ? 0.8 : 0.15;
+  return 1;
+}
+
+export function wildPlansFor(id, year, climate, age, cell) {
+  const c = climate || { zone: 'temperate', veg: 0.5, arid: 0.3, ice: 0, snowLine: 3000, lon: 0 };
+  const tree = c.snowLine - 550;
+  let list;
+  if ((age === 'deep' || age === 'far') && id !== 'miocene' && id !== 'iceage') list = plansFor(id, year).map((p) => ({ ...p, density: p.density * (0.6 + 0.6 * c.veg) }));
+  else list = (BIOME[id === 'iceage' ? COLDER[c.zone] : c.zone] || BIOME.temperate)(c);
+  return list.filter((p) => p.density > 0).map((p) => ({ ...p, density: p.density * (p.ground ? 0.7 : TALL.has(p.sp) ? 0.6 : 0.8), seed: cell + ':' + p.seed, w: (g) => { const m = earthMul(p.sp, g, c, tree); return m > 0 ? m * p.w(g) : 0; } }));
+}
+
+export function wildSpecies(id, year, age) {
+  const out = new Set();
+  for (const zone of Object.keys(BIOME)) for (const lon of [-100, 10]) for (const p of wildPlansFor(id, year, { zone, veg: 0.6, arid: 0.3, ice: 0, snowLine: 3000, lon, elevation: 0 }, age, 'w')) out.add(p.sp);
+  return [...out];
+}
