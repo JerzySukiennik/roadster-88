@@ -301,6 +301,12 @@ class Game {
     return h ? h.timeOfImpact : null;
   }
 
+  onLanded(loc) {
+    if (!loc || loc.mode !== 'earth') { this.mapId = this.mapName; return; }
+    const o = loc.origin || loc, q = (v) => Math.round(v * 4);
+    this.mapId = 'e' + (q(o.lat) + 360).toString(36) + (q(o.lon) + 720).toString(36);
+  }
+
   makePlayer() {
     const g = this;
     return {
