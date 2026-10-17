@@ -71,6 +71,7 @@ class Pool {
 
   spawn(x, y, z, vx, vy, vz, life, s0, s1, r, g, b, a, drag = 1, buoy = 0) {
     if (this.n >= this.cap) return;
+    if (this.vac) { life *= 0.3; s1 *= 1.6; a *= 0.22; drag = 0.05; buoy = 0; }
     const i = this.n++;
     this.p[i * 3] = x; this.p[i * 3 + 1] = y; this.p[i * 3 + 2] = z;
     this.v[i * 3] = vx; this.v[i * 3 + 1] = vy; this.v[i * 3 + 2] = vz;
@@ -250,8 +251,9 @@ export class FX {
   }
 
   thrusters(dt, sim, carQuat, carPos, camPos) {
-    const th = sim.thrusters, vel = sim.vel;
+    const th = sim.thrusters, vel = sim.vel, vac = !!(sim.env && sim.env.space);
     this.puffs.cam = camPos; this.billows.cam = camPos; this.alpha.cam = camPos;
+    this.puffs.vac = this.alpha.vac = vac;
     this.jets.begin();
     let rw = 0, rx = 0, ry = 0, rz = 0, rh = 0;
     th.all.forEach((n, idx) => {
@@ -303,6 +305,7 @@ export class FX {
       }
     });
     this.jets.end();
+    this.puffs.vac = this.alpha.vac = false;
     if (rw > 0) { const h = rh / rw; this.ring.set(dt, rx / rw, ry / rw, rz / rw, Math.min(9, 4 + 1.5 * h), Math.max(0, Math.min(1, 1 - h / 4.5)) * Math.min(1, rw / 14000)); }
     else this.ring.set(dt, 0, 0, 0, 1, 0);
   }

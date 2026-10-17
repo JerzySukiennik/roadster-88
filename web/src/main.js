@@ -99,6 +99,7 @@ class Game {
     }
     this.spawn(sp, sy);
     if (this.valley) { await this.loadEras(); await this.loadLife(); }
+    this.spaceHooks = true;
     await this.loadSpace();
     if (this.valley && this.life && !params.has('nostory')) { try { this.story = new Story(this); } catch (e) { this.story = null; console.error('story failed', e); } }
     this.input = new Input($('view'));
@@ -264,6 +265,7 @@ class Game {
   }
 
   respawn() {
+    if (this.space && this.space.active) return this.space.respawnInSpace();
     if (this.tc.busy) return;
     const old = this.car;
     old.sim.wreck = true;
@@ -403,6 +405,7 @@ class Game {
   }
 
   exitCar() {
+    if (this.space && this.space.active) { this.hint('No spacewalks yet · stay in the Roadster', 1.8); return; }
     const car = this.car, s = car.sim;
     if (this.tc.busy || this.tc.state === 'gone') return;
     if (s.speed > 4) { this.hint('Slow down to get out', 1.6); return; }
@@ -772,9 +775,10 @@ class Game {
     this.gfx.updateSun(this.sky.sunDir, this.sky.sun.color, (1 - this.sky.state.night) * Math.min(1, this.sky.sun.intensity / 6) * (this.tc.state === 'gone' ? 0 : 1));
     this.sky.update(fdt, rs ? rs.pos : s.pos, false, this.viewDir || (this.viewDir = new THREE.Vector3()).set(0, 0, -1).applyQuaternion(this.gfx.camera.quaternion).setY(0).normalize());
     if (this.plate) this.plate.syncProps(this.phys);
-    if (this.valley) this.valley.update(fdt, this.gfx.camera.position, this.gfx.camera);
-    if (this.eras && !this.erasBroken) { try { this.eras.update(fdt, this.gfx.camera.position); } catch (e) { this.erasBroken = true; console.error('eras.update failed', e); } }
-    if (this.life && !this.lifeBroken) { try { this.life.update(fdt, this.gfx.camera.position); } catch (e) { this.lifeBroken = true; console.error('life.update failed', e); } }
+    const inSpace = !!(this.space && this.space.active);
+    if (this.valley && !inSpace) this.valley.update(fdt, this.gfx.camera.position, this.gfx.camera);
+    if (this.eras && !this.erasBroken && !inSpace) { try { this.eras.update(fdt, this.gfx.camera.position); } catch (e) { this.erasBroken = true; console.error('eras.update failed', e); } }
+    if (this.life && !this.lifeBroken && !inSpace) { try { this.life.update(fdt, this.gfx.camera.position); } catch (e) { this.lifeBroken = true; console.error('life.update failed', e); } }
     this.fx.setLight(this.sky.sun.color, this.sky.sun.intensity, night);
     if (!this.paused) {
       if (this.car.view.root.visible && !params.has('noplume')) this.fx.thrusters(fdt, s, this.car.pose.quat, this.car.pose.pos, this.gfx.camera.position);
@@ -790,7 +794,7 @@ class Game {
     }
     this.hud.update(fdt, { view: this.rig.mode, hidden: this.paused || !this.started || this.walker.active || !!this.ride, mph: s.speed / MPH, thrusters: s.thrusters, tc: { armed: this.tc.armed, trigger: this.tu.time_travel.trigger_mph, yearLabel: this.yearLabel(this.tc.destination.year) }, input: this.input.down.size > 0 });
     this.audio.listener(this.gfx.camera);
-    this.audio.update(fdt, { sim: rs ? rs.audio : s, powertrain: this.tu.powertrain, fpp: !chase, gone: this.tc.state === 'gone', nozzleWorld: (n) => this.nozzleWorld(n), carPos: rs ? rs.pos : this.car.pose.pos, scrape: this.damage.scrape, tc: this.tc, weather: this.weather, ambient: this.eras && this.eras.ambient });
+    this.audio.update(fdt, { sim: rs ? rs.audio : s, powertrain: this.tu.powertrain, fpp: !chase, gone: this.tc.state === 'gone', nozzleWorld: (n) => this.nozzleWorld(n), carPos: rs ? rs.pos : this.car.pose.pos, scrape: this.damage.scrape, tc: this.tc, weather: inSpace ? null : this.weather, ambient: inSpace ? null : this.eras && this.eras.ambient, space: inSpace, reentry: inSpace && this.space.state === 'reentry' });
     if (this.started) this.gfx.updateDynRes(fdt);
     const tr = performance.now();
     this.gfx.render();

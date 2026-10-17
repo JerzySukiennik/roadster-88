@@ -202,15 +202,15 @@ export class AudioEngine {
     if (!this.ctx) return;
     const t = this.ctx.currentTime, sim = s.sim, P = s.powertrain;
     const inside = s.fpp;
-    this.outside.frequency.setTargetAtTime(inside ? 2600 : 20000, t, 0.1);
+    this.outside.frequency.setTargetAtTime(s.space ? (s.reentry ? 1800 : 700) : inside ? 2600 : 20000, t, s.space ? 0.2 : 0.1);
     const load = Math.min(1, Math.abs(sim.motorForce) / P.max_wheel_force);
     const vol = sim.enabled && !s.gone ? 1 : 0;
     if (this.motorSynth) this.motorSynth.update(dt, sim.speed, load, sim.contacts, vol * (inside ? 1.15 : 0.85));
-    const sp = sim.speed;
+    const sp = s.space && !s.reentry ? 0 : sim.speed;
     this.wind.f.frequency.setTargetAtTime(300 + sp * 22, t, 0.1);
     this.wind.g.gain.setTargetAtTime(vol * Math.min(0.5, (sp / 90) ** 2 * 0.45), t, 0.1);
     this.setLoop('wind_loop', vol * Math.min(1, (sp / 80) ** 2) * 0.8, 0.7 + Math.min(0.8, sp / 110), 0.15);
-    const ground = sim.contacts > 0;
+    const ground = sim.contacts > 0 && !s.space;
     this.setLoop('tyre_roll_loop', vol * (ground ? Math.min(1, sp / 25) : 0) * 0.35, 0.9 + Math.min(0.8, sp / 60), 0.08, this.road);
     let slip = 0; for (const w of sim.wheels) if (w.contact) slip = Math.max(slip, w.slipVel);
     this.setLoop('tyre_skid_loop', vol * Math.min(1, Math.max(0, slip - 2.5) / 7), 0.85 + Math.min(0.3, slip / 40), 0.05);

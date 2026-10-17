@@ -69,6 +69,7 @@ class Remote {
     if (d.dg) this.dgPending = d.dg;
     if (d.xc !== undefined) this.xcPending = d.xc || [];
     if (d.lf) { this.lf = d.lf; this.lfNew = true; }
+    this.so = Array.isArray(d.s) ? d.s : null;
     if (d.le) this.le = (this.le || []).concat(d.le).slice(-40);
     this.name = String(d.n || '').slice(0, 20); this.outfit = d.o | 0; this.last = now; this.paint = PAINTS[d.p] ? d.p : 'white'; this.ride = d.r || null; this.dy = typeof d.dy === 'number' ? d.dy : null;
     const fl = (d.k && d.k[1]) || 0, was = this.lastFl === undefined ? 0 : this.lastFl;
@@ -128,6 +129,7 @@ class Remote {
     const b = this.buf; if (!b.length) return false;
     const dt = this.lastSample ? Math.min(0.1, now - this.lastSample) : 0; this.lastSample = now;
     this.poseAt(this.clock(), this.pos, this.quat, this.vel);
+    if (this.g.space && this.g.space.netAdjust) this.g.space.netAdjust(this);
     const decay = Math.exp(-dt * 5);
     this.corrP.multiplyScalar(decay);
     this._dq.identity(); this.corrQ.slerp(this._dq, 1 - decay);
@@ -493,6 +495,7 @@ export class Online {
     if (g.ride) d.r = g.ride;
     if (g.tc.armed || g.tc.state === 'departing') d.dy = g.tc.destination.year;
     if (g.car.given) d.k[1] |= 512;
+    if (g.space && g.space.active && g.space.netOffset) d.s = g.space.netOffset();
     const P = g.tc.present; d.j = this.joinAt; d.ck = [P.year, P.month, P.day, P.hour, P.minute];
     const dg = this.damageNet(nowMs); if (dg) d.dg = dg;
     if (nowMs - (this.xcAt || 0) > 1000) { this.xcAt = nowMs; d.xc = this.extrasNet(); }
