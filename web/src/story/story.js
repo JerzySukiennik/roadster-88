@@ -285,7 +285,7 @@ export class Story {
 
   drawTarget() {
     const E = this.el, T = typeof this.target === 'function' ? this.target() : this.target;
-    if (!T || this.g.paused || this.dlgOpen) { E.wp.classList.remove('on'); E.meta.textContent = this.meta || ''; return; }
+    if (!T || this.g.paused || this.dlgOpen || (this.g.space && this.g.space.active)) { E.wp.classList.remove('on'); E.meta.textContent = this.meta || ''; return; }
     const d = this.dist(T);
     E.meta.textContent = (this.meta ? this.meta + ' · ' : '') + (d > 950 ? (d / 1000).toFixed(1) + ' km' : Math.round(d) + ' m');
     const cam = this.g.gfx.camera, v = this._v.set(T.x, (T.y ?? this.g.valley.heightAt(T.x, T.z)) + 2.2, T.z).project(cam);
