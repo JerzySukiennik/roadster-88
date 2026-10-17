@@ -185,7 +185,9 @@ export class Driver {
     const hips = this.bones.get('Hips');
     this.root.updateMatrixWorld(true);
     const carQ = root.getWorldQuaternion(Q());
-    const seatW = seat.getWorldPosition(V());
+    const P = !!opt.passenger;
+    const seatL = P ? new THREE.Vector3(-seat.position.x, seat.position.y, seat.position.z) : seat.position.clone();
+    const seatW = seatL.clone().applyMatrix4(root.matrixWorld);
     const recline = -0.42;
     const hq = carQ.clone().multiply(Q().setFromAxisAngle(X, recline)).multiply(this.restWorldQ.get('Hips'));
     this.setWorldQuat(hips, hq);
@@ -209,7 +211,7 @@ export class Driver {
     for (const s of ['Left', 'Right']) {
       const L = this.len[s];
       const sx = s === 'Left' ? 1 : -1;
-      const sl = seat.position;
+      const sl = seatL;
       const ankle = toW(new THREE.Vector3(sl.x + sx * 0.12 + (s === 'Right' ? -0.02 : 0.04), 0.22, sl.z + 0.86 - (s === 'Left' ? 0.06 : 0)));
       const pole = up.clone().multiplyScalar(0.8).add(fwd.clone().multiplyScalar(0.6)).add(side.clone().multiplyScalar(sx * 0.15));
       this.twoBone(this.bones.get(s + 'UpLeg'), this.bones.get(s + 'Leg'), this.bones.get(s + 'Foot'), ankle, pole, L.leg1, L.leg2);
@@ -218,6 +220,14 @@ export class Driver {
     }
     for (const s of ['Left', 'Right']) {
       const L = this.len[s], grip = s === 'Left' ? gl : gr;
+      if (P) {
+        const sx = s === 'Left' ? 1 : -1;
+        const knee = toW(new THREE.Vector3(seatL.x + sx * 0.13, seatL.y + 0.22, seatL.z + 0.42));
+        const pole = up.clone().multiplyScalar(-1).add(side.clone().multiplyScalar(sx * 0.8));
+        this.twoBone(this.bones.get(s + 'Arm'), this.bones.get(s + 'ForeArm'), this.bones.get(s + 'Hand'), knee, pole, L.arm1, L.arm2);
+        this.curl(s, 0.45);
+        continue;
+      }
       if (!grip) continue;
       const gp = grip.getWorldPosition(V());
       const wheelQ = grip.parent.getWorldQuaternion(Q());

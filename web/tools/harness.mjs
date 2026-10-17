@@ -238,6 +238,20 @@ const S = {
     await tap('KeyF'); await wait(1500); await shot('foot_enter');
     console.log('after enter', await R(() => { const g = window.__r88.game; return JSON.stringify({ active: g.walker.active, mode: g.rig.mode }); }));
   },
+  async yearin() {
+    await wait(2500);
+    await page.keyboard.press('KeyY'); await wait(200);
+    for (const k of ['Digit1', 'Digit8', 'Digit8', 'Digit5']) { await page.keyboard.press(k); await wait(80); }
+    await wait(300); await shot('yearin_typing');
+    await page.keyboard.press('Enter'); await wait(400); await shot('yearin_set');
+    console.log('dest', await R(() => window.__r88.game.tc.destination.year));
+    await page.keyboard.press('KeyY'); await page.keyboard.press('KeyB');
+    for (const k of '66000000') await page.keyboard.press('Digit' + k);
+    await wait(200); await shot('yearin_bc'); await page.keyboard.press('Enter'); await wait(300);
+    console.log('dest bc', await R(() => window.__r88.game.tc.destination.year));
+    await page.keyboard.press('KeyY'); await page.keyboard.press('Digit3'); await page.keyboard.press('Escape'); await wait(200);
+    console.log('after esc', await R(() => JSON.stringify({ y: window.__r88.game.tc.destination.year, paused: window.__r88.game.paused, open: window.__r88.game.yearIn.open })));
+  },
   async night() { await R(() => window.__r88.setTime(22, 30)); await wait(2500); await shot('night'); await keys('KeyW'); await wait(2000); await shot('night_drive'); await release(); },
   async fpp() {
     await R(() => window.__r88.camera('fpp')); await wait(1500); await shot('fpp');
@@ -495,6 +509,7 @@ async function crash(mph, name) {
 }
 Object.assign(S, (await import('./eras-scenarios.mjs')).erasScenarios({ page, R, wait, shot, stats, reset, tele, keys, release, tap, state, sample }));
 if (fs.existsSync(path.join(here, 'life-scenarios.mjs'))) Object.assign(S, (await import('./life-scenarios.mjs')).lifeScenarios({ page, R, wait, shot, stats, reset, tele, keys, release, tap, state, sample, fmt, out, errors }));
+if (fs.existsSync(path.join(here, 'years-scenarios.mjs'))) Object.assign(S, (await import('./years-scenarios.mjs')).yearsScenarios({ page, R, wait, shot, stats, reset, tele, keys, release, tap, state, sample, fmt, out, errors }));
 for (const sc of scenarios) { if (!S[sc]) { console.log('unknown scenario', sc); continue; } console.log('== ' + sc); await S[sc](); }
 if (errors.length) console.log('ERRORS:\n' + [...new Set(errors)].slice(0, 30).join('\n'));
 if (flag('logs')) console.log(logs.slice(0, 40).join('\n'));

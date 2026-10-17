@@ -94,7 +94,7 @@ export class TimeFX {
     return k / 3;
   }
 
-  depart(carPos, carQuat, vel, grounded, wheelPts) {
+  depart(carPos, carQuat, vel, grounded, wheelPts, opts = {}) {
     const v = new THREE.Vector3(vel.x, vel.y, vel.z);
     const dir = v.clone(); if (dir.lengthSq() < 1e-4) dir.set(0, 0, 1).applyQuaternion(carQuat); dir.normalize();
     this.implosion.position.copy(carPos).add(new THREE.Vector3(0, 0.6, 0));
@@ -117,7 +117,7 @@ export class TimeFX {
       this.scene.add(mesh);
       this.trails.push({ mesh, t: 0, len: 0, ring: true, base: mesh.position.clone(), dir });
     }
-    this.state.flash = 1;
+    if (!opts.remote) this.state.flash = 1;
   }
 
   arrive() { this.state.arrive = 1; this.state.frost = 1; this.arrT = 0; }

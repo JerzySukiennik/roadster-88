@@ -94,7 +94,7 @@ export class CarSim {
     const mk = (pts, fric) => {
       let d = R.ColliderDesc.convexHull(pts);
       if (!d) d = R.ColliderDesc.cuboid(0.98, 0.3, 2.0).setTranslation(0, 0.55, 0);
-      d.setDensity(0).setFriction(fric).setRestitution(0.08).setCollisionGroups(groups(GROUP.CAR, GROUP.STATIC | GROUP.CAR | GROUP.PROP | GROUP.DEBRIS))
+      d.setDensity(0).setFriction(fric).setRestitution(0.08).setCollisionGroups(groups(GROUP.CAR, GROUP.STATIC | GROUP.CAR | GROUP.PROP | GROUP.DEBRIS | GROUP.WALKER))
         .setActiveEvents(R.ActiveEvents.CONTACT_FORCE_EVENTS).setContactForceEventThreshold(9000);
       const col = this.world.createCollider(d, this.body);
       col.userData = { kind: 'car', car: this };

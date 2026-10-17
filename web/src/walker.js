@@ -87,7 +87,7 @@ export class Walker {
     this.knock();
     const t = this.body.translation();
     const desired = { x: this.vel.x * dt, y: this.vel.y * dt, z: this.vel.z * dt };
-    this.ctl.computeColliderMovement(this.collider, desired, undefined, groups(GROUP.WALKER, GROUP.STATIC | GROUP.CAR | GROUP.PROP));
+    this.ctl.computeColliderMovement(this.collider, desired, undefined, groups(GROUP.WALKER, GROUP.STATIC | GROUP.CAR | GROUP.PROP | GROUP.DEBRIS | GROUP.WALKER));
     const m = this.ctl.computedMovement();
     const nx = t.x + m.x, ny = t.y + m.y, nz = t.z + m.z;
     this.body.setNextKinematicTranslation({ x: nx, y: ny, z: nz });

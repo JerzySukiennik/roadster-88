@@ -112,7 +112,7 @@ export class DamageSystem {
     this.lastImpact.set(key, now);
     const J = mu * vn * 1.1;
     const E = 0.5 * mu * vn * vn * 0.99;
-    if (od.kind === 'remote' && car === this.g.car) { this.lastRemote.set(od.uid, now); if (this.g.online) this.g.online.sendHit(od.uid, J, nrm, pt); }
+    if (od.kind === 'remote' && car === this.g.car) { this.lastRemote.set(od.uid, now); if (this.g.online) { this.g.online.sendHit(od.uid, J, nrm, pt); this.g.online.soften(od.uid); } }
     this.impactAt(car, pt, nrm, vn, J, E, rel, od);
   }
 
@@ -125,7 +125,7 @@ export class DamageSystem {
     let cylRadius = 0, footprint = 50;
     if (od.tag === 'pillar' || od.tag === 'pole' || od.tag === 'tower') cylRadius = od.r || 0.5;
     if (od.kind === 'prop') footprint = 0.5;
-    if (od.kind === 'car') footprint = 1.2;
+    if (od.kind === 'car' || od.kind === 'remote') footprint = 1.2;
     const axis = new THREE.Vector3(0, 1, 0).applyQuaternion(q);
     const depth = car.lattice.impact({ p: pL.toArray(), n: nL.toArray(), speed: vn, energy: E, cylRadius, axis: axis.toArray(), footprint });
     if (car === this.g.car) {
@@ -283,7 +283,7 @@ export class DamageSystem {
     const hx = Math.max(0.03, localSize.x / 2 * 0.9), hy = Math.max(0.03, localSize.y / 2 * 0.9), hz = Math.max(0.03, localSize.z / 2 * 0.9);
     const isWheel = name.startsWith('Wheel_');
     const desc = isWheel ? R.ColliderDesc.cylinder(Math.max(0.08, Math.min(hx, hz) * 0.4), Math.max(hy, hz)).setRotation({ x: 0, y: 0, z: Math.sin(Math.PI / 4), w: Math.cos(Math.PI / 4) }) : R.ColliderDesc.cuboid(hx, hy, hz);
-    desc.setMass(mass).setFriction(isWheel ? 1.0 : 0.6).setRestitution(isWheel ? 0.35 : 0.15).setCollisionGroups(groups(GROUP.DEBRIS, GROUP.STATIC | GROUP.CAR | GROUP.DEBRIS | GROUP.PROP));
+    desc.setMass(mass).setFriction(isWheel ? 1.0 : 0.6).setRestitution(isWheel ? 0.35 : 0.15).setCollisionGroups(groups(GROUP.DEBRIS, GROUP.STATIC | GROUP.CAR | GROUP.DEBRIS | GROUP.PROP | GROUP.WALKER));
     world.createCollider(desc, body);
     const v = car.sim.vel, k = Math.min(1, J / 40000);
     body.setLinvel({ x: v.x * 0.92 + rnd(-2, 2) * k, y: v.y + rnd(1, 4) * (0.3 + k), z: v.z * 0.92 + rnd(-2, 2) * k }, true);

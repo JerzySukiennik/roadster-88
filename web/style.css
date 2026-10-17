@@ -28,6 +28,14 @@ html, body { margin: 0; height: 100%; background: #000; overflow: hidden; font-f
 .hud-dots { position: absolute; left: 50%; bottom: 30px; width: 46px; height: 64px; transform: translateX(-50%); }
 .hud-dots i { position: absolute; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: #fff; opacity: 0.18; transition: opacity 0.08s linear; box-shadow: 0 0 6px rgba(255, 255, 255, 0.0); }
 
+.year-in { position: fixed; left: 44px; bottom: 112px; padding: 12px 16px 11px; border-radius: 16px; background: rgba(14, 15, 18, 0.5); border: 1px solid var(--line); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); opacity: 0; transform: translateY(8px); transition: opacity 0.18s ease, transform 0.22s cubic-bezier(0.2, 0.7, 0.2, 1); pointer-events: none; z-index: 4; min-width: 220px; }
+.year-in.on { opacity: 1; transform: none; }
+.yi-label { font-size: 10px; font-weight: 600; letter-spacing: 0.22em; text-transform: uppercase; color: var(--amber); }
+.yi-val { margin-top: 4px; font-size: 34px; font-weight: 300; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.yi-val::after { content: ""; display: inline-block; width: 2px; height: 0.9em; margin-left: 4px; vertical-align: -0.08em; background: var(--amber); animation: caret 1s steps(2) infinite; }
+.yi-val.dim { color: var(--ink-dim); }
+.yi-sub { margin-top: 3px; font-size: 11px; color: var(--ink-dim); }
+@keyframes caret { 50% { opacity: 0; } }
 .gaze { position: fixed; left: 50%; top: 50%; width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px; border-radius: 50%; background: rgba(255, 255, 255, 0.85); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35); pointer-events: none; display: none; transition: transform 0.12s ease, background 0.12s ease; }
 .gaze.on { display: block; }
 .gaze.hot { transform: scale(1.8); background: #fff; }

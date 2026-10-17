@@ -14,6 +14,7 @@ import { Hud } from './hud.js';
 import { Menu } from './menu.js';
 import { Walker } from './walker.js';
 import { Online } from './online.js';
+import { YearInput } from './yearInput.js';
 import { AudioEngine } from './audio.js';
 import { DamageSystem } from './damage.js';
 import { Cockpit } from './render/cockpit.js';
@@ -102,6 +103,7 @@ class Game {
     this.frames = []; this.spikes = 0; this.frameCount = 0; this.warm = 0; this.prof = { sim: 0, mid: 0, render: 0 };
     this.menu = new Menu(this);
     this.online = new Online(this);
+    this.yearIn = new YearInput(this);
     this.harness = params.has('debug');
     this.input.onLockChange = (locked) => { if (!locked && !this.paused && this.started && !this.harness) this.setPaused(true); };
     const unlock = () => { this.audio.unlock().then(() => this.audio.setRadio(this.settings.radio, this.eraId())); };
@@ -176,14 +178,15 @@ class Game {
     if (force || Math.abs(h - (this.lastSkyHour || -9)) > 0.02) { this.sky.setTime(p.month, p.day, h); this.lastSkyHour = h; }
   }
 
-  spawn(pos, yaw) {
+  spawn(pos, yaw, paint) {
     const sim = new CarSim(this.R, this.phys.world, this.tu, { position: pos, yaw, wing: this.settings.wing });
     sim.id = 'c' + (this.carSerial = (this.carSerial || 0) + 1);
     sim.flight.assist = this.settings.assist;
-    const view = new CarView(this.tu, this.mats, this.template);
+    const own = !paint || paint === this.settings.paint, mats = own ? this.mats : this.online.matsFor(paint);
+    const view = new CarView(this.tu, mats, this.template);
     view.setWing(this.settings.wing); view.setRoof(this.settings.roof);
     this.gfx.scene.add(view.root);
-    const car = { sim, view, prev: { pos: new THREE.Vector3(), quat: new THREE.Quaternion() }, curr: { pos: new THREE.Vector3(), quat: new THREE.Quaternion() }, pose: { pos: new THREE.Vector3(), quat: new THREE.Quaternion() } };
+    const car = { sim, view, mats, paint: own ? null : paint, prev: { pos: new THREE.Vector3(), quat: new THREE.Quaternion() }, curr: { pos: new THREE.Vector3(), quat: new THREE.Quaternion() }, pose: { pos: new THREE.Vector3(), quat: new THREE.Quaternion() } };
     this.damage.attach(car, this.latticeData);
     this.capture(car); this.capture(car);
     car.pose.pos.copy(car.curr.pos); car.pose.quat.copy(car.curr.quat);
@@ -282,7 +285,12 @@ class Game {
     const I = this.input;
     if (I.hit('Escape') && this.menu.mode !== 'title') this.setPaused(!this.paused);
     if (this.paused) return;
-    if (I.hit('KeyF')) { if (this.walker.active) this.enterCar(); else this.exitCar(); }
+    if (I.hit('KeyF')) { if (this.ride) this.exitRide(); else if (this.walker.active) this.enterCar(); else this.exitCar(); }
+    if (this.ride) {
+      if (I.hit('KeyC')) { this.rig.mode = this.rig.mode === 'chase' ? 'fpp' : 'chase'; this.rig.fppYaw = 0; this.rig.fppPitch = 0; this.gfx.cut(); }
+      if (I.hit('KeyT')) this.hint('Your driver sets the year', 1.6);
+      return;
+    }
     if (this.walker.active) { if (I.hit('KeyR')) this.spawnNearWalker(); return; }
     if (I.hit('KeyC')) { this.rig.mode = this.rig.mode === 'chase' ? 'fpp' : 'chase'; this.rig.fppYaw = 0; this.rig.fppPitch = 0; this.gfx.cut(); }
     if (I.hit('KeyR')) this.respawn();
@@ -312,27 +320,140 @@ class Game {
   }
 
   enterCar() {
-    const c = this.walker.nearestCar();
+    const w = this.walker.pos, c = this.walker.nearestCar(), r = this.online.nearestRemoteCar(w, 3.2);
+    const dc = c ? Math.hypot(c.sim.pos.x - w.x, c.sim.pos.z - w.z) : 1e9, dr = r ? Math.hypot(r.pos.x - w.x, r.pos.z - w.z) : 1e9;
+    if (r && dr < dc) {
+      if (r.foot) { this.online.request(r.uid, 'take'); this.hint(`Asking ${r.name || 'the owner'} for the keys`, 1.6); }
+      else this.rideWith(r);
+      return;
+    }
     if (!c) { this.hint('Walk up to a Roadster to get in', 1.6); return; }
+    this.boardCar(c);
+  }
+
+  boardCar(c) {
     this.doorPulse(c, true);
     this.walker.leave();
     if (c !== this.car) {
       const wi = this.wrecks.indexOf(c); if (wi >= 0) this.wrecks.splice(wi, 1);
       c.sim.wreck = false; c.sim.flight.assist = this.settings.assist;
+      if (this.car.given) this.dropCar(this.car);
       this.car = c;
       this.cockpit.bind(c.view); this.timeFx.setSurface(c.view.root);
     }
     this.driver.attach(c.view.root, false);
     this.rig.mode = 'chase'; this.rig.initialized = false; this.gfx.cut();
     clearTimeout(this.doorT); this.doorT = setTimeout(() => { if (!this.walker.active) this.doorPulse(c, false); }, 1100);
+    this.online.send();
+  }
+
+  dropCar(car) {
+    car.sim.destroy(); this.gfx.scene.remove(car.view.root);
+    const i = this.cars.indexOf(car); if (i >= 0) this.cars.splice(i, 1);
+    const wi = this.wrecks.indexOf(car); if (wi >= 0) this.wrecks.splice(wi, 1);
+  }
+
+  giveCar(to) {
+    const car = this.car, r = this.online.remotes.get(to);
+    car.given = to; car.sim.enabled = false;
+    car.sim.body.setEnabled(false);
+    car.view.root.visible = false;
+    this.online.send();
+    this.hint(`${(r && r.name) || 'A friend'} took your Roadster · R for a new one`, 3);
+  }
+
+  takeGiven(c, from) {
+    if (!this.walker.active || this.ride) return;
+    const r = this.online.remotes.get(from);
+    if (r) { r.hideUntil = performance.now() + 2500; r.setSolid(false); if (r.view) r.view.root.visible = false; }
+    const q = new THREE.Quaternion(c[3], c[4], c[5], c[6]).normalize(), f = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
+    const keep = this.car, car = this.spawn([c[0], c[1], c[2]], Math.atan2(f.x, f.z), r && r.paint);
+    car.sim.body.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }, true); car.sim.readState(); this.capture(car); this.capture(car);
+    car.pose.quat.copy(car.curr.quat);
+    this.car = keep;
+    this.boardCar(car);
+    this.hint(`${(r && r.name) || 'Your friend'}'s Roadster is yours`, 2.5);
+  }
+
+  rideWith(r) {
+    this.walker.leave();
+    this.ride = r.uid; this.rideLost = 0;
+    this.rideLast = { pos: r.pos.clone(), quat: r.quat.clone() };
+    if (r.view) this.driver.attach(r.view.root, false);
+    this.audio.play('door_open', { pos: r.pos });
+    this.rig.mode = 'chase'; this.rig.hold = null; this.rig.initialized = false; this.gfx.cut();
+    this.online.send();
+    this.hint(`Riding with ${r.name || 'a friend'} · F to get out · C to look around`, 3);
+  }
+
+  exitRide(force) {
+    const r = this.online.remotes.get(this.ride), L = this.rideLast;
+    if (!force && (this.tc.state === 'departing' || this.tc.state === 'gone' || (r && r.vel.length() > 4))) { this.hint('Wait for the car to stop', 1.6); return; }
+    const p = new THREE.Vector3(-1.45, 0, -0.15).applyQuaternion(L.quat).add(L.pos);
+    const gy = this.groundHeight(p.x, p.z, L.pos.y + 2.5), y = gy === null ? L.pos.y : gy;
+    const left = new THREE.Vector3(1, 0, 0).applyQuaternion(L.quat), f = new THREE.Vector3(0, 0, 1).applyQuaternion(L.quat);
+    this.ride = null;
+    this.walker.enter(p.x, y + 0.02, p.z, Math.atan2(-left.x, -left.z));
+    this.driver.attach(this.gfx.scene, true); this.driver.root.visible = true;
+    this.rig.mode = 'foot'; this.rig.footYaw = Math.atan2(f.x, f.z) - 0.35; this.rig.footPitch = 0.22; this.rig.footInit = false; this.rig.hold = null;
+    this.audio.play('door_close', { pos: L.pos });
+    this.gfx.cut();
+    this.online.send();
+    this.hint('F to get in · Shift to run · Space to jump', 3);
+  }
+
+  followJump(year) {
+    const tc = this.tc;
+    if (tc.busy || !this.ride) return;
+    tc.setDestination({ ...tc.destination, year });
+    tc.departed = { ...tc.present };
+    tc.state = 'departing'; tc.t = 0; tc.charge = 1; tc.events.push('depart');
+  }
+
+  rideState(fdt, r) {
+    const st = this._rs || (this._rs = { pos: new THREE.Vector3(), quat: new THREE.Quaternion(), vel: new THREE.Vector3(), accel: new THREE.Vector3(), accelLocal: new THREE.Vector3(), raw: new THREE.Vector3(), iq: new THREE.Quaternion() });
+    const L = this.rideLast;
+    st.pos.copy(L.pos); st.quat.copy(L.quat);
+    if (r) {
+      if (fdt > 0) st.raw.subVectors(r.vel, st.vel).multiplyScalar(1 / fdt).clampLength(0, 45);
+      st.accel.lerp(st.raw, Math.min(1, fdt * 4));
+      st.vel.copy(r.vel);
+    } else st.accel.multiplyScalar(0.9);
+    st.accelLocal.copy(st.accel).applyQuaternion(st.iq.copy(st.quat).invert());
+    const f = this._rf || (this._rf = new THREE.Vector3());
+    f.set(0, 0, 1).applyQuaternion(st.quat);
+    st.speed = st.vel.length(); st.fwdSpeed = st.vel.dot(f);
+    const gy = this.groundHeight(st.pos.x, st.pos.z, st.pos.y + 0.6);
+    st.grounded = gy !== null && st.pos.y - gy < 0.9; st.airborne = !st.grounded; st.reverse = st.fwdSpeed < -0.5;
+    const th = r && r.ghost && r.ghost.thrusters;
+    st.boost = th ? (th.rear.reduce((a, n) => a + n.valve, 0) / 4) * (st.grounded ? 1 : 0.3) : 0;
+    st.thrust = th ? th.all.reduce((a, n) => a + n.valve * n.thrustMax, 0) / 40000 : 0;
+    const cp = this.gfx.camera.position, cg = fdt ? this.groundHeight(cp.x, cp.z, cp.y + 2) : 0;
+    st.groundY = cg === null ? -50 : cg;
+    const au = this._ras || (this._ras = { motorRpm: 0, motorForce: 0, regenForce: 0, speed: 0, enabled: true, contacts: 4, wheels: [], thrusters: null });
+    au.speed = st.speed; au.motorRpm = Math.abs(st.fwdSpeed) * this.tu.powertrain.motor_rpm_per_mps;
+    au.motorForce = Math.min(this.tu.powertrain.max_wheel_force, Math.abs(st.accelLocal.z) * this.tu.car.mass); au.contacts = st.grounded ? 4 : 0;
+    au.thrusters = th || this.car.sim.thrusters;
+    st.audio = au;
+    return st;
+  }
+
+  rideEye(view, out) {
+    view.root.updateMatrixWorld(true);
+    view.eyeWorld(out);
+    const inv = this._ri || (this._ri = new THREE.Matrix4());
+    out.applyMatrix4(inv.copy(view.root.matrixWorld).invert());
+    out.x = -out.x;
+    return out.applyMatrix4(view.root.matrixWorld);
   }
 
   spawnNearWalker() {
     const w = this.walker, f = { x: Math.sin(this.rig.footYaw), z: Math.cos(this.rig.footYaw) };
     const p = [w.pos.x + f.x * 6, w.pos.y + 1.2, w.pos.z + f.z * 6];
     const g = this.groundHeight(p[0], p[2], p[1] + 5); if (g !== null) p[1] = g + 0.08;
-    const keep = this.car;
+    let keep = this.car;
     const car = this.spawn(p, this.rig.footYaw + Math.PI / 2);
+    if (keep.given) { this.dropCar(keep); keep = car; }
     this.car = keep; this.cockpit.bind(keep.view); this.timeFx.setSurface(keep.view.root);
     car.sim.flight.assist = this.settings.assist;
     this.hint('New Roadster', 1.5);
@@ -349,7 +470,7 @@ class Game {
     for (const c of this.cars) {
       this.applyEnv(c.sim);
       if (c === this.car && gone) { c.sim.readState(); continue; }
-      c.sim.preStep(dt, c === this.car && !this.walker.active ? inp : this.walker.parked);
+      c.sim.preStep(dt, c === this.car && !this.walker.active && !this.ride ? inp : this.walker.parked);
     }
     if (this.walker.active) this.walker.step(dt, this.input, this.rig.footYaw);
     this.online.preStep(dt);
@@ -378,10 +499,16 @@ class Game {
       if (e === 'arm') A.play('tc_arm', { inside: true });
       if (e === 'disarm') A.play('tc_disarm', { inside: true });
       if (e === 'charge') A.play('tc_crackle', { pos: car.curr.pos });
-      if (e === 'depart') {
+      if (e === 'depart' && this.ride) {
+        const L = this.rideLast, f = new THREE.Vector3(0, 0, 1).applyQuaternion(L.quat).setY(0).normalize(), side = new THREE.Vector3(f.z, 0, -f.x);
+        this.timeFx.state.flash = 1;
+        A.play('tc_boom_double', { gain: 1, inside: true });
+        if (this.rig.mode === 'chase') this.pendingHold = { pos: L.pos.clone().addScaledVector(f, -6.5).addScaledVector(side, 2.4).add(new THREE.Vector3(0, 1.9, 0)), look: L.pos.clone().addScaledVector(f, 9).add(new THREE.Vector3(0, 0.6, 0)) };
+      } else if (e === 'depart') {
         const rear = sim.wheels.slice(2).filter((w) => w.contact), use = rear.length ? rear : sim.wheels.filter((w) => w.contact);
         const wheelPts = use.map((w) => ({ x: w.point.x, y: w.point.y, z: w.point.z }));
         this.timeFx.depart(car.curr.pos.clone(), car.curr.quat.clone(), sim.vel, sim.contacts >= 2, wheelPts);
+        this.online.flagDepart();
         A.play('tc_boom_double', { gain: 1, inside: true });
         A.play('tc_fire_whoosh', { pos: car.curr.pos, gain: 0.9 });
         if (this.rig.mode === 'chase') {
@@ -398,11 +525,11 @@ class Game {
       }
       if (e === 'arrive') {
         this.applyClock(true);
-        sim.body.setEnabled(true);
+        sim.body.setEnabled(!car.given);
         if (this.saved) { sim.body.setLinvel(this.saved.lin, true); sim.body.setAngvel(this.saved.ang, true); }
-        car.view.root.visible = true;
+        car.view.root.visible = !car.given;
         this.rig.hold = null; this.rig.initialized = false; this.gfx.cut();
-        this.timeFx.arrive();
+        if (!this.ride) { this.timeFx.arrive(); this.online.flagArrive(); }
         A.play('tc_arrive_zap', { pos: car.curr.pos, gain: 1 });
         A.setRadio(this.settings.radio, this.eraId());
         if (this.valley) this.arriveValley();
@@ -441,7 +568,8 @@ class Game {
 
   nozzleWorld(n) {
     const v = this._nw || (this._nw = new THREE.Vector3());
-    return v.set(n.pos.x, n.pos.y, n.pos.z).applyQuaternion(this.car.pose.quat).add(this.car.pose.pos);
+    const P = this.ride && this.rideLast ? this.rideLast : this.car.pose;
+    return v.set(n.pos.x, n.pos.y, n.pos.z).applyQuaternion(P.quat).add(P.pos);
   }
 
   frame() {
@@ -470,6 +598,15 @@ class Game {
     }
     if (this.walker.active) this.walker.interpolate(alpha);
     this.online.update(fdt);
+    let rideR = null, rs = null;
+    if (this.ride) {
+      rideR = this.online.remotes.get(this.ride) || null;
+      const ok = !!(rideR && rideR.view && !rideR.vanished && !rideR.hidden);
+      if (ok) { this.rideLast.pos.copy(rideR.pos); this.rideLast.quat.copy(rideR.quat); this.rideLost = 0; }
+      else { this.rideLost += fdt; if (!this.tc.busy && (this.rideLost > 8 || (rideR && rideR.hidden))) this.exitRide(true); }
+      if (!ok) rideR = null;
+      if (this.ride) rs = this.rideState(fdt, rideR);
+    }
     const [mx, my] = this.input.consumeMouse();
     this.rig.mouse(mx, my, now / 1000);
     const s = this.car.sim;
@@ -477,21 +614,34 @@ class Game {
     this.menu.update(fdt);
     if (this.pendingHold) { this.rig.hold = this.pendingHold; this.pendingHold = null; this.gfx.cut(); }
     if (this.walker.active) this.rig.updateFoot(fdt, this.walker.pose, (o, d, l) => this.camRay(o, d, l));
-    else if (this.rig.mode === 'chase') this.rig.updateChase(fdt, st, now / 1000, (o, d, l) => this.camRay(o, d, l));
+    else if (rs) {
+      if (this.rig.mode === 'fpp' && rideR) this.rig.updateFpp(fdt, this.rideEye(rideR.view, this._eye || (this._eye = new THREE.Vector3())), rideR.quat, rs, null);
+      else this.rig.updateChase(fdt, rs, now / 1000, (o, d, l) => this.camRay(o, d, l));
+    } else if (this.rig.mode === 'chase') this.rig.updateChase(fdt, st, now / 1000, (o, d, l) => this.camRay(o, d, l));
     else { this.car.view.root.updateMatrixWorld(true); this.rig.updateFpp(fdt, this.car.view.eyeWorld(new THREE.Vector3()), this.car.pose.quat, st, this.screenFocus()); }
     const chase = this.rig.mode !== 'fpp';
-    if (this.cabinGlass !== !chase) { CarView.setCabinView(this.mats, !chase); this.cabinGlass = !chase; }
+    const ownCab = !chase && !this.ride, cm = (rideR && rideR.mats) || this.car.mats || this.mats;
+    if (this.cabinGlass !== !chase || this.cabinMats !== cm) { if (this.cabinMats && this.cabinMats !== cm) CarView.setCabinView(this.cabinMats, false); CarView.setCabinView(cm, !chase); this.cabinGlass = !chase; this.cabinMats = cm; }
     const nightK = THREE.MathUtils.smoothstep(this.sky.state.night, 0.05, 0.6), on = this.car.view.root.visible ? 1 : 0;
     this.lamps.L.intensity = this.lamps.R.intensity = 260 * nightK * on;
     this.lamps.cabin.intensity = 0.35 * nightK * on;
     this.placeLamps();
-    const hit = chase ? (this.cockpit.hit = null) : this.cockpit.gaze(this.gfx.camera);
+    const hit = !ownCab ? (this.cockpit.hit = null) : this.cockpit.gaze(this.gfx.camera);
     const clicks = this.input.consumeClicks();
-    if (!chase && clicks && !this.paused && this.cockpit.tap() && this.driver.ready) this.driver.touch(hit.point);
+    if (ownCab && clicks && !this.paused && this.cockpit.tap() && this.driver.ready) this.driver.touch(hit.point);
     if (this.driver.ready && this.walker.active) {
       this.driver.setHeadVisible(true);
       const v = this.valley;
       this.driver.walkPose(this.walker, fdt, { camYaw: this.rig.footYaw, ground: v ? (x, z) => v.heightAt(x, z) : null });
+    } else if (this.driver.ready && this.ride) {
+      const d = this.driver;
+      if (rideR) {
+        if (d.root.parent !== rideR.view.root) d.attach(rideR.view.root, false);
+        d.root.visible = true;
+        d.look.yaw = chase ? 0 : this.rig.fppYaw; d.look.pitch = chase ? 0 : this.rig.fppPitch;
+        d.setHeadVisible(chase);
+        d.pose(rideR.view, fdt, { accelZ: rs.accelLocal.z, accelX: rs.accelLocal.x, passenger: true });
+      } else d.root.visible = false;
     } else if (this.driver.ready && !this.noDriverPose) {
       this.driver.look.yaw = chase ? THREE.MathUtils.clamp(s.steerAngle * 0.6, -0.4, 0.4) : this.rig.fppYaw;
       this.driver.look.pitch = chase ? 0 : this.rig.fppPitch;
@@ -499,15 +649,15 @@ class Game {
       this.poseSkip = chase ? (this.poseSkip || 0) + 1 : 0;
       if (!chase || this.poseSkip % 3 === 0) this.driver.pose(this.car.view, chase ? fdt * 3 : fdt, { accelZ: st.accelLocal.z, accelX: st.accelLocal.x });
     }
-    this.cockpit.update(fdt, !chase);
-    $('gaze').classList.toggle('on', !chase && !this.paused);
+    this.cockpit.update(fdt, ownCab);
+    $('gaze').classList.toggle('on', ownCab && !this.paused);
     $('gaze').classList.toggle('hot', !!(hit && this.cockpit.hover));
-    this.gfx.u.blur.value = THREE.MathUtils.smoothstep(s.speed / MPH, 40, 220) * 0.5 * (chase ? 1 : 0.5);
+    this.gfx.u.blur.value = THREE.MathUtils.smoothstep((rs ? rs.speed : s.speed) / MPH, 40, 220) * 0.5 * (chase ? 1 : 0.5);
     this.expK = (this.expK || 1) + ((chase ? 1 : 1.55) - (this.expK || 1)) * Math.min(1, fdt * 1.5);
     this.gfx.u.exposure.value = this.sky.exposure * this.expK;
     if (this.sky.fpp !== !chase) { this.sky.fpp = !chase; this.sky.applyShadowPreset(this.gfx.preset); }
     this.gfx.updateSun(this.sky.sunDir, this.sky.sun.color, (1 - this.sky.state.night) * Math.min(1, this.sky.sun.intensity / 6) * (this.tc.state === 'gone' ? 0 : 1));
-    this.sky.update(fdt, s.pos, false, this.viewDir || (this.viewDir = new THREE.Vector3()).set(0, 0, -1).applyQuaternion(this.gfx.camera.quaternion).setY(0).normalize());
+    this.sky.update(fdt, rs ? rs.pos : s.pos, false, this.viewDir || (this.viewDir = new THREE.Vector3()).set(0, 0, -1).applyQuaternion(this.gfx.camera.quaternion).setY(0).normalize());
     if (this.plate) this.plate.syncProps(this.phys);
     if (this.valley) this.valley.update(fdt, this.gfx.camera.position, this.gfx.camera);
     if (this.eras && !this.erasBroken) { try { this.eras.update(fdt, this.gfx.camera.position); } catch (e) { this.erasBroken = true; console.error('eras.update failed', e); } }
@@ -517,16 +667,17 @@ class Game {
       if (this.car.view.root.visible && !params.has('noplume')) this.fx.thrusters(fdt, s, this.car.pose.quat, this.car.pose.pos, this.gfx.camera.position);
       for (const c of this.cars) this.fx.tyres(fdt, c.sim, c.pose.quat, c.pose.pos);
       this.damage.update(fdt);
-      this.car.view.root.updateMatrixWorld(true);
-      this.timeFx.update(fdt, this.tc, this.car.view.root.matrixWorld, this.car.pose.pos, this.gfx, this.tu.time_travel, this.car.view.root.visible);
+      const tv = this.ride ? (rideR ? rideR.view : null) : this.car.view;
+      if (tv) tv.root.updateMatrixWorld(true);
+      this.timeFx.update(fdt, this.tc, (tv || this.car.view).root.matrixWorld, this.ride ? this.rideLast.pos : this.car.pose.pos, this.gfx, this.tu.time_travel, !!tv && tv.root.visible);
       this.fx.update(fdt);
       this.applyClock(false);
       const fl = this.timeFx.flashLevel || 0;
       if (fl !== this.lastFlash) { $('flash').style.opacity = fl.toFixed(3); this.lastFlash = fl; }
     }
-    this.hud.update(fdt, { view: this.rig.mode, hidden: this.paused || !this.started || this.walker.active, mph: s.speed / MPH, thrusters: s.thrusters, tc: { armed: this.tc.armed, trigger: this.tu.time_travel.trigger_mph, yearLabel: this.yearLabel(this.tc.destination.year) }, input: this.input.down.size > 0 });
+    this.hud.update(fdt, { view: this.rig.mode, hidden: this.paused || !this.started || this.walker.active || !!this.ride, mph: s.speed / MPH, thrusters: s.thrusters, tc: { armed: this.tc.armed, trigger: this.tu.time_travel.trigger_mph, yearLabel: this.yearLabel(this.tc.destination.year) }, input: this.input.down.size > 0 });
     this.audio.listener(this.gfx.camera);
-    this.audio.update(fdt, { sim: s, powertrain: this.tu.powertrain, fpp: !chase, gone: this.tc.state === 'gone', nozzleWorld: (n) => this.nozzleWorld(n), carPos: this.car.pose.pos, scrape: this.damage.scrape, tc: this.tc, weather: this.weather, ambient: this.eras && this.eras.ambient });
+    this.audio.update(fdt, { sim: rs ? rs.audio : s, powertrain: this.tu.powertrain, fpp: !chase, gone: this.tc.state === 'gone', nozzleWorld: (n) => this.nozzleWorld(n), carPos: rs ? rs.pos : this.car.pose.pos, scrape: this.damage.scrape, tc: this.tc, weather: this.weather, ambient: this.eras && this.eras.ambient });
     if (this.started) this.gfx.updateDynRes(fdt);
     const tr = performance.now();
     this.gfx.render();
