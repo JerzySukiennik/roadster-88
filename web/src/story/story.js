@@ -4,13 +4,15 @@ import { eraOf } from '../sim/timetravel.js';
 import { Props } from './props.js';
 import { NPCs } from './npc.js';
 import { CHAPTERS } from './chapters.js';
+import { Voice } from './voice.js';
+import { voiceOf } from './lines.js';
 
 const KEY = 'r88.story.v1';
 const $ = (id) => document.getElementById(id);
 
 export class Story {
   constructor(game) {
-    this.g = game; this.props = new Props(game); this.npc = new NPCs(game);
+    this.g = game; this.props = new Props(game); this.npc = new NPCs(game); this.voice = new Voice(game);
     this.el = { obj: $('storyObj'), ch: $('soCh'), text: $('soText'), meta: $('soMeta'), wp: $('storyWp'), wpd: $('wpDist'), radio: $('storyRadio'), rw: $('srWho'), rt: $('srText'), dlg: $('storyDlg'), dw: $('sdWho'), dt: $('sdText'), dc: $('sdChoices'), dh: $('sdHint'), title: $('storyTitle'), tm: $('stMain'), ts: $('stSub') };
     this.steps = CHAPTERS.flatMap((c) => c.steps.map((s) => ({ ...s, chapter: c })));
     this.st = this.load();
@@ -45,7 +47,10 @@ export class Story {
     const s = this.step; if (!s) return;
     this.st.step = s.id; this.save();
     this.applyWorld();
-    if (!prev || prev.chapter !== s.chapter) this.title(s.chapter.title, s.chapter.name, 4);
+    if (!prev || prev.chapter !== s.chapter) {
+      this.title(s.chapter.title, s.chapter.name, 4);
+      const ci = CHAPTERS.indexOf(s.chapter); this.voice.prefetch(`c${ci}_`); this.voice.prefetch(`c${ci + 1}_`);
+    }
     this.sdone = false;
     if (s.enter) s.enter(this);
   }
@@ -84,7 +89,16 @@ export class Story {
     E.title.classList.add('on'); clearTimeout(this.titleT); this.titleT = setTimeout(() => E.title.classList.remove('on'), sec * 1000);
   }
 
-  radio(who, text, sec) { this.radioQ.push({ who, text, sec: sec || Math.max(2.6, text.length / 16) }); }
+  radio(a, b, c) {
+    const line = typeof a === 'object' ? a : { who: a, text: b }, sec = typeof a === 'object' ? b : c;
+    this.radioQ.push({ ...line, sec: sec || Math.max(2.6, line.text.length / 16) });
+  }
+
+  voicePos(line) {
+    const who = voiceOf(line), id = { ida: 'ida', marta: 'marta', kessler: 'kessler' }[who];
+    if (!id || line.radio) return null;
+    return () => { const p = this.npc.pos(id); return p ? { x: p.x, y: p.y + 1.62, z: p.z } : null; };
+  }
 
   spot(def) { const off = this.g.interact.add(def); this.spots.push(off); return off; }
 
@@ -108,7 +122,11 @@ export class Story {
         if (L.do) L.do(this);
         if (L.skip && L.skip(this)) { run(k + 1); return; }
         this.openDlg(L, (choice) => {
-          if (choice !== null) { picks.push(choice); const c = L.choices[choice]; if (c.do) c.do(this); if (c.then) { this.say(c.then).then((p2) => { picks.push(...p2); run(k + 1); }); return; } }
+          if (choice !== null) {
+            picks.push(choice); const c = L.choices[choice]; if (c.do) c.do(this);
+            const seq = [...(c.v ? [{ who: c.who || 'YOU', text: c.text, v: c.v }] : []), ...(c.then || [])];
+            if (seq.length) { this.say(seq).then((p2) => { picks.push(...p2); run(k + 1); }); return; }
+          }
           run(k + 1);
         });
       };
@@ -119,8 +137,9 @@ export class Story {
   openDlg(L, cb) {
     const E = this.el;
     E.dw.textContent = L.who || ''; E.dc.innerHTML = '';
-    this.dlgOpen = { L, cb, shown: 0, full: L.text, sel: 0, t: 0 };
+    const D = this.dlgOpen = { L, cb, shown: 0, full: L.text, sel: 0, t: 0, rate: 60, vh: null, wait: !!this.voice.has(L.v), after: 0 };
     E.dt.textContent = '';
+    if (L.v) this.voice.play(L, { pos: this.voicePos(L) }).then((h) => { if (this.dlgOpen !== D) { if (h) this.voice.stop(); return; } D.wait = false; if (h) { D.vh = h; D.rate = Math.max(12, D.full.length / Math.max(0.5, h.dur * 0.9)); } });
     if (L.choices) L.choices.forEach((c, i) => { const d = document.createElement('div'); d.className = 'sd-choice'; d.innerHTML = `<b>${i + 1}</b><span></span>`; d.lastChild.textContent = c.text; d.onclick = () => this.choose(i); E.dc.appendChild(d); });
     E.dh.textContent = L.choices ? '1, 2 or click to answer' : 'E to continue';
     E.dc.style.visibility = 'hidden';
@@ -130,9 +149,11 @@ export class Story {
 
   closeDlg() { this.dlgOpen = null; this.el.dlg.classList.remove('on'); }
 
+  advance() { const D = this.dlgOpen; if (!D) return; this.voice.stop(); this.dlgOpen = null; D.cb(null); if (!this.dlgOpen) this.el.dlg.classList.remove('on'); }
+
   choose(i) {
     const D = this.dlgOpen; if (!D || !D.L.choices || D.shown < D.full.length || i >= D.L.choices.length) return;
-    this.dlgOpen = null; D.cb(i);
+    this.voice.stop(); this.dlgOpen = null; D.cb(i);
     if (!this.dlgOpen) this.el.dlg.classList.remove('on');
     if (this.g.input && !document.pointerLockElement) this.g.input.requestLock && this.g.input.requestLock();
   }
@@ -143,9 +164,10 @@ export class Story {
     if (k === 'Escape') return;
     e.preventDefault(); e.stopPropagation();
     if (e.repeat) return;
-    if (D.shown < D.full.length) { if (k === 'KeyE' || k === 'Space' || k === 'Enter') D.shown = D.full.length; return; }
+    const go = k === 'KeyE' || k === 'Space' || k === 'Enter';
+    if (D.shown < D.full.length) { if (go) { D.shown = D.full.length; D.wait = false; if (!D.L.choices) this.advance(); else this.voice.stop(); } return; }
     if (D.L.choices) { const n = Number(k.replace(/^(Digit|Numpad)/, '')); if (n >= 1 && n <= D.L.choices.length) this.choose(n - 1); return; }
-    if (k === 'KeyE' || k === 'Space' || k === 'Enter') { this.dlgOpen = null; D.cb(null); if (!this.dlgOpen) this.el.dlg.classList.remove('on'); }
+    if (go) this.advance();
   }
 
   frontOfCar() { const c = this.g.car; if (!c || c.given) return null; return this._v.set(0, 0, 2.5).applyQuaternion(c.curr.quat).add(c.curr.pos).clone(); }
@@ -233,10 +255,13 @@ export class Story {
     if (this.away) { this.away = false; if (this.el.text.textContent && !this.st.done) this.el.obj.classList.add('on'); }
     if (this.dlgOpen) {
       const D = this.dlgOpen; D.t += dt;
-      if (D.shown < D.full.length) { D.shown = Math.min(D.full.length, D.shown + dt * 60); this.el.dt.textContent = D.full.slice(0, Math.floor(D.shown)); if (D.shown >= D.full.length) this.el.dc.style.visibility = ''; }
+      if (D.wait && D.t > 1.5) D.wait = false;
+      if (!D.wait && D.shown < D.full.length) { D.shown = Math.min(D.full.length, D.shown + dt * D.rate); this.el.dt.textContent = D.full.slice(0, Math.floor(D.shown)); if (D.shown >= D.full.length) this.el.dc.style.visibility = ''; }
+      if (D.vh && D.vh.ended && D.shown >= D.full.length && !D.L.choices) { D.after += dt; if (D.after > 0.65) this.advance(); }
       if (this.g.walker.active) this.g.walker.lock = Math.max(this.g.walker.lock, 0.15);
     }
     this.radioStep(dt);
+    this.voice.update();
     const s = this.step;
     if (s && !this.st.done) {
       if (s.update && !this.sdone) { const r = s.update(this, dt, this.events); if (r) this.next(); }
@@ -254,7 +279,8 @@ export class Story {
     if (this.radioGap > 0) { this.radioGap -= dt; return; }
     const r = this.radioQ.shift(); if (!r) return;
     this.radioCur = r; E.rw.textContent = r.who; E.rt.textContent = r.text; E.radio.classList.add('on');
-    if (this.g.audio) this.g.audio.play('ui_tap', { inside: true, gain: 0.3 });
+    if (r.v && this.voice.has(r.v)) this.voice.play(r, {}).then((h) => { if (h && this.radioCur === r) r.sec = Math.max(r.sec, h.dur + 0.5); });
+    else if (this.g.audio) this.g.audio.play('ui_tap', { inside: true, gain: 0.3 });
   }
 
   drawTarget() {

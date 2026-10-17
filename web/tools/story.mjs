@@ -17,7 +17,7 @@ const busy = () => { try { return execSync('pgrep -f "web/tools/harness.mjs"').t
 const chromes = () => { try { return execSync('pgrep -f "Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"').toString().trim().split('\n').filter(Boolean).length; } catch { return 0; } };
 for (let i = 0; i < 60 && (busy() || chromes() > 0); i++) { if (i % 6 === 0) console.log('waiting for other test browsers to finish...'); await new Promise((r) => setTimeout(r, 5000)); }
 const exe = '/Users/jurek/Library/Caches/ms-playwright/chromium-1234/chrome-mac-x64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';
-const browser = await chromium.launch({ headless: false, executablePath: exe, args: ['--use-angle=metal', '--ignore-gpu-blocklist', '--enable-unsafe-webgpu', '--window-size=1100,700', '--window-position=3000,3000', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows'] });
+const browser = await chromium.launch({ headless: false, executablePath: exe, args: ['--use-angle=metal', '--ignore-gpu-blocklist', '--enable-unsafe-webgpu', '--window-size=1100,700', '--window-position=3000,3000', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows', '--autoplay-policy=no-user-gesture-required'] });
 const page = await browser.newPage({ viewport: { width: 1100, height: 620 } });
 const errors = [];
 page.on('pageerror', (e) => errors.push('pageerror: ' + e.message + ' ' + (e.stack || '').split('\n').slice(1, 3).join(' | ')));
@@ -50,7 +50,8 @@ const talk = async (choices = []) => {
   let c = 0, opened = false;
   for (let i = 0; i < 12 && !opened; i++) { opened = await R(() => !!window.__r88.game.story.dlgOpen); if (!opened) await wait(250); }
   if (!opened) return false;
-  for (let i = 0; i < 40; i++) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < 90000) {
     const d = await R(() => { const D = window.__r88.game.story.dlgOpen; return D ? { full: D.shown >= D.full.length, choices: D.L.choices ? D.L.choices.length : 0, who: D.L.who, text: D.full.slice(0, 50) } : null; });
     if (!d) { await wait(300); const d2 = await R(() => !!window.__r88.game.story.dlgOpen); if (!d2) return true; continue; }
     if (!d.full) { await wait(350); continue; }
@@ -88,7 +89,8 @@ await check('Ida spawned', !!ida, ida);
 if (ida) await putWalker(near(ida, 1.8, 0.3), ida);
 await wait(800);
 await check('talk prompt', await R(() => window.__r88.game.interact.shown === 'Talk to Ida'), await R(() => window.__r88.game.interact.shown));
-await key('KeyE'); await wait(700); await shot('ida_dialog');
+await key('KeyE'); await wait(1500); await shot('ida_dialog');
+await check('Ida speaks (voice clip playing)', await R(() => { const S = window.__r88.game.story, D = S.dlgOpen; return !!(D && D.vh && D.vh.dur > 1); }), await R(() => ({ ctx: window.__r88.game.audio.ctx && window.__r88.game.audio.ctx.state, speaking: window.__r88.game.story.voice.speaking })));
 await check('dialog 0.meet', await talk([2]));
 await check('0.meet -> 0.canister', await until('0.canister', 5000), await step());
 const can = await where('S.can && S.can.body.translation()');
@@ -178,6 +180,7 @@ await R(() => { const g = window.__r88.game, w = g.walker, c = g.car.sim; const 
 await wait(1200);
 const fr3 = await where('S.frontOfCar()');
 await putWalker(near(fr3, 1.3, 0), fr3); await wait(700);
+for (let i = 0; i < 40; i++) { const st2 = await R(() => ({ dlg: !!window.__r88.game.story.dlgOpen, shown: window.__r88.game.interact.shown })); if (!st2.dlg && (st2.shown || '').includes('frunk')) break; if (i === 39) console.log('  stow prompt state', JSON.stringify(st2)); await wait(250); }
 await key('KeyE'); await wait(600);
 await check('1.stow -> 1.home', await until('1.home', 5000), { frunk: (await st()).frunk, fr2 });
 await enterCar();
