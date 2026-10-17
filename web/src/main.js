@@ -350,16 +350,21 @@ class Game {
     const p = this.dryGround(at.x, at.z), yaw = this.rig.footYaw || 0;
     const s = this.valley ? this.valley.safeSpawnAt(p.x, p.z, p.y + 0.1) : [p.x, p.y + 0.1, p.z];
     const c = this.car, cs = c.sim;
-    const keep = !cs.wreck && !c.given && cs.enabled && Math.hypot(cs.pos.x - s[0], cs.pos.z - s[2]) < 80 && !(this.valley && this.valley.fluidAt && this.valley.fluidAt(cs.pos.x, cs.pos.z));
-    if (!keep) {
-      const side = [s[0] + Math.cos(yaw) * 4.5, s[1] + 0.4, s[2] - Math.sin(yaw) * 4.5];
+    const keep = !cs.wreck && !c.given && cs.enabled && cs.up.y > 0.5 && Math.hypot(cs.pos.x - s[0], cs.pos.z - s[2]) < 80 && !(this.valley && this.valley.fluidAt && this.valley.fluidAt(cs.pos.x, cs.pos.z));
+    let spot = s, face = yaw;
+    if (keep) {
+      const d = new THREE.Vector3(1.6, 0, -0.2).applyQuaternion(c.curr.quat).add(c.curr.pos);
+      const gy = this.groundHeight(d.x, d.z, cs.pos.y + 2.5);
+      spot = [d.x, gy === null ? cs.pos.y : gy + 0.02, d.z]; face = Math.atan2(-cs.left.x, -cs.left.z);
+    } else {
+      const side = [s[0] + Math.cos(yaw) * 3.0, s[1] + 0.4, s[2] - Math.sin(yaw) * 3.0];
       const g = this.groundHeight(side[0], side[2], side[1] + 6); if (g !== null) side[1] = g + 0.08;
       const old = this.car, car = this.spawn(side, yaw);
       if (old.given) this.dropCar(old);
       car.sim.flight.assist = this.settings.assist;
     }
     if (this.walker.active) this.walker.leave();
-    this.walker.enter(s[0], s[1], s[2], yaw);
+    this.walker.enter(spot[0], spot[1], spot[2], face);
     this.driver.attach(this.gfx.scene, true); this.driver.root.visible = true;
     this.rig.mode = 'foot'; this.rig.footYaw = yaw; this.rig.footPitch = 0.22; this.rig.footInit = false; this.rig.hold = null;
     this.gfx.cut();
