@@ -1,11 +1,12 @@
 // Roadster 88 motor sound: the parametric EV motor synth shared by the game and the sound editor (tones of sine and triangle pairs, filter, echo, shimmer, an air noise layer, a speed-driven volume curve and optional pitch follow), with presets and a settings sanitiser.
 export const MOTOR_PRESETS = {
+  jurek: { name: "Jurek", tones: [[515.118885362368, 0.305], [282.5455829795911, 0.26]], wave: 0, detune: 0, cutoff: 331.8235917958316, q: 1.2, echo: 0, feedback: 0, shimmer: 0, shimmerHz: 0.05, noise: 0, noiseTone: 150, idle: 0.05, top: 0.14, topSpeed: 45, throttle: 0.06, pitch: 0.23, airMute: true, gain: 1.2 },
   muted: { name: 'Przytłumiony', tones: [[110, 0.34], [165, 0.2], [220, 0.12], [330, 0.04]], wave: 0.3, detune: 4, cutoff: 1500, q: 0.5, echo: 0.12, feedback: 0.46, shimmer: 0.035, shimmerHz: 0.17, noise: 0, noiseTone: 1400, idle: 0.035, top: 0.13, topSpeed: 38, throttle: 0.05, pitch: 0, airMute: true, gain: 1.25 },
   heavenly: { name: 'Niebiański', tones: [[220, 0.3], [277.18, 0.14], [329.63, 0.2], [440, 0.13], [554.37, 0.07], [659.25, 0.05]], wave: 0.3, detune: 4, cutoff: 2600, q: 0.4, echo: 0.42, feedback: 0.46, shimmer: 0.08, shimmerHz: 0.17, noise: 0, noiseTone: 1400, idle: 0.035, top: 0.13, topSpeed: 38, throttle: 0.05, pitch: 0, airMute: true, gain: 1 },
   hover: { name: 'Poduszkowiec', tones: [[82.4, 0.3], [123.5, 0.16], [164.8, 0.1], [247, 0.05]], wave: 0.8, detune: 11, cutoff: 900, q: 1.2, echo: 0.06, feedback: 0.3, shimmer: 0.12, shimmerHz: 5.5, noise: 0.05, noiseTone: 700, idle: 0.05, top: 0.14, topSpeed: 45, throttle: 0.06, pitch: 0.15, airMute: true, gain: 1.2 },
   ev: { name: 'Klasyczny EV', tones: [[160, 0.22], [320, 0.16], [480, 0.06], [960, 0.03]], wave: 0.1, detune: 2, cutoff: 3200, q: 0.7, echo: 0.04, feedback: 0.2, shimmer: 0.01, shimmerHz: 0.3, noise: 0.02, noiseTone: 2500, idle: 0.02, top: 0.12, topSpeed: 55, throttle: 0.07, pitch: 2, airMute: true, gain: 1 },
 };
-export const DEFAULT_MOTOR = MOTOR_PRESETS.muted;
+export const DEFAULT_MOTOR = MOTOR_PRESETS.jurek;
 
 const num = (v, d, a, b) => (Number.isFinite(+v) ? Math.max(a, Math.min(b, +v)) : d);
 

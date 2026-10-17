@@ -1,38 +1,30 @@
 {
- "name": "Przytłumiony",
+ "name": "Jurek",
  "tones": [
   [
-   110,
-   0.34
+   515.118885362368,
+   0.305
   ],
   [
-   165,
-   0.2
-  ],
-  [
-   220,
-   0.12
-  ],
-  [
-   330,
-   0.04
+   282.5455829795911,
+   0.26
   ]
  ],
- "wave": 0.3,
- "detune": 4,
- "cutoff": 1500,
- "q": 0.5,
- "echo": 0.12,
- "feedback": 0.46,
- "shimmer": 0.035,
- "shimmerHz": 0.17,
+ "wave": 0,
+ "detune": 0,
+ "cutoff": 331.8235917958316,
+ "q": 1.2,
+ "echo": 0,
+ "feedback": 0,
+ "shimmer": 0,
+ "shimmerHz": 0.05,
  "noise": 0,
- "noiseTone": 1400,
- "idle": 0.035,
- "top": 0.13,
- "topSpeed": 38,
- "throttle": 0.05,
- "pitch": 0,
+ "noiseTone": 150,
+ "idle": 0.05,
+ "top": 0.14,
+ "topSpeed": 45,
+ "throttle": 0.06,
+ "pitch": 0.23,
  "airMute": true,
- "gain": 1.25
+ "gain": 1.2
 }
