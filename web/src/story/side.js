@@ -154,10 +154,13 @@ export class SideJobs {
 
   frunkUse() {
     const I = this.g.interact, it = this.heldCargo(), S = this.S;
-    if (it) { I.held = null; I.removeItem(it); if (this.job && this.job.item === it) this.job.item = null; this.cargo.push(it.sideJob); if (this.g.audio) this.g.audio.play('door_close', { pos: S.frontOfCar(), gain: 0.6 }); return true; }
+    if (it) { const fin = () => { if (I.held && I.held.body === it.body) I.held = null; I.removeItem(it); if (this.job && this.job.item === it) this.job.item = null; this.cargo.push(it.sideJob); }; const M = this.g.moves; if (M && !M.busy) M.stow(it, this.g.car, fin); else fin(); return true; }
     if (this.allowTake && this.cargo.length) {
-      const kind = this.cargo.pop(), p = S.frontOfCar(), item = I.spawnItem(kind, { x: p.x, y: p.y + 0.5, z: p.z });
-      item.sideJob = kind; if (this.job) this.job.item = item; I.pick(item.body, item.col); return true;
+      const take = (p) => { const kind = this.cargo.pop(), item = I.spawnItem(kind, { x: p.x, y: p.y, z: p.z }); item.sideJob = kind; if (this.job) this.job.item = item; return item; };
+      const M = this.g.moves;
+      if (M && !M.busy) M.take(this.g.car, take);
+      else { const p = S.frontOfCar(), item = take({ x: p.x, y: p.y + 0.5, z: p.z }); I.pick(item.body, item.col); }
+      return true;
     }
     return false;
   }

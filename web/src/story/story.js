@@ -251,12 +251,12 @@ export class Story {
     if (this.side && this.side.frunkUse()) return;
     const I = this.g.interact, it = this.heldItem();
     if (it && this.following && it.netKey) { this.coop.send('stow', it.netKey); I.held = null; it.body.setBodyType(this.g.R.RigidBodyType.KinematicPositionBased, true); if (this.g.audio) this.g.audio.play('door_close', { pos: this.frontOfCar(), gain: 0.6 }); return; }
-    if (it) { I.held = null; this.removeItem(it); this.st.frunk.push(it.story); this.save(); if (this.g.audio) this.g.audio.play('door_close', { pos: this.frontOfCar(), gain: 0.6 }); this.emit('stow', it.story); return; }
+    if (it) { const fin = () => { if (I.held && I.held.body === it.body) I.held = null; this.removeItem(it); this.st.frunk.push(it.story); this.save(); this.emit('stow', it.story); }; if (this.g.moves && !this.g.moves.busy) this.g.moves.stow(it, this.g.car, fin); else fin(); return; }
     if (this.allowTake && this.st.frunk.length && this.following) { const p = this.frontOfCar(); this.coop.send('take', p.x, p.y, p.z); return; }
     if (this.allowTake && this.st.frunk.length) {
-      const kind = this.st.frunk.pop(), p = this.frontOfCar();
-      const item = this.item(kind, { x: p.x, y: p.y + 0.5, z: p.z });
-      I.pick(item.body, item.col); this.save(); this.emit('take', kind);
+      const take = (p) => { const kind = this.st.frunk.pop(), item = this.item(kind, { x: p.x, y: p.y, z: p.z }); this.save(); this.emit('take', kind); return item; };
+      if (this.g.moves && !this.g.moves.busy) this.g.moves.take(this.g.car, take);
+      else { const p = this.frontOfCar(), item = take({ x: p.x, y: p.y + 0.5, z: p.z }); I.pick(item.body, item.col); }
     }
   }
 

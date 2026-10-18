@@ -230,7 +230,7 @@ export class CarView {
       }
       this.clips[clip.name] = { duration: clip.duration || 1, tracks, last: -1 };
     }
-    this.doorT = 0; this.doorTarget = 0;
+    this.doorT = 0; this.doorTarget = 0; this.hoodT = 0; this.hoodTarget = 0;
     this.wing = this.n.Wing; this.roof = this.n.Roof_Targa;
     this.wingT = 0; this.wingTarget = 0; this.roofT = 0; this.roofTarget = 0;
     this.headBase = 3.5;
@@ -311,6 +311,12 @@ export class CarView {
         const d = this.n[nm]; if (!d || this.lostParts.has(nm)) continue;
         const r = this.rest.get(d); d.quaternion.copy(r.q).multiply(this._q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), s * e * 1.12));
       }
+    }
+    const hood = this.n.Hood;
+    if (hood && !this.lostParts.has('Hood') && (this.hoodT > 0 || this.hoodTarget > 0)) {
+      this.hoodT += Math.sign(this.hoodTarget - this.hoodT) * Math.min(Math.abs(this.hoodTarget - this.hoodT), dt / 0.7);
+      const e = this.hoodT * this.hoodT * (3 - 2 * this.hoodT), r = this.rest.get(hood);
+      hood.quaternion.copy(r.q).multiply(this._q.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -0.95 * e));
     }
     if (this.hasClip('wing_deploy') && !this.lostParts.has('Wing')) {
       this.wingT += Math.sign(this.wingTarget - this.wingT) * Math.min(Math.abs(this.wingTarget - this.wingT), dt / this.clips.wing_deploy.duration);

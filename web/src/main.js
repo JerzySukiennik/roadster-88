@@ -21,6 +21,7 @@ import { AudioEngine } from './audio.js';
 import { DamageSystem } from './damage.js';
 import { Cockpit } from './render/cockpit.js';
 import { Driver } from './render/driver.js';
+import { Moves } from './moves.js';
 import { buildLayout } from './sim/layout.js';
 import { PhysicsWorld } from './sim/world.js';
 import { CarSim, GROUP, groups } from './sim/car.js';
@@ -55,6 +56,7 @@ class Game {
     this.walker = new Walker(this);
     this.player = this.makePlayer();
     this.interact = new Interact(this);
+    this.moves = new Moves(this);
     progress(0.35, 'Sky');
     this.sky = new SkySystem(this.gfx, this.gfx.preset);
     if (params.has('envoff')) this.sky.envOff = true;
@@ -406,6 +408,7 @@ class Game {
     if (this.showAudio || document.getElementById('audioDiag')) { this.diagT = (this.diagT || 0) + 1; if (this.diagT % 15 === 1) this.audioDiag(); }
     if (I.hit('Escape') && this.menu.mode !== 'title') this.setPaused(!this.paused);
     if (this.paused || this.player.dead) return;
+    if (this.moves.busy) { if (I.hit('KeyE') && this.walker.active) this.moves.queue = () => this.interact.use(); return; }
     if (I.hit('KeyF')) { if (this.ride) this.exitRide(); else if (this.walker.active) this.enterCar(); else this.exitCar(); }
     if (this.ride) {
       if (I.hit('KeyC')) { this.rig.mode = this.rig.mode === 'chase' ? 'fpp' : 'chase'; this.rig.fppYaw = 0; this.rig.fppPitch = 0; this.gfx.cut(); }
@@ -433,12 +436,12 @@ class Game {
     const gy = this.groundHeight(p.x, p.z, s.pos.y + 2.5);
     const y = gy === null ? s.pos.y : gy;
     const yaw = Math.atan2(s.left.x, s.left.z);
-    this.doorPulse(car, true);
     this.walker.enter(p.x, y + 0.02, p.z, yaw);
-    this.driver.attach(this.gfx.scene, true);
+    this.moves.exit(car, new THREE.Vector3(p.x, y + 0.02, p.z), yaw);
+    if (!this.moves.busy) { this.doorPulse(car, true); this.driver.attach(this.gfx.scene, true); }
     this.rig.mode = 'foot'; this.rig.footYaw = s.yaw() + 0.35; this.rig.footPitch = 0.22; this.rig.footInit = false; this.rig.hold = null;
     this.gfx.cut();
-    clearTimeout(this.doorT); this.doorT = setTimeout(() => { if (this.walker.active) this.doorPulse(car, false); }, 1600);
+    clearTimeout(this.doorT); this.doorT = setTimeout(() => { if (this.walker.active) this.doorPulse(car, false); }, 2100);
     this.hint('F to get in · Shift to run · Space to jump', 3);
   }
 
@@ -451,11 +454,12 @@ class Game {
       return;
     }
     if (!c) { this.hint('Walk up to a Roadster to get in', 1.6); return; }
-    this.boardCar(c);
+    if (this.moves.busy) return;
+    this.moves.enter(c, () => this.boardCar(c, true));
   }
 
-  boardCar(c) {
-    this.doorPulse(c, true);
+  boardCar(c, opened = false) {
+    if (!opened) this.doorPulse(c, true);
     this.walker.leave();
     if (c !== this.car) {
       const wi = this.wrecks.indexOf(c); if (wi >= 0) this.wrecks.splice(wi, 1);
@@ -767,10 +771,15 @@ class Game {
     this.interact.update();
     this.interact.hold(fdt, this.walker.active && !this.paused && this.input.is('KeyE'));
     if (ownCab && clicks && !this.paused && this.cockpit.tap() && this.driver.ready) this.driver.touch(hit.point);
-    if (this.driver.ready && this.walker.active) {
+    if (this.driver.ready && this.moves.busy) {
+      this.driver.setHeadVisible(!this.rig.footClose);
+      this.moves.render(fdt);
+      this.interact.follow();
+    } else if (this.driver.ready && this.walker.active) {
       this.driver.setHeadVisible(!this.rig.footClose);
       const v = this.valley;
       this.driver.walkPose(this.walker, fdt, { camYaw: this.rig.footYaw, ground: v ? (x, z) => v.heightAt(x, z) : null, overlay: this.interact.held && this.interact.pending === null ? 'Walk_Carry_Loop' : null });
+      this.interact.follow();
     } else if (this.driver.ready && this.ride) {
       const d = this.driver;
       if (rideR) {
@@ -781,6 +790,7 @@ class Game {
         d.pose(rideR.view, fdt, { accelZ: rs.accelLocal.z, accelX: rs.accelLocal.x, passenger: true });
       } else d.root.visible = false;
     } else if (this.driver.ready && !this.noDriverPose) {
+      if (!this.driver.anim) this.driver.preloadMotion();
       this.driver.look.yaw = chase ? THREE.MathUtils.clamp(s.steerAngle * 0.6, -0.4, 0.4) : this.rig.fppYaw;
       this.driver.look.pitch = chase ? 0 : this.rig.fppPitch;
       this.driver.setHeadVisible(chase);

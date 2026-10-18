@@ -1,4 +1,4 @@
-// Roadster 88 interactions on foot: an E prompt for the nearest usable thing (registered spots such as people, doors and mission objects, plus any light physics object), picking up, carrying, dropping and throwing objects with matching avatar motions, and spawnable carry items for missions.
+// Roadster 88 interactions on foot: an E prompt for the nearest usable thing (registered spots such as people, doors and mission objects, plus any light physics object), picking up (the item waits for the hands), carrying it between the avatar's hands, dropping and throwing objects with matching avatar motions, and spawnable carry items for missions.
 import * as THREE from 'three/webgpu';
 import { GROUP, groups } from './sim/car.js';
 
@@ -18,7 +18,8 @@ export class Interact {
     this.g = game; this.spots = new Set(); this.items = []; this.held = null; this.focus = null; this.pending = null;
     this.el = document.getElementById('prompt'); this.txt = document.getElementById('promptText');
     this.shape = new game.R.Ball(0.9);
-    this._v = new THREE.Vector3(); this._q = new THREE.Quaternion();
+    this._v = new THREE.Vector3(); this._q = new THREE.Quaternion(); this._a = new THREE.Vector3(); this._b = new THREE.Vector3(); this._h = new THREE.Vector3(); this._f = new THREE.Vector3();
+    this.hand = new THREE.Vector3(); this.handQ = new THREE.Quaternion(); this.handAt = -1;
   }
 
   add(spot) { this.spots.add(spot); return () => this.spots.delete(spot); }
@@ -89,13 +90,13 @@ export class Interact {
 
   click() { if (this.held && !this.pending) this.throw(); }
 
-  pick(body, col) {
-    const g = this.g, A = g.driver.anim;
+  pick(body, col, opt = {}) {
+    const g = this.g, A = g.driver.anim, anim = opt.anim !== false && !!A;
     const cols = []; for (let i = 0; i < body.numColliders(); i++) { const c = body.collider(i); cols.push({ c, gr: c.collisionGroups() }); c.setCollisionGroups(groups(GROUP.PROP, 0)); }
     body.setBodyType(g.R.RigidBodyType.KinematicPositionBased, true);
     const t = body.translation();
-    this.held = { body, cols, from: new THREE.Vector3(t.x, t.y, t.z), k: 0, q0: new THREE.Quaternion().copy(body.rotation()) };
-    if (A) A.play('PickUp_Table', { rate: 1.4, lock: true });
+    this.held = { body, cols, from: new THREE.Vector3(t.x, t.y, t.z), k: 0, q0: new THREE.Quaternion().copy(body.rotation()), wait: anim ? 0.26 : 0, blend: opt.blend || 0.28 };
+    if (anim) A.play('PickUp_Table', { rate: 1.4, lock: true });
     if (g.audio) g.audio.play('ui_tap', { pos: { x: t.x, y: t.y, z: t.z }, gain: 0.5 });
   }
 
@@ -136,15 +137,34 @@ export class Interact {
         return;
       }
     }
-    h.k = Math.min(1, h.k + dt / 0.45);
-    const q = this._q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), w.yaw);
+    if (h.wait > 0) { h.wait -= dt; return; }
+    h.k = Math.min(1, h.k + dt / h.blend);
+    const fresh = this.g.time - this.handAt < 0.25;
+    const q = fresh ? this._q.copy(this.handQ) : this._q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), w.yaw);
     const raise = this.pending !== null ? new THREE.Vector3(0, 0.55, -0.15) : new THREE.Vector3();
-    const tgt = this._v.copy(HOLD).add(raise).applyQuaternion(q).add(new THREE.Vector3(w.pos.x, w.pos.y, w.pos.z));
+    const tgt = fresh ? this._v.copy(this.hand) : this._v.copy(HOLD).add(raise).applyQuaternion(q).add(new THREE.Vector3(w.pos.x, w.pos.y, w.pos.z));
     const e = h.k * h.k * (3 - 2 * h.k);
     const p = h.from.clone().lerp(tgt, e);
     h.body.setNextKinematicTranslation({ x: p.x, y: p.y, z: p.z });
     const r = h.q0.clone().slerp(q, e);
     h.body.setNextKinematicRotation({ x: r.x, y: r.y, z: r.z, w: r.w });
+  }
+
+  handPoint() {
+    const D = this.g.driver; if (!D || !D.ready || !D.bones) return null;
+    const L = D.bones.get('LeftHand'), R = D.bones.get('RightHand'); if (!L || !R) return null;
+    const a = L.getWorldPosition(this._a), b = R.getWorldPosition(this._b), f = this._f.set(0, 0, 1).applyQuaternion(D.root.quaternion);
+    return this._h.copy(a).add(b).multiplyScalar(0.5).addScaledVector(f, 0.07).add(this._v.set(0, -0.03, 0));
+  }
+
+  follow() {
+    const h = this.held, M = this.g.moves;
+    if (!h || (M && M.busy && M.cur.kind === 'stow' && M.cur.step >= 1)) return;
+    const p = this.handPoint(); if (!p) return;
+    this.hand.copy(p); this.handQ.copy(this.g.driver.root.quaternion); this.handAt = this.g.time;
+    if (h.k < 1 || h.wait > 0) return;
+    const it = this.items.find((x) => x.body === h.body), mesh = it ? it.mesh : null;
+    if (mesh) { mesh.position.copy(p); mesh.quaternion.copy(this.handQ); }
   }
 
   hold(dt, down) {

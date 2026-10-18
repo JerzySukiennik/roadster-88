@@ -101,7 +101,7 @@ const front = await where('S.frontOfCar()');
 await putWalker(near(front, 1.3, 0), front); await wait(700);
 await check('frunk prompt', (await R(() => window.__r88.game.interact.shown || '')).includes('frunk'), await R(() => window.__r88.game.interact.shown));
 await key('KeyE'); await wait(600);
-await check('0.canister -> 0.jump', await until('0.jump', 4000), await R(() => window.__r88.game.story.st.frunk));
+await check('0.canister -> 0.jump', await until('0.jump', 7000), await R(() => window.__r88.game.story.st.frunk));
 await enterCar();
 const y1 = await timeJump(1885);
 await check('jumped to 1885', y1 === 1885, y1);
@@ -158,7 +158,8 @@ if (branch === 'trade') {
   const fr = await where('S.frontOfCar()');
   await putWalker(near(fr, 1.3, 0), fr); await wait(700);
   await check('take from frunk prompt', (await R(() => window.__r88.game.interact.shown || '')).startsWith('Take'), await R(() => window.__r88.game.interact.shown));
-  await key('KeyE'); await wait(1500);
+  await key('KeyE');
+  for (let i = 0; i < 24; i++) { if (await R(() => !window.__r88.game.moves.busy && !!window.__r88.game.interact.held)) break; await wait(250); }
   const k3 = await where("S.npc.pos('kessler')");
   await putWalker(near(k3, 1.8, Math.PI / 2), k3); await wait(700);
   await key('KeyE'); await wait(700); await shot('trade');

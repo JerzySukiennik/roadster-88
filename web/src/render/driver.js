@@ -285,9 +285,14 @@ export class Driver {
     if (!onFoot) { this.root.position.set(0, 0, 0); this.root.quaternion.identity(); }
   }
 
+  preloadMotion() {
+    if (!this.ready || this.anim || this.animLoading) return;
+    this.animLoading = true; Animator.create(this).then((a) => { this.anim = a; }).catch((e) => console.warn('avatar motion failed', e));
+  }
+
   walkPose(w, dt, opt) {
     if (!this.ready) return;
-    if (!this.anim && !this.animLoading) { this.animLoading = true; Animator.create(this).then((a) => { this.anim = a; }).catch((e) => console.warn('avatar motion failed', e)); }
+    this.preloadMotion();
     if (this.anim) return this.motionPose(w, dt, opt);
     const root = this.root, sp = w.speed, run = Math.min(1, Math.max(0, (sp - 2.2) / 3.5)), amp = Math.min(1, sp / 0.9);
     root.position.set(w.pose.x, w.pose.y, w.pose.z);
