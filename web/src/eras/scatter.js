@@ -6,6 +6,7 @@ import { rng, hash2i, hashStr, inPoly } from './lib.js';
 import { plansFor, planKey, smooth, wildPlansFor } from './floraplans.js';
 import { periodInfo } from './periods.js';
 import { GROUP, groups } from '../sim/car.js';
+import { staticMotion } from '../render/gfx.js';
 
 function vnoise(x, z, s) {
   const xi = Math.floor(x), zi = Math.floor(z), fx = x - xi, fz = z - zi, u = fx * fx * (3 - 2 * fx), v = fz * fz * (3 - 2 * fz);
@@ -98,7 +99,7 @@ export class Scatter {
   mkInst(base, mat, cap, shadow, sp) {
     const g = base.clone();
     g.setAttribute('ivar', new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4));
-    const im = new THREE.InstancedMesh(g, mat, cap);
+    const im = new THREE.InstancedMesh(g, staticMotion(mat), cap);
     im.count = 0; im.frustumCulled = false; im.castShadow = shadow; im.receiveShadow = true;
     im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
     im.userData.k = 'flora_' + sp; im.userData.base = base; im.visible = false;

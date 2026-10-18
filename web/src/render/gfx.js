@@ -1,6 +1,6 @@
 // Roadster 88 graphics core: WebGPURenderer (WebGL2 fallback), TSL post chain (GTAO, TAAU, motion blur, bloom, lens flare, flash), quality presets and dynamic resolution.
 import * as THREE from 'three/webgpu';
-import { pass, mrt, output, velocity, normalView, packNormalToRGB, unpackRGBToNormal, sample, screenUV, uniform, vec2, vec3, vec4, int, float, mix, convertToTexture, smoothstep, length, exp, step, atan, cos, abs, Fn, Loop, uv, min, interleavedGradientNoise, screenCoordinate, perspectiveDepthToViewZ, cameraViewMatrix } from 'three/tsl';
+import { pass, mrt, output, velocity, normalView, packNormalToRGB, unpackRGBToNormal, sample, screenUV, uniform, vec2, vec3, vec4, int, float, mix, convertToTexture, smoothstep, length, exp, step, atan, cos, abs, Fn, Loop, uv, min, interleavedGradientNoise, screenCoordinate, perspectiveDepthToViewZ, cameraViewMatrix, positionWorld } from 'three/tsl';
 import { ao } from 'three/addons/tsl/display/GTAONode.js';
 import { taau } from 'three/addons/tsl/display/TAAUNode.js';
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
@@ -21,7 +21,20 @@ const smoothBlur = Fn(([tex, vel, n]) => {
 
 export function fxMaterial(m) {
   if (m.transparent && !m.alphaTest) m.alphaTest = 0.015;
-  if (m.transparent) m.mrtNode = mrt({ normal: packNormalToRGB(cameraViewMatrix.mul(vec4(0, 1, 0, 0)).xyz) });
+  if (m.transparent) m.mrtNode = mrt({ ...(m.mrtNode ? m.mrtNode.outputNodes : { output }), normal: packNormalToRGB(cameraViewMatrix.mul(vec4(0, 1, 0, 0)).xyz) });
+  return m;
+}
+
+const curViewProj = uniform(new THREE.Matrix4()), prevViewProj = uniform(new THREE.Matrix4());
+const staticVelocity = Fn(() => {
+  const w = vec4(positionWorld, 1), c = curViewProj.mul(w), p = prevViewProj.mul(w);
+  return c.xy.div(c.w).sub(p.xy.div(p.w));
+})();
+
+export function staticMotion(m) {
+  if (m.userData.staticMotion) return m;
+  m.userData.staticMotion = true;
+  m.mrtNode = mrt({ ...(m.mrtNode ? m.mrtNode.outputNodes : { output }), velocity: staticVelocity });
   return m;
 }
 
@@ -166,6 +179,7 @@ export class Gfx {
   }
 
   cut() {
+    this.vpCut = true;
     const aa = this.aa;
     if (aa && aa._historyRenderTarget) aa._historyRenderTarget.width = 1;
   }
@@ -182,7 +196,13 @@ export class Gfx {
   }
 
   render() {
-    this.u.near.value = this.camera.near; this.u.far.value = this.camera.far;
+    const cam = this.camera;
+    this.u.near.value = cam.near; this.u.far.value = cam.far;
+    cam.updateMatrixWorld();
+    const vp = this._vp || (this._vp = new THREE.Matrix4());
+    vp.copy(cam.matrixWorld).invert().premultiply(cam.projectionMatrix);
+    prevViewProj.value.copy(this.vpCut || !this.vpSet ? vp : curViewProj.value);
+    curViewProj.value.copy(vp); this.vpSet = true; this.vpCut = false;
     this.pipeline.render();
     if (this.gpuTime && !this.gpuPending) { this.gpuPending = true; this.renderer.resolveTimestampsAsync('render').then((v) => { this.gpuPending = false; if (v !== undefined && v !== null) this.gpuMs += ((typeof v === 'number' ? v : this.renderer.info.render.timestamp) - this.gpuMs) * 0.1; }).catch(() => { this.gpuPending = false; }); }
   }
