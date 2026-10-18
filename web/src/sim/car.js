@@ -77,6 +77,7 @@ export class CarSim {
     this.motorForce = 0; this.regenForce = 0; this.load = 0; this.motorRpm = 0; this.brakeOn = 0;
     this.wing = !!opts.wing;
     this.fan = !!opts.fan; this.fanSpool = 0; this.fanSuck = 0;
+    this.inWater = 0; this.waterLevel = null; this.splashN = 0; this.splashAt = { x: 0, y: 0, z: 0, s: 0 };
     this.enabled = true; this.wreck = false;
     this.forceAcc = new V3(); this.torqueAcc = new V3();
     this.env = { grip: 1, wind: new V3(), surface: null }; this.steps = 0;
@@ -378,6 +379,35 @@ export class CarSim {
     this.torqueAcc.add(t);
   }
 
+  water(dt, inp) {
+    const W = this.env.water, prev = this.inWater;
+    this.inWater = 0; this.waterLevel = null;
+    if (!W) return;
+    const P = HULL, g = this.tu.gravity || 9.81, per = WATER.buoy * this.mass * g / P.length;
+    let sub = 0, level = null;
+    for (const p of P) {
+      const w = this.toWorld(this._b.set(p[0], p[1], p[2]), this._b), L = W(w.x, w.z, w.y);
+      if (!L || L.kind === 'lava') continue;
+      const d = L.level - w.y;
+      if (d <= 0) continue;
+      const f = Math.min(1, d / WATER.hull);
+      sub += f / P.length; level = L.level;
+      this.addForceAt(this._a.set(0, per * f, 0), w);
+    }
+    if (!sub) return;
+    this.inWater = sub; this.waterLevel = level;
+    const v = this.vel, sp = v.len();
+    this.addForceAt(this._a.copy(v).scale(-sub * (WATER.quad * sp + WATER.lin)), this.comW);
+    this.torqueAcc.add(this._c.copy(this.angW).scale(-sub * WATER.spin));
+    if (this.contacts < 2 && sub > 0.12 && !this.wreck) {
+      const fw = this._d.set(this.fwd.x, 0, this.fwd.z), l = fw.len();
+      if (l > 0.2) { fw.scale(1 / l); this.addForceAt(this._a.copy(fw).scale((inp.throttle - inp.brake) * WATER.paddle * Math.min(1, sub * 2.5)), this.comW); }
+      const turn = inp.steer * WATER.rudder * Math.min(1, sub * 2.5) * (0.35 + Math.min(1, Math.abs(this.fwdSpeed) / 3)) * (this.fwdSpeed < -0.3 ? -1 : 1);
+      this.torqueAcc.add(this._c.set(0, turn, 0));
+    }
+    if (prev < 0.03 && sub >= 0.03) { const s = Math.min(1, (Math.abs(v.y) * 1.5 + sp) / 25); if (s > 0.08) { Object.assign(this.splashAt, { x: this.comW.x, y: level, z: this.comW.z, s }); this.splashN++; } }
+  }
+
   fans(dt) {
     const A = this.tu.aero, on = this.fan && !this.wreck && !this.env.space ? 1 : 0;
     this.fanSpool += (on - this.fanSpool) * Math.min(1, dt / (on ? A.fan_spool_s || 0.7 : (A.fan_spool_s || 0.7) * 1.8));
@@ -428,6 +458,7 @@ export class CarSim {
     this.tyres(dt);
     this.aero();
     this.fans(dt);
+    this.water(dt, inp);
     this.thrust(dt, inp);
     const J = this._a.copy(this.forceAcc).scale(dt), Jt = this._b.copy(this.torqueAcc).scale(dt);
     this.body.applyImpulse({ x: J.x, y: J.y, z: J.z }, true);
@@ -495,4 +526,6 @@ export function tyreCurve(Ty, sx, sy) {
   return CURVE;
 }
 
+const HULL = [[-0.82, 0.18, 1.85], [0.82, 0.18, 1.85], [-0.82, 0.18, -1.85], [0.82, 0.18, -1.85], [0, 0.18, 0]];
+const WATER = { buoy: 2.6, hull: 0.75, quad: 450, lin: 900, spin: 9000, paddle: 2600, rudder: 3200 };
 const WRECK_INPUT = { throttle: 0, brake: 1, steer: 0, boost: false, lift: false, descend: false, pitch: 0, roll: 0, park: true };

@@ -621,6 +621,7 @@ class Game {
     if (w && w.wind) e.wind.set(w.wind[0] * gust, 0, w.wind[1] * gust); else e.wind.set(0, 0, 0);
     const v = this.valley;
     e.surface = v && v.surfaceAt ? (this._surf || (this._surf = (x, z) => SURFACE_GRIP[v.surfaceAt(x, z)] ?? 1)) : null;
+    e.water = v && v.waterSurface ? (this._wat || (this._wat = (x, z, y) => v.waterSurface(x, z, y))) : null;
   }
 
   handleTimeEvents() {

@@ -29,6 +29,7 @@ export class AudioEngine {
     this.buildMotor();
     this.buildThrust();
     this.buildFan();
+    this.wash = this.noiseVoice('lowpass', 700, 0.6, this.outside);
     this.road = ctx.createBiquadFilter(); this.road.type = 'highpass'; this.road.frequency.value = 220; this.road.Q.value = 0.6; this.road.connect(this.outside);
     this.wind = this.noiseVoice('lowpass', 600, 0.7, this.outside);
     this.rumble = this.noiseVoice('lowpass', 150, 0.8, this.outside);
@@ -91,6 +92,20 @@ export class AudioEngine {
       const hi = this.noiseVoice('highpass', 2500, 0.5, p);
       this.nozzleVoices.push({ p, body, mid, hi });
     }
+  }
+
+  splash(s, pos) {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t = ctx.currentTime, p = ctx.createPanner(); p.panningModel = 'equalpower'; p.distanceModel = 'inverse'; p.refDistance = 6; p.rolloffFactor = 0.7;
+    p.positionX.value = pos.x; p.positionY.value = pos.y; p.positionZ.value = pos.z; p.connect(this.outside);
+    const src = ctx.createBufferSource(); src.buffer = this.noiseBuf;
+    const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.setValueAtTime(5200, t); f.frequency.exponentialRampToValueAtTime(380, t + 0.5 + s * 0.6);
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.25 + 0.75 * s, t + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.7 + s * 0.9);
+    src.connect(f); f.connect(g); g.connect(p); src.start(t, Math.random()); src.stop(t + 1.8);
+    const o = ctx.createOscillator(), og = ctx.createGain(); o.frequency.setValueAtTime(85, t); o.frequency.exponentialRampToValueAtTime(38, t + 0.35);
+    og.gain.setValueAtTime(0.0001, t); og.gain.exponentialRampToValueAtTime(0.5 * s + 0.05, t + 0.01); og.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
+    o.connect(og); og.connect(p); o.start(t); o.stop(t + 0.5);
+    src.onended = () => { try { p.disconnect(); } catch (e) { /* gone */ } };
   }
 
   buildFan() {
@@ -267,6 +282,12 @@ export class AudioEngine {
     this.setLoop('tyre_roll_loop', vol * (ground ? Math.min(1, sp / 25) : 0) * 0.35, 0.9 + Math.min(0.8, sp / 60), 0.08, this.road);
     let slip = 0; for (const w of sim.wheels) if (w.contact) slip = Math.max(slip, w.slipVel);
     this.setLoop('tyre_skid_loop', vol * Math.min(1, Math.max(0, slip - 2.5) / 7), 0.85 + Math.min(0.3, slip / 40), 0.05);
+    if (this.wash) {
+      const w = sim.inWater || 0, wsp = Math.min(1, sim.speed / 6);
+      this.wash.f.frequency.setTargetAtTime(380 + sim.speed * 70, t, 0.2);
+      this.wash.g.gain.setTargetAtTime(vol * Math.min(1, w * 2.5) * (0.06 + 0.3 * wsp), t, 0.15);
+      if (sim.splashN && sim.splashN !== this.splashSeen) { this.splashSeen = sim.splashN; this.splash(sim.splashAt.s, sim.splashAt); }
+    }
     if (this.fanV) {
       const F = this.fanV, spool = sim.fanSpool || 0, suck = Math.min(1, (sim.fanSuck || 0) / 10500), f = 110 + 470 * spool - 40 * suck;
       for (const o of F.oscs) o.o.frequency.setTargetAtTime(f * o.m, t, 0.12);

@@ -1,8 +1,8 @@
-// Roadster 88 on foot: the driver's avatar as a Rapier kinematic character (walk, run, jump, slopes and steps, swimming, knock-back when a car hits it), camera-relative controls, deadly car hits, falls, lava and drowning, and getting in and out of any free Roadster.
+// Roadster 88 on foot: the driver's avatar as a Rapier kinematic character (walk, run, jump, slopes and steps, swimming at the surface and climbing out onto banks and quays, knock-back when a car hits it), camera-relative controls, deadly car hits, falls and lava, and getting in and out of any free Roadster.
 import { GROUP, groups } from './sim/car.js';
 
-const WALK = 1.3, RUN = 5.8, SWIM = 1.4, JUMP = 4.6, G = 9.81, RADIUS = 0.3, HALF = 0.58;
-const LETHAL_HIT = 13, LETHAL_FALL = 15.5, DROWN = 6;
+const WALK = 1.3, RUN = 5.8, SWIM = 1.6, SWIM_FAST = 2.5, SWIM_ROOT = 0.15, JUMP = 4.6, G = 9.81, RADIUS = 0.3, HALF = 0.58;
+const LETHAL_HIT = 13, LETHAL_FALL = 15.5;
 const PARKED = { throttle: 0, brake: 1, steer: 0, boost: false, lift: false, descend: false, pitch: 0, roll: 0, park: true };
 
 export class Walker {
@@ -11,7 +11,7 @@ export class Walker {
     this.active = false;
     this.pos = { x: 0, y: 0, z: 0 }; this.vel = { x: 0, y: 0, z: 0 };
     this.yaw = 0; this.speed = 0; this.phase = 0; this.grounded = true; this.air = 0; this.tumble = 0;
-    this.dead = false; this.dying = null; this.swim = false; this.wet = 0; this.lock = 0;
+    this.dead = false; this.dying = null; this.swim = false; this.wet = 0; this.lock = 0; this.climb = null;
     this.prev = { x: 0, y: 0, z: 0 }; this.curr = { x: 0, y: 0, z: 0 }; this.pose = { x: 0, y: 0, z: 0 };
     this.body = null; this.collider = null;
     this.ctl = this.world.createCharacterController(0.03);
@@ -40,7 +40,7 @@ export class Walker {
   enter(x, y, z, yaw) {
     this.build(x, y, z);
     this.active = true; this.yaw = yaw; this.speed = 0; this.phase = 0; this.tumble = 0;
-    this.dead = false; this.dying = null; this.swim = false; this.wet = 0; this.lock = 0;
+    this.dead = false; this.dying = null; this.swim = false; this.wet = 0; this.lock = 0; this.climb = null;
     this.vel.x = this.vel.y = this.vel.z = 0;
     for (const k of ['prev', 'curr', 'pose']) Object.assign(this[k], { x, y, z });
     Object.assign(this.pos, { x, y, z });
@@ -70,6 +70,7 @@ export class Walker {
 
   step(dt, input, camYaw) {
     if (!this.active) return;
+    if (this.climb) { this.climbStep(dt); return; }
     const I = input, V = this.g.valley;
     const D = this.g.driver, alock = D && D.anim && D.motionOn ? D.anim.lock : 0;
     const free = !this.dead && this.tumble <= 0 && this.lock <= 0 && alock <= 0;
@@ -78,11 +79,12 @@ export class Walker {
     if (!free) mx = mz = 0;
     const ml = Math.hypot(mx, mz); if (ml > 1) { mx /= ml; mz /= ml; }
     const run = I.is('ShiftLeft') || I.is('ShiftRight');
-    const liq = V && V.fluidAt ? V.fluidAt(this.pos.x, this.pos.z) : null;
+    const liq = V && V.waterSurface ? V.waterSurface(this.pos.x, this.pos.z, this.pos.y + 1) : V && V.fluidAt ? V.fluidAt(this.pos.x, this.pos.z) : null;
     const depth = liq ? liq.level - V.heightAt(this.pos.x, this.pos.z) : 0;
     if (liq && liq.kind === 'lava' && this.pos.y < liq.level + 0.25 && !this.dead) this.die('lava');
-    this.swim = !!(liq && liq.kind !== 'lava' && depth > 1.45 && this.pos.y < liq.level - 0.9);
-    const target = (this.swim ? SWIM : run ? RUN : WALK) * Math.min(1, ml);
+    const deep = !!(liq && liq.kind !== 'lava' && depth > 1.45);
+    this.swim = deep && (this.swim ? this.pos.y < liq.level + 0.5 : this.pos.y < liq.level - 0.9);
+    const target = (this.swim ? (run ? SWIM_FAST : SWIM) : run ? RUN : WALK) * Math.min(1, ml);
     const fx = Math.sin(camYaw), fz = Math.cos(camYaw);
     const wx = fx * mz - fz * mx, wz = fz * mz + fx * mx;
     const wl = Math.hypot(wx, wz);
@@ -101,14 +103,16 @@ export class Walker {
       this.yaw += d * Math.min(1, dt * (run ? 9 : 7));
     }
     if (this.swim) {
-      const sy = liq.level - 1.3;
-      this.vel.y += ((sy - this.pos.y) * 4 - this.vel.y) * Math.min(1, dt * 3);
-      this.wet += dt;
-      if (this.wet > DROWN && !this.dead) this.die('water');
+      const sy = liq.level - SWIM_ROOT, rise = Math.max(-2.5, Math.min(2.2, (sy - this.pos.y) * 3));
+      this.vel.y += (rise - this.vel.y) * Math.min(1, dt * 4);
+      this.wet = Math.min(30, this.wet + dt);
+      if (want > 0 && !this.dead && this.ledge(liq, dirX, dirZ)) return;
     } else {
       this.wet = Math.max(0, this.wet - dt * 2);
       if (this.grounded && I.hit('Space') && free) { this.vel.y = JUMP; this.grounded = false; }
       this.vel.y -= G * (this.vel.y < 0 ? 1.45 : 1) * dt;
+      if (liq && liq.kind !== 'lava' && this.pos.y < liq.level && this.vel.y < 0) this.vel.y *= Math.exp(-5 * dt);
+      if (want > 0 && free && this.grounded && liq && liq.kind !== 'lava' && this.pos.y < liq.level + 0.3 && this.ledge(liq, dirX, dirZ)) return;
     }
     if (!this.dead) this.knock();
     const fallV = this.vel.y;
@@ -134,6 +138,39 @@ export class Walker {
     Object.assign(this.curr, { x: nx, y: ny - HALF - RADIUS, z: nz });
     Object.assign(this.pos, this.curr);
     if (this.pos.y < -200) { const s = this.g.groundHeight(this.pos.x, this.pos.z, 500); this.enter(this.pos.x, (s ?? 0) + 0.5, this.pos.z, this.yaw); }
+  }
+
+  ledge(liq, dx, dz) {
+    const V = this.g.valley, near = this.g.groundHeight(this.pos.x + dx * 0.85, this.pos.z + dz * 0.85, liq.level + 5.6);
+    if (near === null || near - this.pos.y < 0.45) return false;
+    let top = null, ax = 0, az = 0;
+    for (const d of [0.85, 1.5, 2.3]) {
+      const x = this.pos.x + dx * d, z = this.pos.z + dz * d, h = this.g.groundHeight(x, z, liq.level + 5.6);
+      if (h === null || h < liq.level - 0.35 || h > liq.level + 5.2) continue;
+      const w = V && V.waterSurface ? V.waterSurface(x, z, h + 1) : null;
+      if (w && w.level > h + 0.3) continue;
+      if (top === null || h > top + 0.05) { top = h; ax = x; az = z; }
+    }
+    if (top === null) return false;
+    const n = Math.max(1, Math.round((top - this.pos.y) / 1.3)), cyc = 0.7;
+    this.climb = { t: 0, n, cyc, k: 0, dur: n * cyc + 0.3, a: { x: this.pos.x, y: this.pos.y, z: this.pos.z }, b: { x: ax, y: top + 0.02, z: az } };
+    this.yaw = Math.atan2(dx, dz); this.swim = false;
+    const D = this.g.driver;
+    if (D && D.anim) D.anim.play('ClimbUp_1m', { lock: true, rate: 0.667 / cyc });
+    if (this.g.audio) this.g.audio.splash(0.2, { x: this.pos.x, y: liq.level, z: this.pos.z });
+    return true;
+  }
+
+  climbStep(dt) {
+    const c = this.climb; c.t += dt;
+    const k = Math.min(c.n - 1, Math.floor(c.t / c.cyc));
+    if (k > c.k) { c.k = k; const D = this.g.driver; if (D && D.anim) D.anim.play('ClimbUp_1m', { lock: true, rate: 0.667 / c.cyc }); }
+    const u = Math.min(1, c.t / c.dur), e = (x) => x * x * (3 - 2 * x), split = (c.n * c.cyc - 0.25) / c.dur, up = e(Math.min(1, u / split)), fw = e(Math.max(0, (u - split * 0.85) / (1 - split * 0.85)));
+    const x = c.a.x + (c.b.x - c.a.x) * fw, y = c.a.y + (c.b.y - c.a.y) * up, z = c.a.z + (c.b.z - c.a.z) * fw;
+    this.body.setNextKinematicTranslation({ x, y: y + HALF + RADIUS, z });
+    this.vel.x = this.vel.y = this.vel.z = 0; this.speed = 0; this.swim = false; this.grounded = u >= 1; this.air = 0;
+    Object.assign(this.prev, this.curr); Object.assign(this.curr, { x, y, z }); Object.assign(this.pos, this.curr);
+    if (u >= 1) this.climb = null;
   }
 
   knock() {

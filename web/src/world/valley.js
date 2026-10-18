@@ -455,6 +455,15 @@ export class Valley {
 
   liquidAt(x, z) { return this.fluidAt(x, z); }
 
+  waterSurface(x, z, y) {
+    const l = this.fluidAt(x, z);
+    if (l) return l;
+    if (this.inEarth || (y !== undefined && this.inTunnel(x, z, y))) return null;
+    for (const P of this.ponds) if (Math.hypot((x - P.x) / P.rx, (z - P.z) / P.rz) < 1.05 && this.O.hAt(x, z) < P.level) return P.surface || (P.surface = { id: P.id, kind: 'water', level: P.level });
+    if (!this.isInner(x, z) && this.O.waterAt(x, z)) return this._sea || (this._sea = { id: 'sea', kind: 'water', level: 0 });
+    return null;
+  }
+
   sunAt(x, z, y) {
     if (this.inEarth) return 1;
     const t = this.terrainSun(x, z);

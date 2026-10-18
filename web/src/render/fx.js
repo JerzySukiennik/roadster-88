@@ -236,7 +236,7 @@ export class FX {
     this.ring = new Ring(scene, this.light, this.tex.ring);
     this.pools = [this.alpha, this.add, this.puffs, this.billows];
     this.acc = new Map();
-    this._o = new THREE.Vector3(); this._d = new THREE.Vector3(); this._v = new THREE.Vector3();
+    this._o = new THREE.Vector3(); this._d = new THREE.Vector3(); this._v = new THREE.Vector3(); this.splashSeen = new Map();
   }
 
   setLight(sunColor, sunI, night) {
@@ -322,6 +322,15 @@ export class FX {
         const fw = this._v.set(Math.sin(w.steer), 0, Math.cos(w.steer)).applyQuaternion(carQuat);
         this.skids.add(key, p.x, p.y, p.z, fw.x, fw.z, w.width * 0.9, Math.min(1, slip * 0.08));
       } else this.skids.cut(key);
+    }
+    if (sim.splashN && sim.splashN !== this.splashSeen.get(sim.id)) {
+      this.splashSeen.set(sim.id, sim.splashN);
+      const S = sim.splashAt, n = Math.round(30 + 90 * S.s);
+      for (let k = 0; k < n; k++) { const a = Math.random() * 6.28, r = rnd(0.5, 2.4), up = rnd(3, 11) * (0.4 + S.s); this.alpha.spawn(S.x + Math.cos(a) * r, S.y + 0.1, S.z + Math.sin(a) * r, Math.cos(a) * rnd(1, 5) + sim.vel.x * 0.25, up, Math.sin(a) * rnd(1, 5) + sim.vel.z * 0.25, rnd(0.8, 1.6), 0.25, rnd(0.8, 1.8), 0.86, 0.9, 0.93, 0.5, 0.6, -7); }
+    }
+    if (sim.inWater > 0.08 && sim.speed > 1.5 && sim.waterLevel !== null) {
+      const bow = this._o.set(0, 0, 2.2).applyQuaternion(carQuat).add(carPos), cnt = this.rate(sim.id + 'wake', Math.min(50, sim.speed * 6), dt);
+      for (let k = 0; k < cnt; k++) { const side = Math.random() < 0.5 ? -1 : 1, rx = sim.left.x * side, rz = sim.left.z * side; this.alpha.spawn(bow.x + rx * rnd(0.3, 1.0), sim.waterLevel + 0.05, bow.z + rz * rnd(0.3, 1.0), rx * rnd(1, 3) + sim.vel.x * 0.5, rnd(0.6, 2.2), rz * rnd(1, 3) + sim.vel.z * 0.5, rnd(0.5, 1.1), 0.2, rnd(0.6, 1.3), 0.88, 0.92, 0.95, 0.4, 0.8, -6); }
     }
     if (sim.fanSuck > 1500 && sim.contacts > 0) {
       const back = this._o.set(0, 0.1, -2.15).applyQuaternion(carQuat).add(carPos), dir = this._d.set(0, 0, -1).applyQuaternion(carQuat);
