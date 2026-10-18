@@ -393,7 +393,7 @@ class Game {
     let el = document.getElementById('audioDiag');
     if (!el) { el = document.createElement('pre'); el.id = 'audioDiag'; el.style.cssText = 'position:fixed;right:16px;top:16px;margin:0;padding:10px 12px;border-radius:12px;background:rgba(10,11,14,0.78);color:#e8e8e8;font:11px/1.45 ui-monospace,Menlo,monospace;z-index:9;pointer-events:none;white-space:pre;max-width:46vw'; document.body.appendChild(el); }
     const st = this.audio.stats ? this.audio.stats() : {};
-    el.textContent = `AUDIO  (F8 hide · Shift+F8 restart)\n${['state', 'rate', 'latency', 'time', 'rms', 'motor', 'voices', 'ready', 'resets', 'blind', 'radio'].map((k) => k.padEnd(8) + String(st[k])).join('\n')}\n${(st.log || []).join('\n')}`;
+    el.textContent = `AUDIO  (F8 hide · Shift+F8 restart)\n${['state', 'rate', 'latency', 'out', 'time', 'rms', 'motor', 'voices', 'ready', 'resets', 'blind', 'radio'].map((k) => k.padEnd(8) + String(st[k])).join('\n')}\n${(st.log || []).join('\n')}`;
     el.style.display = this.showAudio ? 'block' : 'none';
   }
 

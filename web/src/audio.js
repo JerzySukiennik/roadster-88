@@ -17,6 +17,7 @@ export class AudioEngine {
     if (!AC) return;
     const ctx = new AC({ latencyHint: 'interactive' });
     this.ctx = ctx;
+    ctx.onerror = () => { if (this.ctx === ctx && !this.rebuilding) this.heal('audio device error'); };
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -14; comp.knee.value = 10; comp.ratio.value = 4; comp.attack.value = 0.004; comp.release.value = 0.2;
     this.master = ctx.createGain(); this.master.gain.value = 0.85;
@@ -224,7 +225,7 @@ export class AudioEngine {
 
   stats() {
     const c = this.ctx;
-    return { state: c ? c.state : 'none', rate: c ? c.sampleRate : 0, latency: c && c.baseLatency ? Math.round(c.baseLatency * 1000) : 0, time: c ? c.currentTime.toFixed(1) : '-', rms: (this.rms || 0).toFixed(4), motor: this.motorSynth ? (this.motorSynth.level || 0).toFixed(3) : '-', voices: this.voices, ready: this.ready, resets: this.resets, blind: !!this.guardBlind, radio: this.radioOn ? this.musicKey : 'off', log: (this.log || []).slice(-5) };
+    return { state: c ? c.state : 'none', rate: c ? c.sampleRate : 0, latency: c && c.baseLatency ? Math.round(c.baseLatency * 1000) : 0, out: c && c.outputLatency ? Math.round(c.outputLatency * 1000) : 0, time: c ? c.currentTime.toFixed(1) : '-', rms: (this.rms || 0).toFixed(4), motor: this.motorSynth ? (this.motorSynth.level || 0).toFixed(3) : '-', voices: this.voices, ready: this.ready, resets: this.resets, blind: !!this.guardBlind, radio: this.radioOn ? this.musicKey : 'off', log: (this.log || []).slice(-5) };
   }
 
   async rebuild() {
