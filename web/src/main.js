@@ -77,7 +77,7 @@ class Game {
     this.fx = new FX(this.gfx.scene, this.gfx.preset);
     progress(0.6, 'Roadster');
     this.mats = new CarMaterials();
-    this.settings = { assist: store.get('assist', true), wing: store.get('wing', false), roof: store.get('roof', true), paint: store.get('paint', 'white'), radio: store.get('radio', false) };
+    this.settings = { assist: store.get('assist', true), wing: store.get('wing', false), fan: store.get('fan', false), roof: store.get('roof', true), paint: store.get('paint', 'white'), radio: store.get('radio', false) };
     this.mats.setPaint(this.settings.paint);
     this.template = await loadRealCar(this.gfx.preset.carLod);
     this.latticeData = await this.loadLattice();
@@ -203,7 +203,7 @@ class Game {
   }
 
   spawn(pos, yaw, paint) {
-    const sim = new CarSim(this.R, this.phys.world, this.tu, { position: pos, yaw, wing: this.settings.wing });
+    const sim = new CarSim(this.R, this.phys.world, this.tu, { position: pos, yaw, wing: this.settings.wing, fan: this.settings.fan });
     sim.id = 'c' + (this.carSerial = (this.carSerial || 0) + 1);
     sim.flight.assist = this.settings.assist;
     const own = !paint || paint === this.settings.paint, mats = own ? this.mats : this.online.matsFor(paint);
@@ -416,6 +416,7 @@ class Game {
     if (I.hit('KeyC')) { this.rig.mode = this.rig.mode === 'chase' ? 'fpp' : 'chase'; this.rig.fppYaw = 0; this.rig.fppPitch = 0; this.gfx.cut(); }
     if (I.hit('KeyR')) this.respawn();
     if (I.hit('KeyT')) this.toggleArm();
+    if (I.hit('KeyG')) this.setFan(!this.settings.fan);
   }
 
   doorPulse(car, open) {
@@ -839,6 +840,7 @@ class Game {
   setPaint(k) { this.settings.paint = k; store.set('paint', k); this.mats.setPaint(k); }
   setRoof(on) { this.settings.roof = on; store.set('roof', on); this.car.view.setRoof(on); }
   setWing(on) { this.settings.wing = on; store.set('wing', on); this.car.view.setWing(on); this.car.sim.wing = on; }
+  setFan(on) { this.settings.fan = on; store.set('fan', on); this.car.sim.fan = on; this.hint(on ? 'Fan downforce on' : 'Fan downforce off', 1.4); }
   setOutfit(i) { store.set('outfit', i); if (this.driver.ready) this.driver.setOutfit(i).then(() => { this.cockpit.dirty = true; }); }
   setRadio(on) { this.settings.radio = on; store.set('radio', on); this.audio.setRadio(on, this.eraId()); }
 

@@ -4,7 +4,7 @@ import { PAINTS } from './render/carMaterials.js';
 import { PRESETS } from './render/gfx.js';
 import { OUTFITS } from './render/driver.js';
 
-const KEYS = [['W', 'Drive, rear thrust'], ['S', 'Brake, reverse, retro'], ['A  D', 'Steer, yaw'], ['Shift', 'Boost'], ['Shift + S', 'Retro brake'], ['Space', 'Tap to hop, hold to lift'], ['Ctrl', 'Descend'], ['Arrows', 'Pitch and roll'], ['Mouse', 'Look'], ['Click', 'Touch the screen (cockpit)'], ['C', 'Cockpit or chase camera'], ['Y', 'Type a destination year'], ['T', 'Arm time circuits'], ['F', 'Get out or get in'], ['R', 'New Roadster'], ['Esc', 'Menu'], ['On foot', 'W A S D walk, Shift run, Space jump'], ['E', 'Pick up, drop, use (on foot)'], ['Click', 'Throw what you carry'], ['O', 'Space: press twice to go up or come back'], ['F8', 'Sound status · Shift+F8 restarts the sound'], ['In space: S', 'Turn around (then W to burn)'], ['In space: Shift + W', 'Hold for the orbital drive']];
+const KEYS = [['W', 'Drive, rear thrust'], ['S', 'Brake, reverse, retro'], ['A  D', 'Steer, yaw'], ['Shift', 'Boost'], ['Shift + S', 'Retro brake'], ['Space', 'Tap to hop, hold to lift'], ['Ctrl', 'Descend'], ['Arrows', 'Pitch and roll'], ['Mouse', 'Look'], ['Click', 'Touch the screen (cockpit)'], ['C', 'Cockpit or chase camera'], ['Y', 'Type a destination year'], ['T', 'Arm time circuits'], ['G', 'Fan downforce (suction grip)'], ['F', 'Get out or get in'], ['R', 'New Roadster'], ['Esc', 'Menu'], ['On foot', 'W A S D walk, Shift run, Space jump'], ['E', 'Pick up, drop, use (on foot)'], ['Click', 'Throw what you carry'], ['O', 'Space: press twice to go up or come back'], ['F8', 'Sound status · Shift+F8 restarts the sound'], ['In space: S', 'Turn around (then W to burn)'], ['In space: Shift + W', 'Hold for the orbital drive']];
 const SWATCH = { red: '#a3121a', white: '#e9e8e4', black: '#111214', silver: '#6c7078', blue: '#173a8a' };
 
 function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; }
@@ -105,7 +105,7 @@ export class Menu {
       }
       P.appendChild(grid);
     } else if (this.section === 'garage') {
-      head('Garage', 'Paint, roof, wing and the driver.');
+      head('Garage', 'Paint, roof, wing, fans and the driver.');
       const sw = el('div', 'swatches');
       for (const [k, p] of Object.entries(PAINTS)) {
         const b = el('button', 'swatch' + (g.settings.paint === k ? ' on' : ''));
@@ -117,6 +117,7 @@ export class Menu {
       P.appendChild(sw);
       P.appendChild(this.row('Targa roof', this.seg([['on', 'On'], ['off', 'Off']], () => (g.settings.roof ? 'on' : 'off'), (k) => g.setRoof(k === 'on'))));
       P.appendChild(this.row('Rear wing', this.seg([['on', 'Up'], ['off', 'Stowed']], () => (g.settings.wing ? 'on' : 'off'), (k) => g.setWing(k === 'on'))));
+      P.appendChild(this.row('Fan downforce (G)', this.seg([['on', 'On'], ['off', 'Off']], () => (g.settings.fan ? 'on' : 'off'), (k) => g.setFan(k === 'on'))));
       P.appendChild(this.row('Doors', this.seg([['open', 'Open'], ['closed', 'Closed']], () => (g.car.view.doorTarget > 0.5 ? 'open' : 'closed'), (k) => { if ((k === 'open') !== (g.car.view.doorTarget > 0.5)) g.car.view.toggleDoors(); })));
       P.appendChild(this.row('Driver', this.seg(OUTFITS.map((o, i) => [String(i), o.label]), () => String(g.store.get('outfit', 0)), (k) => g.setOutfit(Number(k)))));
     } else if (this.section === 'settings') {

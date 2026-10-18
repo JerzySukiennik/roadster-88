@@ -323,6 +323,12 @@ export class FX {
         this.skids.add(key, p.x, p.y, p.z, fw.x, fw.z, w.width * 0.9, Math.min(1, slip * 0.08));
       } else this.skids.cut(key);
     }
+    if (sim.fanSuck > 1500 && sim.contacts > 0) {
+      const back = this._o.set(0, 0.1, -2.15).applyQuaternion(carQuat).add(carPos), dir = this._d.set(0, 0, -1).applyQuaternion(carQuat);
+      const grip = sim.env && sim.env.surface ? sim.env.surface(back.x, back.z) : 1, amt = (grip < 0.95 ? 1 : 0.12) * sim.fanSuck / 10500;
+      const cnt = this.rate(sim.id + 'fan', amt * 34, dt);
+      for (let k = 0; k < cnt; k++) { const side = rnd(-1, 1), sp = rnd(3, 7); this.alpha.spawn(back.x + dir.z * side * 0.8, back.y, back.z - dir.x * side * 0.8, dir.x * sp + dir.z * side * 1.5 + sim.vel.x * 0.4, rnd(0.2, 0.9), dir.z * sp - dir.x * side * 1.5 + sim.vel.z * 0.4, rnd(0.9, 1.7), 0.35, rnd(1.4, 2.6), 0.6, 0.57, 0.53, 0.22, 1.6, 0.2); }
+    }
   }
 
   sparks(p, v, n, count) {

@@ -76,6 +76,7 @@ export class CarSim {
     this.speed = 0; this.fwdSpeed = 0; this.latSpeed = 0; this.contacts = 0; this.clearance = 0;
     this.motorForce = 0; this.regenForce = 0; this.load = 0; this.motorRpm = 0; this.brakeOn = 0;
     this.wing = !!opts.wing;
+    this.fan = !!opts.fan; this.fanSpool = 0; this.fanSuck = 0;
     this.enabled = true; this.wreck = false;
     this.forceAcc = new V3(); this.torqueAcc = new V3();
     this.env = { grip: 1, wind: new V3(), surface: null }; this.steps = 0;
@@ -377,6 +378,16 @@ export class CarSim {
     this.torqueAcc.add(t);
   }
 
+  fans(dt) {
+    const A = this.tu.aero, on = this.fan && !this.wreck && !this.env.space ? 1 : 0;
+    this.fanSpool += (on - this.fanSpool) * Math.min(1, dt / (on ? A.fan_spool_s || 0.7 : (A.fan_spool_s || 0.7) * 1.8));
+    this.fanSuck = 0;
+    if (this.fanSpool < 0.01 || this.up.y < 0.35) return;
+    const seal = this.contacts > 0 ? 0.55 + 0.45 * Math.min(1, this.contacts / 4) : Math.max(0, 1 - this.clearance / 0.8);
+    this.fanSuck = (A.fan_downforce_n || 10500) * this.fanSpool * seal;
+    this.addForceAt(this._a.copy(this.up).scale(-this.fanSuck), this.toWorld(this._b.set(0, 0.25, -0.2), this._b));
+  }
+
   thrust(dt, inp) {
     const th = this.thrusters;
     const comL = this.comLocal;
@@ -416,6 +427,7 @@ export class CarSim {
     this.powertrain(dt, inp);
     this.tyres(dt);
     this.aero();
+    this.fans(dt);
     this.thrust(dt, inp);
     const J = this._a.copy(this.forceAcc).scale(dt), Jt = this._b.copy(this.torqueAcc).scale(dt);
     this.body.applyImpulse({ x: J.x, y: J.y, z: J.z }, true);
@@ -424,6 +436,7 @@ export class CarSim {
 
   spaceStep(dt, inp) {
     if (!this.zeroG) { this.body.setGravityScale(0, true); this.zeroG = true; }
+    this.fanSpool = 0; this.fanSuck = 0;
     const S = this.tu.suspension;
     this.steering(dt, inp);
     this.contacts = 0; this.clearance = 99;

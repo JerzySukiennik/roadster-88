@@ -28,6 +28,7 @@ export class AudioEngine {
     this.noiseBuf = this.makeNoise(2);
     this.buildMotor();
     this.buildThrust();
+    this.buildFan();
     this.road = ctx.createBiquadFilter(); this.road.type = 'highpass'; this.road.frequency.value = 220; this.road.Q.value = 0.6; this.road.connect(this.outside);
     this.wind = this.noiseVoice('lowpass', 600, 0.7, this.outside);
     this.rumble = this.noiseVoice('lowpass', 150, 0.8, this.outside);
@@ -90,6 +91,15 @@ export class AudioEngine {
       const hi = this.noiseVoice('highpass', 2500, 0.5, p);
       this.nozzleVoices.push({ p, body, mid, hi });
     }
+  }
+
+  buildFan() {
+    const ctx = this.ctx, bus = ctx.createGain(); bus.gain.value = 0; bus.connect(this.outside);
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 900; bp.Q.value = 2.5;
+    const tone = ctx.createGain(); tone.gain.value = 0.32; bp.connect(tone); tone.connect(bus);
+    const oscs = [1, 2.02, 3.97].map((m, i) => { const o = ctx.createOscillator(); o.type = i ? 'triangle' : 'sawtooth'; const g = ctx.createGain(); g.gain.value = [0.6, 0.35, 0.18][i]; o.connect(g); g.connect(bp); o.start(); return { o, m }; });
+    const air = this.noiseVoice('bandpass', 2200, 0.7, bus);
+    this.fanV = { bus, bp, oscs, air };
   }
 
   fileFor(key, variant) {
@@ -257,6 +267,14 @@ export class AudioEngine {
     this.setLoop('tyre_roll_loop', vol * (ground ? Math.min(1, sp / 25) : 0) * 0.35, 0.9 + Math.min(0.8, sp / 60), 0.08, this.road);
     let slip = 0; for (const w of sim.wheels) if (w.contact) slip = Math.max(slip, w.slipVel);
     this.setLoop('tyre_skid_loop', vol * Math.min(1, Math.max(0, slip - 2.5) / 7), 0.85 + Math.min(0.3, slip / 40), 0.05);
+    if (this.fanV) {
+      const F = this.fanV, spool = sim.fanSpool || 0, suck = Math.min(1, (sim.fanSuck || 0) / 10500), f = 110 + 470 * spool - 40 * suck;
+      for (const o of F.oscs) o.o.frequency.setTargetAtTime(f * o.m, t, 0.12);
+      F.bp.frequency.setTargetAtTime(f * 2.6, t, 0.12);
+      F.air.f.frequency.setTargetAtTime(1300 + 2300 * spool, t, 0.15);
+      F.air.g.gain.setTargetAtTime(0.35 + 0.65 * suck, t, 0.15);
+      F.bus.gain.setTargetAtTime(vol * spool * spool * 0.16, t, 0.1);
+    }
     const th = sim.thrusters;
     let total = 0, active = 0;
     th.all.forEach((n) => { const v = n.attached && vol ? n.valve : 0; if (v > 0.05) active++; });
