@@ -1,0 +1,10 @@
+{
+  "name": "roadster88-web-tools",
+  "private": true,
+  "type": "module",
+  "description": "Headless parity harness and browser test harness for the Roadster 88 web build.",
+  "dependencies": {
+    "@dimforge/rapier3d-compat": "0.21.0",
+    "meshoptimizer": "^0.22.0"
+  }
+}

@@ -1,0 +1,678 @@
+{
+"c0_gone_1": {
+"asr": 0.88,
+"cps": 13.9,
+"dur": 6.67,
+"engine": "gemini",
+"key": "ce042bc5fd1d",
+"mean": -22.7,
+"peak": -2.0,
+"voice": "thought"
+},
+"c0_gone_2": {
+"asr": 0.87,
+"cps": 14.2,
+"dur": 6.317,
+"engine": "gemini",
+"key": "ce042bc5fd1d",
+"mean": -21.8,
+"peak": -2.4,
+"voice": "thought"
+},
+"c0_jump_r1": {
+"cps": 12.7,
+"dur": 6.447,
+"engine": "kokoro",
+"key": "409df7cd51b1",
+"mean": -18.2,
+"peak": -1.8,
+"voice": "ida"
+},
+"c0_lost_r1": {
+"cps": 14.7,
+"dur": 4.214,
+"engine": "kokoro",
+"key": "52014816da01",
+"mean": -18.3,
+"peak": -2.0,
+"voice": "ida"
+},
+"c0_lost_r2": {
+"cps": 15.7,
+"dur": 7.511,
+"engine": "kokoro",
+"key": "72a9910a31b3",
+"mean": -18.0,
+"peak": -1.8,
+"voice": "ida"
+},
+"c0_lost_r3": {
+"cps": 12.6,
+"dur": 3.34,
+"engine": "kokoro",
+"key": "96bbb22e75d7",
+"mean": -17.6,
+"peak": -1.8,
+"voice": "ida"
+},
+"c0_meet_1": {
+"asr": 1.0,
+"cps": 16.6,
+"dur": 5.253,
+"engine": "gemini",
+"key": "cb1db51fd357",
+"mean": -17.5,
+"peak": -3.3,
+"voice": "ida"
+},
+"c0_meet_2": {
+"asr": 1.0,
+"cps": 13.4,
+"dur": 6.791,
+"engine": "gemini",
+"key": "cb1db51fd357",
+"mean": -17.8,
+"peak": -0.7,
+"voice": "ida"
+},
+"c0_meet_3": {
+"asr": 0.96,
+"cps": 17.5,
+"dur": 7.016,
+"engine": "gemini",
+"key": "cb1db51fd357",
+"mean": -17.9,
+"peak": -2.7,
+"voice": "ida"
+},
+"c0_meet_c1": {
+"asr": 1.0,
+"cps": 10.8,
+"dur": 1.114,
+"engine": "gemini",
+"key": "cb1db51fd357",
+"mean": -19.8,
+"peak": -3.4,
+"voice": "you"
+},
+"c0_meet_c1r": {
+"asr": 1.0,
+"cps": 16.7,
+"dur": 1.077,
+"engine": "gemini",
+"key": "cb1db51fd357",
+"mean": -18.8,
+"peak": -4.6,
+"voice": "ida"
+},
+"c0_meet_c2": {
+"asr": 1.0,
+"cps": 10.6,
+"dur": 1.698,
+"engine": "gemini",
+"key": "cb1db51fd357",
+"mean": -19.2,
+"peak": -2.7,
+"voice": "you"
+},
+"c0_meet_c2r": {
+"asr": 0.88,
+"cps": 11.4,
+"dur": 4.202,
+"engine": "gemini",
+"key": "cb1db51fd357",
+"mean": -17.8,
+"peak": -1.8,
+"voice": "ida"
+},
+"c1_end_1": {
+"asr": 1.0,
+"cps": 17.2,
+"dur": 6.033,
+"engine": "gemini",
+"key": "99915655032b",
+"mean": -17.4,
+"peak": -1.7,
+"voice": "ida"
+},
+"c1_end_2": {
+"asr": 1.0,
+"cps": 16.4,
+"dur": 5.841,
+"engine": "gemini",
+"key": "99915655032b",
+"mean": -17.6,
+"peak": -1.9,
+"voice": "ida"
+},
+"c1_forge_1": {
+"asr": 0.91,
+"cps": 13.3,
+"dur": 5.333,
+"engine": "gemini",
+"key": "d9350b8e9b49",
+"mean": -17.5,
+"peak": -1.9,
+"voice": "kessler"
+},
+"c1_forge_2": {
+"asr": 0.89,
+"cps": 14.8,
+"dur": 11.909,
+"engine": "gemini",
+"key": "d9350b8e9b49",
+"mean": -16.8,
+"peak": -1.6,
+"voice": "kessler"
+},
+"c1_forge_c1": {
+"asr": 1.0,
+"cps": 16.3,
+"dur": 1.905,
+"engine": "gemini",
+"key": "d9350b8e9b49",
+"mean": -18.3,
+"peak": -2.8,
+"voice": "you"
+},
+"c1_forge_c1r": {
+"asr": 0.94,
+"cps": 10.0,
+"dur": 8.466,
+"engine": "gemini",
+"key": "d9350b8e9b49",
+"mean": -17.7,
+"peak": -1.8,
+"voice": "kessler"
+},
+"c1_forge_c2": {
+"asr": 1.0,
+"cps": 22.0,
+"dur": 0.907,
+"engine": "gemini",
+"key": "d9350b8e9b49",
+"mean": -17.9,
+"peak": -2.2,
+"voice": "you"
+},
+"c1_forge_c2r": {
+"asr": 1.0,
+"cps": 10.0,
+"dur": 2.687,
+"engine": "gemini",
+"key": "d9350b8e9b49",
+"mean": -18.8,
+"peak": -1.9,
+"voice": "kessler"
+},
+"c1_guide_1": {
+"asr": 1.0,
+"cps": 12.2,
+"dur": 6.802,
+"engine": "gemini",
+"key": "4523f45b1e20",
+"mean": -18.2,
+"peak": -1.8,
+"voice": "marta"
+},
+"c1_guide_2": {
+"asr": 0.97,
+"cps": 15.7,
+"dur": 9.509,
+"engine": "gemini",
+"key": "4523f45b1e20",
+"mean": -17.9,
+"peak": -2.4,
+"voice": "marta"
+},
+"c1_guide_3": {
+"asr": 1.0,
+"cps": 14.7,
+"dur": 5.362,
+"engine": "gemini",
+"key": "ce042bc5fd1d",
+"mean": -22.2,
+"peak": -3.6,
+"voice": "thought"
+},
+"c1_guide_c1": {
+"asr": 0.75,
+"cps": 10.8,
+"dur": 2.416,
+"engine": "gemini",
+"key": "4523f45b1e20",
+"mean": -23.4,
+"peak": -2.0,
+"voice": "you"
+},
+"c1_guide_c1r": {
+"asr": 0.95,
+"cps": 13.6,
+"dur": 7.442,
+"engine": "gemini",
+"key": "4523f45b1e20",
+"mean": -18.2,
+"peak": -1.9,
+"voice": "marta"
+},
+"c1_guide_c2": {
+"asr": 1.0,
+"cps": 19.2,
+"dur": 1.252,
+"engine": "gemini",
+"key": "4523f45b1e20",
+"mean": -19.1,
+"peak": -3.2,
+"voice": "you"
+},
+"c1_guide_c2r": {
+"asr": 1.0,
+"cps": 16.0,
+"dur": 5.991,
+"engine": "gemini",
+"key": "4523f45b1e20",
+"mean": -18.2,
+"peak": -1.8,
+"voice": "marta"
+},
+"c1_home_r1": {
+"asr": 1.0,
+"cps": 12.5,
+"dur": 3.855,
+"engine": "gemini",
+"key": "ce042bc5fd1d",
+"mean": -21.4,
+"peak": -3.5,
+"voice": "thought"
+},
+"c1_ida_1": {
+"asr": 1.0,
+"cps": 17.5,
+"dur": 5.247,
+"engine": "gemini",
+"key": "99915655032b",
+"mean": -17.7,
+"peak": -1.9,
+"voice": "ida"
+},
+"c1_ida_2": {
+"asr": 1.0,
+"cps": 16.6,
+"dur": 3.437,
+"engine": "gemini",
+"key": "99915655032b",
+"mean": -17.9,
+"peak": -2.0,
+"voice": "ida"
+},
+"c1_ida_c1": {
+"asr": 1.0,
+"cps": 8.4,
+"dur": 1.303,
+"engine": "gemini",
+"key": "99915655032b",
+"mean": -20.5,
+"peak": -3.2,
+"voice": "you"
+},
+"c1_ida_c1r": {
+"asr": 1.0,
+"cps": 17.9,
+"dur": 1.96,
+"engine": "gemini",
+"key": "99915655032b",
+"mean": -17.7,
+"peak": -4.0,
+"voice": "ida"
+},
+"c1_ida_c2": {
+"asr": 1.0,
+"cps": 9.0,
+"dur": 3.219,
+"engine": "gemini",
+"key": "99915655032b",
+"mean": -17.7,
+"peak": -1.9,
+"voice": "you"
+},
+"c1_ida_c2r": {
+"asr": 0.93,
+"cps": 13.8,
+"dur": 4.651,
+"engine": "gemini",
+"key": "99915655032b",
+"mean": -18.0,
+"peak": -1.9,
+"voice": "ida"
+},
+"c1_plaque_1": {
+"asr": 0.79,
+"cps": 13.6,
+"dur": 11.076,
+"engine": "gemini",
+"key": "ce042bc5fd1d",
+"mean": -22.0,
+"peak": -1.7,
+"voice": "thought"
+},
+"c1_plaque_2": {
+"asr": 0.91,
+"cps": 14.0,
+"dur": 5.058,
+"engine": "gemini",
+"key": "ce042bc5fd1d",
+"mean": -23.5,
+"peak": -3.2,
+"voice": "thought"
+},
+"c1_race_r1": {
+"asr": 1.0,
+"cps": 12.9,
+"dur": 3.802,
+"engine": "gemini",
+"key": "ce042bc5fd1d",
+"mean": -22.5,
+"peak": -2.4,
+"voice": "thought"
+},
+"c1_trade_1": {
+"asr": 1.0,
+"cps": 15.4,
+"dur": 3.629,
+"engine": "kokoro",
+"key": "766f8a4ab734",
+"mean": -17.3,
+"peak": -1.6,
+"voice": "kessler"
+},
+"c1_trade_2": {
+"asr": 1.0,
+"cps": 15.8,
+"dur": 4.864,
+"engine": "kokoro",
+"key": "b262f0ede193",
+"mean": -18.0,
+"peak": -1.9,
+"voice": "kessler"
+},
+"c1_trade_3": {
+"asr": 1.0,
+"cps": 15.7,
+"dur": 6.105,
+"engine": "kokoro",
+"key": "c850e93f72ad",
+"mean": -18.1,
+"peak": -1.9,
+"voice": "kessler"
+},
+"c1_trade_4": {
+"asr": 1.0,
+"cps": 15.7,
+"dur": 3.306,
+"engine": "kokoro",
+"key": "1396c3fa9b89",
+"mean": -17.7,
+"peak": -1.8,
+"voice": "kessler"
+},
+"c1_trade_c1": {
+"asr": 1.0,
+"cps": 17.2,
+"dur": 1.689,
+"engine": "kokoro",
+"key": "402654db3f7a",
+"mean": -18.5,
+"peak": -1.9,
+"voice": "you"
+},
+"c1_trade_c2": {
+"asr": 1.0,
+"cps": 9.8,
+"dur": 0.814,
+"engine": "kokoro",
+"key": "5eabd32322e8",
+"mean": -19.0,
+"peak": -2.9,
+"voice": "you"
+},
+"c2_ad_1": {
+"asr": 0.94,
+"cps": 9.4,
+"dur": 12.447,
+"engine": "gemini",
+"key": "8b6f79f02807",
+"mean": -18.7,
+"peak": -2.6,
+"voice": "ad"
+},
+"c2_arrive_r1": {
+"asr": 0.83,
+"cps": 14.9,
+"dur": 6.45,
+"engine": "kokoro",
+"key": "d8947da5c692",
+"mean": -18.1,
+"peak": -1.9,
+"voice": "ida"
+},
+"c2_caught_r1": {
+"asr": 1.0,
+"cps": 19.5,
+"dur": 3.173,
+"engine": "kokoro",
+"key": "909a4e2ebf44",
+"mean": -17.3,
+"peak": -1.8,
+"voice": "nova"
+},
+"c2_caught_t": {
+"asr": 0.9,
+"cps": 19.4,
+"dur": 2.319,
+"engine": "kokoro",
+"key": "447801c1d82b",
+"mean": -19.9,
+"peak": -2.0,
+"voice": "thought"
+},
+"c2_city_t": {
+"asr": 0.93,
+"cps": 9.8,
+"dur": 7.967,
+"engine": "gemini",
+"key": "7cbe299f10d0",
+"mean": -20.0,
+"peak": -5.1,
+"voice": "thought"
+},
+"c2_escape_r1": {
+"asr": 1.0,
+"cps": 18.8,
+"dur": 3.666,
+"engine": "kokoro",
+"key": "72a248f1885d",
+"mean": -17.7,
+"peak": -2.1,
+"voice": "nova"
+},
+"c2_hack_r1": {
+"asr": 0.88,
+"cps": 18.9,
+"dur": 4.275,
+"engine": "kokoro",
+"key": "9eae67b956d9",
+"mean": -18.3,
+"peak": -1.8,
+"voice": "nova"
+},
+"c2_ida_1": {
+"asr": 1.0,
+"cps": 13.8,
+"dur": 7.698,
+"engine": "gemini",
+"key": "8b6f79f02807",
+"mean": -18.6,
+"peak": -2.4,
+"voice": "ida"
+},
+"c2_ida_2": {
+"asr": 1.0,
+"cps": 14.8,
+"dur": 8.42,
+"engine": "gemini",
+"key": "8b6f79f02807",
+"mean": -17.3,
+"peak": -2.0,
+"voice": "ida"
+},
+"c2_ida_r1": {
+"asr": 1.0,
+"cps": 15.0,
+"dur": 6.262,
+"engine": "gemini",
+"key": "8b6f79f02807",
+"mean": -18.3,
+"peak": -4.3,
+"voice": "ida"
+},
+"c2_lost_r1": {
+"asr": 1.0,
+"cps": 20.7,
+"dur": 2.462,
+"engine": "kokoro",
+"key": "baea1f46632f",
+"mean": -19.2,
+"peak": -2.0,
+"voice": "nova"
+},
+"c2_nova_1": {
+"asr": 1.0,
+"cps": 15.3,
+"dur": 5.623,
+"engine": "gemini",
+"key": "7cbe299f10d0",
+"mean": -18.2,
+"peak": -2.7,
+"voice": "nova"
+},
+"c2_nova_2": {
+"asr": 0.97,
+"cps": 15.2,
+"dur": 10.146,
+"engine": "gemini",
+"key": "7cbe299f10d0",
+"mean": -20.5,
+"peak": -2.2,
+"voice": "nova"
+},
+"c2_nova_3": {
+"asr": 0.92,
+"cps": 19.3,
+"dur": 6.371,
+"engine": "gemini",
+"key": "7cbe299f10d0",
+"mean": -19.1,
+"peak": -2.0,
+"voice": "nova"
+},
+"c2_nova_4": {
+"asr": 1.0,
+"cps": 14.1,
+"dur": 6.438,
+"engine": "gemini",
+"key": "41b5a97173d5",
+"mean": -17.5,
+"peak": -2.0,
+"voice": "nova"
+},
+"c2_nova_5": {
+"asr": 1.0,
+"cps": 16.3,
+"dur": 4.307,
+"engine": "gemini",
+"key": "41b5a97173d5",
+"mean": -17.5,
+"peak": -4.9,
+"voice": "nova"
+},
+"c2_nova_c1": {
+"asr": 1.0,
+"cps": 14.1,
+"dur": 1.134,
+"engine": "gemini",
+"key": "7cbe299f10d0",
+"mean": -18.0,
+"peak": -5.1,
+"voice": "you"
+},
+"c2_nova_c1r": {
+"asr": 1.0,
+"cps": 17.7,
+"dur": 6.79,
+"engine": "gemini",
+"key": "7cbe299f10d0",
+"mean": -18.2,
+"peak": -2.0,
+"voice": "nova"
+},
+"c2_nova_c2": {
+"asr": 0.83,
+"cps": 17.3,
+"dur": 1.79,
+"engine": "gemini",
+"key": "7cbe299f10d0",
+"mean": -18.3,
+"peak": -3.2,
+"voice": "you"
+},
+"c2_nova_c2r": {
+"asr": 1.0,
+"cps": 13.8,
+"dur": 6.67,
+"engine": "gemini",
+"key": "7cbe299f10d0",
+"mean": -20.6,
+"peak": -2.4,
+"voice": "nova"
+},
+"c2_nova_r0": {
+"asr": 0.96,
+"cps": 19.5,
+"dur": 6.631,
+"engine": "kokoro",
+"key": "c97ef51e821e",
+"mean": -18.1,
+"peak": -1.9,
+"voice": "nova"
+},
+"c2_page_t": {
+"asr": 0.94,
+"cps": 14.9,
+"dur": 5.651,
+"engine": "gemini",
+"key": "41b5a97173d5",
+"mean": -20.7,
+"peak": -2.0,
+"voice": "thought"
+},
+"c2_spot_r1": {
+"asr": 1.0,
+"cps": 20.5,
+"dur": 2.386,
+"engine": "kokoro",
+"key": "818aa4b9c64e",
+"mean": -18.6,
+"peak": -1.8,
+"voice": "nova"
+},
+"c2_vault_t": {
+"asr": 1.0,
+"cps": 16.7,
+"dur": 4.5,
+"engine": "kokoro",
+"key": "0587a9959d1c",
+"mean": -20.4,
+"peak": -1.8,
+"voice": "thought"
+}
+}
