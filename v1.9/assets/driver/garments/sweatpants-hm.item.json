@@ -1,0 +1,89 @@
+{
+  "item_id": "sweatpants-hm",
+  "name": "Sweatpants, relaxed fit (H&M)",
+  "slot": "bottom",
+  "layer": 15,
+  "body_mask": [
+    "thighs",
+    "shins"
+  ],
+  "body_mask_contract": "legs",
+  "hides_hair": false,
+  "file": "sweatpants-hm.glb",
+  "node": "sweatpants-hm",
+  "skeleton": "Jurek.Rig (shared, 92 bones, no extra bones added)",
+  "skin_bones": [
+    "Hips",
+    "Spine",
+    "Spine1",
+    "LeftUpLeg",
+    "RightUpLeg",
+    "LeftLeg",
+    "RightLeg",
+    "LeftFoot",
+    "RightFoot",
+    "LeftToeBase",
+    "RightToeBase"
+  ],
+  "tris": 10208,
+  "materials": [
+    "SweatFabric",
+    "SweatRib",
+    "SweatCord",
+    "SweatMetal"
+  ],
+  "textures": {
+    "SweatFabric": {
+      "baseColor": "fabric_baseColor_black_2048.png",
+      "normal": "fabric_normal_2048.png",
+      "orm": "fabric_orm_2048.png",
+      "size": 2048
+    },
+    "SweatRib": {
+      "baseColor": "rib_baseColor_black_1024.png",
+      "normal": "rib_normal_1024.png",
+      "orm": "rib_orm_1024.png",
+      "size": 1024,
+      "uv_scale": 7.142857,
+      "note": "KHR_texture_transform, tile 0.14 m"
+    },
+    "SweatCord": {
+      "baseColor": "cord_baseColor_256.png",
+      "normal": "cord_normal_256.png",
+      "orm": "cord_orm_256.png",
+      "size": 256
+    },
+    "SweatMetal": "constant PBR, no textures"
+  },
+  "variants": [
+    {
+      "id": "black",
+      "title": "Black (default, matches the H&M product photo)",
+      "fabric_baseColor": "textures/fabric_baseColor_black_2048.png",
+      "rib_baseColor": "textures/rib_baseColor_black_1024.png"
+    },
+    {
+      "id": "grey",
+      "title": "Light grey",
+      "fabric_baseColor": "textures/fabric_baseColor_grey_2048.png",
+      "rib_baseColor": "textures/rib_baseColor_grey_1024.png"
+    },
+    {
+      "id": "olive",
+      "title": "Dark olive",
+      "fabric_baseColor": "textures/fabric_baseColor_olive_2048.png",
+      "rib_baseColor": "textures/rib_baseColor_olive_1024.png"
+    }
+  ],
+  "variant_note": "Variant = swap the baseColor textures of SweatFabric and SweatRib (same UVs, normal and ORM unchanged). The GLB ships the black set embedded; the variant PNGs are loose files in textures/.",
+  "clips": [],
+  "clips_note": "The garment has no clips of its own; it is skinned to the shared rig and plays the body clips (A_pose, idle, walk, run, ...).",
+  "regions_hidden_on_body": "Body _REGION 5 (thighs) and 6 (shins)",
+  "fit": {
+    "body": "Jurek.Rig character, 174 cm, A-pose",
+    "min_rest_clearance_mm": 6,
+    "walk_idle_min_posed_clearance_mm": 0.1
+  },
+  "vertices": 6086,
+  "primitives": 4
+}

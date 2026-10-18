@@ -1,0 +1,376 @@
+{
+ "item_id": "gzowo-glass",
+ "name": "Gzowo Glass (G.L.A.S.S. smart glasses)",
+ "slot": "glasses",
+ "layer": 45,
+ "body_mask": [],
+ "hides_hair": "partial",
+ "skin": {
+  "bone": "Head",
+  "weight": 1.0,
+  "note": "rigid, follows the Head bone (and therefore the neck/spine chain)"
+ },
+ "tris": {
+  "realtime": 13407,
+  "cinematic": 31217
+ },
+ "draw_calls_realtime": 8,
+ "files": {
+  "glb": "gzowo-glass.glb",
+  "cinematic_glb": "gzowo-glass_cinematic.glb",
+  "blend": "source/gzowo-glass.blend",
+  "fbx": "source/gzowo-glass.fbx"
+ },
+ "materials": {
+  "realtime": [
+   "GG_Frame",
+   "GG_Lid",
+   "GG_Lens",
+   "GG_Combiner",
+   "GG_HUD",
+   "GG_Metal",
+   "GG_CamGlass",
+   "GG_LED"
+  ],
+  "cinematic": [
+   "GG_Frame",
+   "GG_Lid",
+   "GGC_Lens",
+   "GGC_Combiner",
+   "GGC_HUD",
+   "GG_Metal",
+   "GG_CamGlass",
+   "GG_LED"
+  ]
+ },
+ "textures": {
+  "frame_baseColor_2048.png": "2048 sRGB tile 12.8 mm (0.2 mm layer lines, 64 per tile)",
+  "frame_normal_2048.png": "2048 normal (GL), layer lines",
+  "frame_orm_2048.png": "2048 R occlusion G roughness B metallic",
+  "hud_emissive_1024.png": "1024 HUD readout, emissive (eye side of the beam splitter)"
+ },
+ "clips": [],
+ "clips_note": "no own clips; rigid on Head so it plays every body clip (idle, walk, run, turn, wave, layers) unchanged",
+ "variants": {
+  "frame": {
+   "black_pla (default)": {
+    "GG_Frame": {
+     "baseColorFactor": [
+      0.05,
+      0.05,
+      0.054,
+      1
+     ]
+    },
+    "GG_Lid": {
+     "baseColorFactor": [
+      0.092,
+      0.092,
+      0.098,
+      1
+     ]
+    }
+   },
+   "white_pla": {
+    "GG_Frame": {
+     "baseColorFactor": [
+      0.95,
+      0.95,
+      0.97,
+      1
+     ]
+    },
+    "GG_Lid": {
+     "baseColorFactor": [
+      0.8,
+      0.8,
+      0.83,
+      1
+     ]
+    }
+   },
+   "orange_pla": {
+    "GG_Frame": {
+     "baseColorFactor": [
+      1.0,
+      0.3,
+      0.05,
+      1
+     ]
+    },
+    "GG_Lid": {
+     "baseColorFactor": [
+      0.45,
+      0.45,
+      0.47,
+      1
+     ]
+    }
+   }
+  },
+  "lens": {
+   "smoke (default)": {
+    "GG_Lens": {
+     "baseColorFactor": [
+      0.02,
+      0.022,
+      0.03,
+      0.72
+     ]
+    }
+   },
+   "clear": {
+    "GG_Lens": {
+     "baseColorFactor": [
+      0.8,
+      0.85,
+      0.9,
+      0.12
+     ]
+    }
+   },
+   "blue_mirror": {
+    "GG_Lens": {
+     "baseColorFactor": [
+      0.02,
+      0.1,
+      0.3,
+      0.78
+     ],
+     "metallicFactor": 0.3
+    }
+   }
+  },
+  "hud": {
+   "on (default)": {
+    "GG_HUD": {
+     "emissiveStrength": 2.5
+    }
+   },
+   "off": {
+    "GG_HUD": {
+     "emissiveStrength": 0.0
+    }
+   }
+  }
+ },
+ "hair_clip": {
+  "frame": "glTF Y-up metres, REST pose, in the Jurek.Rig world; transform with (Head bone world x inverse rest) to follow the head. Discard hair fragments (or fade them) inside these volumes so strands do not pierce the printed parts.",
+  "boxes": {
+   "pod_right": {
+    "min": [
+     -0.096,
+     1.6334,
+     0.123
+    ],
+    "max": [
+     -0.066,
+     1.6794,
+     0.077
+    ]
+   },
+   "pod_left": {
+    "min": [
+     0.066,
+     1.6334,
+     0.128
+    ],
+    "max": [
+     0.098,
+     1.6794,
+     0.064
+    ]
+   },
+   "hood": {
+    "min": [
+     -0.068,
+     1.6414,
+     0.129
+    ],
+    "max": [
+     -0.013,
+     1.6784,
+     0.09
+    ]
+   },
+   "bar": {
+    "min": [
+     -0.07,
+     1.6434,
+     0.102
+    ],
+    "max": [
+     0.07,
+     1.6594,
+     0.09
+    ]
+   }
+  },
+  "temple_capsules": {
+   "right": {
+    "points": [
+     [
+      -0.081,
+      1.6596,
+      0.0717
+     ],
+     [
+      -0.0804,
+      1.6609,
+      0.0524
+     ],
+     [
+      -0.0732,
+      1.66,
+      0.0285
+     ],
+     [
+      -0.0737,
+      1.66,
+      0.0196
+     ],
+     [
+      -0.079,
+      1.6581,
+      0.0047
+     ],
+     [
+      -0.0786,
+      1.6535,
+      -0.0064
+     ],
+     [
+      -0.0782,
+      1.6457,
+      -0.0169
+     ],
+     [
+      -0.0779,
+      1.6313,
+      -0.0275
+     ]
+    ],
+    "radius": 0.009
+   },
+   "left": {
+    "points": [
+     [
+      0.082,
+      1.6739,
+      0.0705
+     ],
+     [
+      0.0819,
+      1.6567,
+      0.0627
+     ],
+     [
+      0.0806,
+      1.6611,
+      0.0395
+     ],
+     [
+      0.0784,
+      1.6609,
+      0.0093
+     ],
+     [
+      0.077,
+      1.6577,
+      -0.0084
+     ],
+     [
+      0.0763,
+      1.6534,
+      -0.0193
+     ],
+     [
+      0.0756,
+      1.6452,
+      -0.03
+     ],
+     [
+      0.0749,
+      1.6312,
+      -0.0404
+     ]
+    ],
+    "radius": 0.009
+   }
+  }
+ },
+ "fit": {
+  "dy_m": 0.007,
+  "temple_delta_deg": {
+   "R": 16.7578125,
+   "L": 19.1015625
+  },
+  "rt_min_clearance_mm": {
+   "head": 0.9,
+   "hair": 0.0,
+   "lashes": 7.24,
+   "brow_L": 5.91,
+   "brow_R": 3.41
+  },
+  "rt_tris": 13407,
+  "cin_tris": 31217
+ },
+ "animation_test": {
+  "A_pose": {
+   "frames": [
+    1,
+    2
+   ],
+   "min_head_clearance_mm": 0.9,
+   "min_body_distance_mm": 128.3
+  },
+  "idle": {
+   "frames": [
+    1,
+    121
+   ],
+   "min_head_clearance_mm": 0.9,
+   "min_body_distance_mm": 129.3
+  },
+  "walk": {
+   "frames": [
+    1,
+    33
+   ],
+   "min_head_clearance_mm": 0.9,
+   "min_body_distance_mm": 130.4
+  },
+  "run": {
+   "frames": [
+    1,
+    23
+   ],
+   "min_head_clearance_mm": 0.9,
+   "min_body_distance_mm": 128.3
+  },
+  "wave": {
+   "frames": [
+    1,
+    96
+   ],
+   "min_head_clearance_mm": 0.9,
+   "min_body_distance_mm": 128.7
+  },
+  "turn_left": {
+   "frames": [
+    1,
+    66
+   ],
+   "min_head_clearance_mm": 0.9,
+   "min_body_distance_mm": 126.6
+  },
+  "turn_right": {
+   "frames": [
+    1,
+    66
+   ],
+   "min_head_clearance_mm": 0.9,
+   "min_body_distance_mm": 126.6
+  }
+ }
+}

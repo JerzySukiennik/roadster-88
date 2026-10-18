@@ -1,0 +1,127 @@
+{
+ "id": "tnf-quest-jacket",
+ "name": "The North Face Men's Quest DryVent Triclimate 3-in-1 jacket (outer shell), JK3 black",
+ "slot": "outer",
+ "layer": 30,
+ "body_mask": [
+  "torso",
+  "arms",
+  "forearms",
+  "neck"
+ ],
+ "hides_hair": "false",
+ "fit": "standard",
+ "files": {
+  "default": "tnf-quest-jacket.glb",
+  "hood_down_only": "tnf-quest-jacket_hood-down.glb",
+  "hood_up_only": "tnf-quest-jacket_hood-up.glb",
+  "blend": "source/tnf-quest-jacket.blend",
+  "fbx": "source/tnf-quest-jacket.fbx"
+ },
+ "nodes": {
+  "shell": "TNFQuestJacket",
+  "hood_up": "TNFQuestJacket.HoodUp",
+  "hood_down": "TNFQuestJacket.HoodDown"
+ },
+ "default_visible_nodes": [
+  "TNFQuestJacket",
+  "TNFQuestJacket.HoodDown"
+ ],
+ "variants": [
+  {
+   "name": "hood_down",
+   "group": "hood",
+   "default": true,
+   "show_nodes": [
+    "TNFQuestJacket.HoodDown"
+   ],
+   "hide_nodes": [
+    "TNFQuestJacket.HoodUp"
+   ],
+   "hides_hair": "false"
+  },
+  {
+   "name": "hood_up",
+   "group": "hood",
+   "show_nodes": [
+    "TNFQuestJacket.HoodUp"
+   ],
+   "hide_nodes": [
+    "TNFQuestJacket.HoodDown"
+   ],
+   "hides_hair": "partial"
+  },
+  {
+   "name": "zip_closed",
+   "group": "zip",
+   "default": true,
+   "morph_target": "zip_open",
+   "value": 0.0,
+   "body_mask": [
+    "torso",
+    "arms",
+    "forearms",
+    "neck"
+   ]
+  },
+  {
+   "name": "zip_open",
+   "group": "zip",
+   "morph_target": "zip_open",
+   "value": 1.0,
+   "body_mask": [
+    "arms",
+    "forearms",
+    "neck"
+   ],
+   "note": "chest is visible: put a top_under item (or leave skin) under it"
+  }
+ ],
+ "variant_mechanism": "node visibility for the hood (two skinned meshes in the GLB) and the glTF morph target zip_open on TNFQuestJacket for the zip; groups are independent",
+ "tris": {
+  "shell_with_trims": 11378,
+  "hood_up": 1984,
+  "hood_down": 1948,
+  "default_total": 13326,
+  "hood_up_total": 13362
+ },
+ "materials": [
+  "TNFQuestFabric",
+  "TNFQuestTrim"
+ ],
+ "textures": [
+  {
+   "file": "embedded in GLB",
+   "name": "tnf_jacket_baseColor_2048.jpg",
+   "size": 2048,
+   "role": "baseColor sRGB"
+  },
+  {
+   "name": "tnf_jacket_normal_2048.png",
+   "size": 2048,
+   "role": "normal (OpenGL)"
+  },
+  {
+   "name": "tnf_jacket_orm_2048.jpg",
+   "size": 2048,
+   "role": "R occlusion, G roughness, B metallic"
+  }
+ ],
+ "skeleton": "Jurek.Rig (92 bones, shared contract), skinned with the 4 most important influences per vertex; hood up uses Neck/Head, hood down uses Neck/Spine2",
+ "clips": [
+  "A_pose",
+  "T_pose",
+  "idle",
+  "walk",
+  "run",
+  "turn_left",
+  "turn_right",
+  "wave",
+  "layer_headturn"
+ ],
+ "clips_note": "the garment has no clips of its own; the GLB carries the rig clips so it animates stand-alone",
+ "morph_targets": [
+  "zip_open (on TNFQuestJacket)"
+ ],
+ "shell": "single-sheet 3.2 mm rolled hems, double sided material"
+}
