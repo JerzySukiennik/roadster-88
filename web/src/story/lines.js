@@ -1,18 +1,20 @@
 // Roadster 88 story lines: every spoken line of the chapters with a stable id (the voice file is assets/voice/<id>.mp3), who says it, and the voice settings per character for the Kokoro bake in web/tools/voice-bake.py.
-export const WHO = { IDA: 'IDA GZOWSKA', KES: 'ELIAS KESSLER', MARTA: 'MARTA, GUIDE', RADIO: 'IDA · RADIO', YOU: 'YOU', PLAQUE: 'PLAQUE' };
+export const WHO = { IDA: 'IDA GZOWSKA', KES: 'ELIAS KESSLER', MARTA: 'MARTA, GUIDE', RADIO: 'IDA · RADIO', YOU: 'YOU', PLAQUE: 'PLAQUE', NOVA: 'NOVA', NRADIO: 'NOVA · RADIO', AD: 'KESSLER AEROSPACE · 2080' };
 
 export const VOICES = {
   ida: { voice: 'af_bella', speed: 1.04, pitch: 1.0, gain: 0, gemini: 'Zephyr', style: 'Say this as Ida, an excited, fast-talking young inventor who has not slept in three days, words tumbling out' },
   marta: { voice: 'af_heart', speed: 1.0, pitch: 1.02, gain: 0, gemini: 'Aoede', style: 'Say this as Marta, a cheerful, friendly small-town tour guide, warm and welcoming' },
   kessler: { voice: 'am_michael', speed: 0.9, pitch: 0.92, gain: 1, gemini: 'Algenib', style: 'Say this slowly and warmly as Elias Kessler, an older blacksmith from the 1880s American frontier, with a gentle western drawl' },
   you: { voice: 'am_puck', speed: 1.06, pitch: 1.05, gain: 0, gemini: 'Puck', style: 'Say this as a 14-year-old boy, light, young and upbeat, quick and curious' },
+  nova: { voice: 'af_nova', speed: 1.06, pitch: 1.03, gain: 0, gemini: 'Leda', style: 'Say this as Nova, a quick, confident teenage hacker from 2080, a little cheeky, talking fast and low as if someone might be listening' },
+  ad: { voice: 'bm_george', speed: 0.98, pitch: 0.98, gain: 0, gemini: 'Charon', style: 'Say this as a smooth, slick corporate radio announcer reading a glossy advert' },
   thought: { voice: 'am_puck', speed: 0.98, pitch: 1.05, gain: -2, gemini: 'Puck', style: 'Say this as the quiet inner thought of a 14-year-old boy, close to the microphone, soft and almost under his breath, like Peter Parker thinking to himself' },
 };
 
-export const SPEAKER = { [WHO.IDA]: 'ida', [WHO.RADIO]: 'ida', [WHO.MARTA]: 'marta', [WHO.KES]: 'kessler', [WHO.YOU]: 'you', [WHO.PLAQUE]: 'thought' };
+export const SPEAKER = { [WHO.IDA]: 'ida', [WHO.RADIO]: 'ida', [WHO.MARTA]: 'marta', [WHO.KES]: 'kessler', [WHO.YOU]: 'you', [WHO.PLAQUE]: 'thought', [WHO.NOVA]: 'nova', [WHO.NRADIO]: 'nova', [WHO.AD]: 'ad' };
 
 const T = (who, text, o = {}) => ({ who, text, ...o });
-const { IDA, KES, MARTA, RADIO, YOU, PLAQUE } = WHO;
+const { IDA, KES, MARTA, RADIO, YOU, PLAQUE, NOVA, NRADIO, AD } = WHO;
 
 export const LINES = {
   c0_meet_1: T(IDA, 'There you are! The time circuits are finally calibrated. I haven\'t slept in three days.'),
@@ -60,6 +62,31 @@ export const LINES = {
   c1_end_1: T(IDA, 'There, it\'s back on and good as new. Thank you. And next time, check the bolts before you break history.'),
   c1_end_2: T(IDA, 'Strange, though. The radio just mentioned Kessler Street. We don\'t have a Kessler Street. Do we?', { dir: 'puzzled and a little worried' }),
 };
+
+Object.assign(LINES, {
+  c2_ida_1: T(IDA, 'Okay, Kessler Street was weird. But listen to this. The radio keeps catching an advert from the year 2080.', { dir: 'uneasy, then curious' }),
+  c2_ad_1: T(AD, 'Kessler Aerospace. Drawing fire carriages since 1885. Kessler drones keep Gzowo City safe, every second of every day.', { radio: true, say: 'Kessler Aerospace. Drawing fire carriages since 1885. Kessler drones keep [Gzowo](/ɡzˈɔvO/) City safe, every second of every day.' }),
+  c2_ida_2: T(IDA, 'Fire carriages since 1885? That is your Roadster! Kessler must have seen you vanish. Go to 2080 and find out what he started.', { dir: 'alarmed and fast' }),
+  c2_city_t: T(YOU, 'Whoa. Drones everywhere. And that is my car on every billboard. Drawn by hand.', { thought: true, dir: 'amazed, a bit scared' }),
+  c2_nova_1: T(NOVA, 'Hey. Over here, under the trees. You are the one from the sketches. The fire carriage.', { dir: 'whispering urgently' }),
+  c2_nova_2: T(NOVA, 'Kessler Corp runs this city with those drones. They built all of it from one sketchbook. Elias Kessler\'s. It is locked in the vault on top of their tower.', { say: 'Kessler Corp runs this city with those drones. They built all of it from one sketchbook. [Elias](/ɪlˈIəs/) Kessler\'s. It is locked in the vault on top of their tower.' }),
+  c2_nova_c1: T(YOU, 'How do I get in?'),
+  c2_nova_c1r: T(NOVA, 'The terminal at the foot of the tower opens the roof. Hold it until the hack is done, and stay out of the drones\' light.'),
+  c2_nova_c2: T(YOU, 'Why do you need the sketchbook?'),
+  c2_nova_c2r: T(NOVA, 'Proof. Kessler says he invented all of it. The book shows he copied a stranger\'s car. Yours.'),
+  c2_nova_3: T(NOVA, 'Take a decoy from the crate by the terminal. Throw it and the drones chase the noise for a while. Good luck, fire carriage.', { dir: 'grinning' }),
+  c2_hack_r1: T(NRADIO, 'You are in! The roof is open. Fly up to the landing pad, eight hundred meters up.', { radio: true, dir: 'excited' }),
+  c2_spot_r1: T(NRADIO, 'They saw you! Get out of the light and try again.', { radio: true, dir: 'alarmed' }),
+  c2_vault_t: T(YOU, 'Elias Kessler\'s sketchbook. And that is my Roadster on the very first page.', { thought: true, dir: 'awed, quiet', say: '[Elias](/ɪlˈIəs/) Kessler\'s sketchbook. And that is my Roadster on the very first page.' }),
+  c2_escape_r1: T(NRADIO, 'The whole swarm is after you! Lose them, get far away from the tower!', { radio: true, dir: 'shouting' }),
+  c2_caught_r1: T(NRADIO, 'They took the book back to the vault! Go up and grab it again.', { radio: true, dir: 'frustrated' }),
+  c2_lost_r1: T(NRADIO, 'You lost them! Bring me the book. I am in the park.', { radio: true, dir: 'relieved' }),
+  c2_nova_4: T(NOVA, 'This is it. Every page is your car. I am putting all of it online. The whole city will see.', { dir: 'determined' }),
+  c2_nova_5: T(NOVA, 'Look up! The drones are shutting down. The Kessler logo is going dark!', { dir: 'overjoyed' }),
+  c2_page_t: T(YOU, 'Wait. The last page. Two fire carriages raced past my forge the night the star fell.', { thought: true, dir: 'slowly, realising something' }),
+  c2_ida_r1: T(RADIO, 'Two? On the night of your first jump? Then someone else was there. Come back. We need to talk.', { radio: true, dir: 'serious and worried' }),
+  c2_caught_t: T(YOU, 'They got the book. Fine. Back up to the roof.', { thought: true }),
+});
 
 export const L = (id, o = {}) => ({ ...LINES[id], v: id, ...o });
 

@@ -86,8 +86,12 @@ SCENES = [
     ['c1_forge_1', 'c1_forge_2', 'c1_forge_c1', 'c1_forge_c1r', 'c1_forge_c2', 'c1_forge_c2r'],
     ['c1_trade_1', 'c1_trade_2', 'c1_trade_c1', 'c1_trade_c2', 'c1_trade_3', 'c1_trade_4'],
     ['c1_ida_1', 'c1_ida_c1', 'c1_ida_c1r', 'c1_ida_c2', 'c1_ida_c2r', 'c1_ida_2', 'c1_end_1', 'c1_end_2'],
+    ['c2_ida_1', 'c2_ad_1', 'c2_ida_2', 'c2_ida_r1'],
+    ['c2_city_t', 'c2_nova_1', 'c2_nova_2', 'c2_nova_c1', 'c2_nova_c1r', 'c2_nova_c2', 'c2_nova_c2r', 'c2_nova_3'],
+    ['c2_hack_r1', 'c2_spot_r1', 'c2_vault_t', 'c2_escape_r1', 'c2_caught_r1', 'c2_lost_r1', 'c2_caught_t'],
+    ['c2_nova_4', 'c2_nova_5', 'c2_page_t'],
 ]
-NAME = {'ida': 'Ida', 'marta': 'Marta', 'kessler': 'Kessler', 'you': 'Jurek', 'thought': 'Jurek'}
+NAME = {'ida': 'Ida', 'marta': 'Marta', 'kessler': 'Kessler', 'nova': 'Nova', 'ad': 'Announcer', 'you': 'Jurek', 'thought': 'Jurek'}
 norm = lambda t: re.sub(r'[^a-z0-9 ]', ' ', t.lower().replace('-', ' ')).split()
 asr = [None]
 

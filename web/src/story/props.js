@@ -2,6 +2,13 @@
 import * as THREE from 'three/webgpu';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GROUP, groups } from '../sim/car.js';
+import { PONDS } from '../world/city/layout.js';
+
+export function warmUp(g, obj) {
+  const gx = g.gfx, r = gx && gx.renderer; if (!r || !r.compileAsync || !obj) return;
+  const c = obj.clone(); c.visible = true; c.traverse((o) => { o.visible = true; o.frustumCulled = false; }); c.updateMatrixWorld(true);
+  try { r.compileAsync(c, gx.camera, gx.scene).catch(() => {}); } catch (e) { /* compiles on first draw instead */ }
+}
 
 const M = (color, rough = 0.8, metal = 0, emissive = 0x000000, ei = 0) => new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal, emissive, emissiveIntensity: ei });
 
@@ -31,6 +38,7 @@ export class Props {
   free(x, z, hw, hd, yaw = 0) {
     const g = this.g, R = g.R, y = this.ground(x, z);
     const V = g.valley; if (V && V.fluidAt && V.fluidAt(x, z)) return false;
+    if (this.inPond(x, z)) return false;
     if (V && V.normalAt && V.normalAt(x, z).y < 0.94) return false;
     if (this.onRoad(x, z, Math.hypot(hw, hd) + 2.5)) return false;
     const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
@@ -38,6 +46,8 @@ export class Props {
     g.phys.world.intersectionsWithShape({ x, y: y + 2.2, z }, { x: q.x, y: q.y, z: q.z, w: q.w }, new R.Cuboid(hw, 1.6, hd), (col) => { const ud = col.userData || {}; if (ud.story || (col.shapeType && col.shapeType() === R.ShapeType.HeightField)) return true; hit = true; return false; }, undefined, groups(GROUP.STATIC, GROUP.STATIC | GROUP.PROP));
     return !hit;
   }
+
+  inPond(x, z) { for (const P of PONDS) if (((x - P.x) / P.rx) ** 2 + ((z - P.z) / P.rz) ** 2 < 1.3) return true; return false; }
 
   onRoad(x, z, margin) {
     const V = this.g.valley; if (!V || !V.roads) return false;
@@ -102,7 +112,7 @@ export class Props {
 
   end(s) {
     const g = this.g, R = g.R;
-    this.merge(s);
+    this.merge(s); warmUp(g, s.group);
     s.body = g.phys.world.createRigidBody(R.RigidBodyDesc.fixed().setTranslation(s.at.x, s.at.y, s.at.z).setRotation(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), s.at.yaw || 0)));
     for (const b of s.boxes) {
       const c = g.phys.world.createCollider(R.ColliderDesc.cuboid(b.w / 2, b.h / 2, b.d / 2).setTranslation(b.x, b.y, b.z).setFriction(0.8).setCollisionGroups(groups(GROUP.STATIC, 0xffff)), s.body);
@@ -120,6 +130,12 @@ export class Props {
   }
 
   hideAll() { for (const n of this.sets.keys()) this.show(n, false); }
+
+  clearAll() {
+    const w = this.g.phys.world;
+    for (const s of this.sets.values()) { this.root.remove(s.group); if (s.body) w.removeRigidBody(s.body); }
+    this.sets.clear(); this.droneList = [];
+  }
 
   workshop(name, at, brand) {
     const kessler = brand === 'kessler', s = this.begin(name, at);
@@ -197,6 +213,74 @@ export class Props {
       k.position.set(Math.sin(r) * 9.2, 88, Math.cos(r) * 9.2); k.rotation.y = r; k.castShadow = false;
     }
     return this.end(s);
+  }
+
+  sketch(lines) {
+    const w = 1024, h = 512, c = document.createElement('canvas'); c.width = w; c.height = h;
+    const g = c.getContext('2d');
+    g.fillStyle = '#e9dfc6'; g.fillRect(0, 0, w, h);
+    g.strokeStyle = '#5a4630'; g.lineWidth = 5; g.lineCap = 'round'; g.lineJoin = 'round';
+    const X = (x) => 90 + x * 520, Y = (y) => 330 - y * 260;
+    g.beginPath(); g.moveTo(X(0), Y(0.18)); g.bezierCurveTo(X(0.08), Y(0.32), X(0.28), Y(0.38), X(0.42), Y(0.62)); g.bezierCurveTo(X(0.55), Y(0.78), X(0.75), Y(0.7), X(0.86), Y(0.42)); g.lineTo(X(1), Y(0.3)); g.lineTo(X(1), Y(0.12)); g.lineTo(X(0), Y(0.08)); g.closePath(); g.stroke();
+    for (const cx of [0.2, 0.8]) { g.beginPath(); g.arc(X(cx), Y(0.08), 46, 0, Math.PI * 2); g.stroke(); g.beginPath(); g.arc(X(cx), Y(0.08), 18, 0, Math.PI * 2); g.stroke(); }
+    g.lineWidth = 3; g.beginPath(); g.moveTo(X(0.36), Y(0.52)); g.quadraticCurveTo(X(0.55), Y(0.72), X(0.75), Y(0.55)); g.stroke();
+    g.strokeStyle = '#b5532a'; g.lineWidth = 4;
+    for (let i = 0; i < 6; i++) { g.beginPath(); g.moveTo(X(-0.02), Y(0.14 + i * 0.03)); g.lineTo(X(-0.14 - i * 0.02), Y(0.1 + i * 0.05)); g.stroke(); }
+    g.fillStyle = '#3d2f20'; g.textAlign = 'left'; g.font = 'italic 34px Georgia, serif'; g.fillText('the fire carriage', 640, 120);
+    g.font = '24px Georgia, serif'; g.fillText('E. K.  1885', 700, 160);
+    g.fillStyle = '#10131b'; g.fillRect(0, h - 92, w, 92);
+    g.fillStyle = '#f2efe6'; g.font = '700 46px "Helvetica Neue", Arial, sans-serif'; g.fillText(lines[0], 40, h - 40);
+    g.fillStyle = '#c9a45c'; g.font = '500 24px "Helvetica Neue", Arial, sans-serif'; g.fillText(lines[1] || '', 40, h - 12);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+    return new THREE.MeshStandardMaterial({ map: t, roughness: 0.7, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 0.35 });
+  }
+
+  sketchBoard(name, at, lines) {
+    const s = this.begin(name, at), post = M(0x2c2f36, 0.5, 0.7);
+    this.box(s, 0.5, 9, 0.5, post, -4.5, 4.5, 0); this.box(s, 0.5, 9, 0.5, post, 4.5, 4.5, 0);
+    const p = this.box(s, 12, 6, 0.25, this.sketch(lines), 0, 11, 0, false); p.castShadow = false;
+    return this.end(s);
+  }
+
+  kesslerTower(name, at, H = 800) {
+    const s = this.begin(name, at), glass = M(0x0e131c, 0.12, 0.92), band = M(0x000000, 0.5, 0, 0xc9a45c, 1.6), dark = M(0x1a1d24, 0.5, 0.6);
+    s.mats = { band };
+    const seg = [[34, 0.22], [28, 0.2], [22, 0.18], [16, 0.16], [11, 0.14], [7, 0.1]];
+    let y = 0;
+    for (const [w, f] of seg) {
+      const h = H * f; this.box(s, w, h, w, glass, 0, y + h / 2, 0);
+      const b = this.box(s, w + 0.6, 1.2, w + 0.6, band, 0, y + h - 0.6, 0, false); b.castShadow = false;
+      y += h;
+    }
+    const top = y;
+    const pad = this.box(s, 30, 1.2, 30, dark, 0, top + 0.6, 0);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(11, 0.35, 8, 48), band); ring.rotation.x = Math.PI / 2; ring.position.set(0, top + 1.3, 0); s.local.add(ring);
+    this.box(s, 3, 2.2, 2, M(0x2b2e35, 0.35, 0.85), 9, top + 2.3, -9);
+    for (const r of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
+      const km = sign(['KESSLER'], 1024, 512, '#0b0e15', '#f3e2b8', '#c9a45c'); km.emissiveIntensity = 1.6; s.mats['logo' + r] = km;
+      const k = this.box(s, 22, 11, 0.4, km, 0, H * 0.55, 0, false);
+      const half = (seg[2][0] + 0.8) / 2; k.position.set(Math.sin(r) * half, H * 0.53, Math.cos(r) * half); k.rotation.y = r; k.castShadow = false;
+    }
+    const term = this.box(s, 1.2, 1.6, 0.6, M(0x1b1f27, 0.4, 0.7), 0, 0.8, 18.2);
+    const scr = this.box(s, 0.9, 0.6, 0.05, M(0x000000, 0.3, 0, 0x3fb6ff, 1.8), 0, 1.25, 18.52, false); scr.castShadow = false; s.mats.screen = scr.material;
+    this.box(s, 1.0, 0.7, 0.7, M(0x3a3f2e, 0.8, 0.2), 3.2, 0.35, 18.6);
+    for (const m of s.local.children) m.castShadow = false;
+    s.spots.terminal = this.local(s, 0, 0, 19.4);
+    s.spots.crate = this.local(s, 3.2, 0, 19.6);
+    s.spots.pad = this.local(s, 0, top + 1.3, 0); s.spots.pad.y = at.y + top + 1.3;
+    s.spots.vault = this.local(s, 9, top + 1.3, -7.4); s.spots.vault.y = at.y + top + 1.3;
+    s.top = at.y + top;
+    void term; void pad;
+    return this.end(s);
+  }
+
+  dim(name, on) {
+    const s = this.sets.get(name); if (!s || !s.mats) return;
+    for (const k in s.mats) {
+      const m = s.mats[k]; if (m.emissiveIntensity === undefined) continue;
+      if (m.baseEI === undefined) { m.baseEI = m.emissiveIntensity; m.baseColor = m.color.clone(); }
+      m.emissiveIntensity = on ? m.baseEI * 0.04 : m.baseEI; m.color.copy(m.baseColor).multiplyScalar(on ? 0.1 : 1);
+    }
   }
 
   drones(name, around, n = 3) {

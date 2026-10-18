@@ -6,6 +6,9 @@ import { NPCs } from './npc.js';
 import { CHAPTERS } from './chapters.js';
 import { Voice } from './voice.js';
 import { voiceOf } from './lines.js';
+import { Coop } from './coop.js';
+import { Drones } from './drones.js';
+import { SideJobs } from './side.js';
 
 const KEY = 'r88.story.v1';
 const $ = (id) => document.getElementById(id);
@@ -17,14 +20,18 @@ export class Story {
     this.steps = CHAPTERS.flatMap((c) => c.steps.map((s) => ({ ...s, chapter: c })));
     this.st = this.load();
     this.i = -1; this.target = null; this.radioQ = []; this.dlgOpen = null; this.spots = []; this.t = 0; this.events = [];
+    this.items = new Map(); this.itemSerial = 0; this.spotSerial = 0; this.dlgSerial = 0; this.radioSerial = 0; this.titleSerial = 0; this.titleLast = 0; this.net = null;
+    this.coop = new Coop(this); this.drones = new Drones(game); this.side = new SideJobs(this);
     this._v = new THREE.Vector3();
     addEventListener('keydown', (e) => this.key(e), true);
     if (game.valley && game.valley.onLocation) game.valley.onLocation(() => this.applyWorld());
     const fs = { radius: 2.4, holding: true, pos: () => this.frontOfCar(), enabled: () => !!this.frunkLabel(), onUse: () => this.frunkUse() };
     Object.defineProperty(fs, 'label', { get: () => this.frunkLabel() });
     game.interact.add(fs);
+    const at = this.steps.findIndex((s) => s.id === this.st.step);
+    if (this.st.done && at >= 0 && at + 1 < this.steps.length) { this.st.done = false; this.goto(at + 1); return; }
     if (this.st.done) { this.applyWorld(); return; }
-    this.goto(Math.max(0, this.steps.findIndex((s) => s.id === this.st.step)));
+    this.goto(Math.max(0, at));
   }
 
   load() {
@@ -42,8 +49,8 @@ export class Story {
   goto(i) {
     const prev = this.step;
     if (prev && prev.exit) prev.exit(this);
-    for (const off of this.spots) off(); this.spots = [];
-    this.i = i; this.target = null; this.meta = '';
+    for (const s of this.spots) s.off(); this.spots = [];
+    this.i = i; this.target = null; this.meta = ''; this.net = null;
     const s = this.step; if (!s) return;
     this.st.step = s.id; this.save();
     this.applyWorld();
@@ -69,11 +76,13 @@ export class Story {
   period(year) { return eraOf(year).id; }
   inYear(year) { return this.g.eraId() === this.period(year); }
 
-  player() { const g = this.g; return g.walker.active ? g.walker.pos : g.car.sim.pos; }
+  player() { const g = this.g, host = g.ride && g.online && g.online.remotes.get(g.ride); return host ? host.pos : g.walker.active ? g.walker.pos : g.car.sim.pos; }
   near(p, r) { if (!p) return false; const q = this.player(); return Math.hypot(q.x - p.x, q.z - p.z) < r; }
   dist(p) { const q = this.player(); return Math.hypot(q.x - p.x, q.z - p.z); }
 
   objective(text, target = null, meta = '') {
+    this.ob = [text, target, meta];
+    if (this.side && this.side.job) return;
     const E = this.el;
     this.target = target; this.meta = meta;
     if (!text) { E.obj.classList.remove('on'); E.wp.classList.remove('on'); return; }
@@ -85,6 +94,7 @@ export class Story {
 
   title(main, sub, sec = 3) {
     if (!this.g.started) { this.pendingTitle = [main, sub, sec]; return; }
+    this.titleLast = [++this.titleSerial, main, sub || '', sec];
     const E = this.el; E.tm.textContent = main; E.ts.textContent = sub || '';
     E.title.classList.add('on'); clearTimeout(this.titleT); this.titleT = setTimeout(() => E.title.classList.remove('on'), sec * 1000);
   }
@@ -95,18 +105,71 @@ export class Story {
   }
 
   voicePos(line) {
-    const who = voiceOf(line), id = { ida: 'ida', marta: 'marta', kessler: 'kessler' }[who];
+    const who = voiceOf(line), id = { ida: 'ida', marta: 'marta', kessler: 'kessler', nova: 'nova' }[who];
     if (!id || line.radio) return null;
     return () => { const p = this.npc.pos(id); return p ? { x: p.x, y: p.y + 1.62, z: p.z } : null; };
   }
 
-  spot(def) { const off = this.g.interact.add(def); this.spots.push(off); return off; }
+  spot(def) {
+    def.id = def.id || `${this.st.step}:${++this.spotSerial}`;
+    const off = this.g.interact.add(def); this.spots.push({ def, off });
+    return () => { off(); this.spots = this.spots.filter((x) => x.def !== def); };
+  }
+
+  get following() { return this.coop.mode === 'follow'; }
+
+  holding(kind) {
+    const h = this.heldItem(); if (h && h.story === kind) return true;
+    for (const x of this.items.values()) if (x.holder && x.kind === kind) return true;
+    return false;
+  }
+
+  takeHeld(kind) {
+    const h = this.heldItem(); if (h && h.story === kind) { this.g.interact.held = null; this.removeItem(h); return true; }
+    for (const x of this.items.values()) if (x.holder && x.kind === kind) { this.removeItem(x.it); return true; }
+    return false;
+  }
+
+  removeItem(it) { if (!it) return; this.g.interact.removeItem(it); if (it.key) this.items.delete(it.key); }
+
+  giveItem(kind, at, remote) {
+    const it = this.item(kind, { x: at.x, y: (at.y ?? this.g.valley.heightAt(at.x, at.z)) + 0.9, z: at.z });
+    if (remote) { const x = this.items.get(it.key); x.holder = remote.uid; it.body.setBodyType(this.g.R.RigidBodyType.KinematicPositionBased, true); for (let i = 0; i < it.body.numColliders(); i++) it.body.collider(i).setEnabled(false); }
+    else if (this.g.walker.active && !this.g.interact.held) this.g.interact.pick(it.body, it.col);
+    return it;
+  }
+
+  carrierOf(kind) {
+    const h = this.heldItem(); if (h && h.story === kind) return { uid: (this.g.online && this.g.online.status === 'online' && this.g.online.uid) || 'me' };
+    for (const x of this.items.values()) if (x.holder && x.kind === kind) return { uid: x.holder };
+    return null;
+  }
+
+  itemPos(kind) { for (const x of this.items.values()) if (x.kind === kind && x.it) { const t = x.it.body.translation(); return { x: t.x, y: t.y, z: t.z }; } return null; }
+
+  decoys() {
+    for (const x of this.items.values()) {
+      if (x.kind !== 'decoy' || !x.it || x.holder || this.heldItem() === x.it) continue;
+      const b = x.it.body, v = b.linvel(), sp = Math.hypot(v.x, v.y, v.z);
+      if (sp > 2 && !x.moving) { x.moving = true; x.t0 = performance.now(); }
+      const t = b.translation(), age = performance.now() - (x.t0 || 0), low = t.y - this.g.valley.heightAt(t.x, t.z) < 0.35;
+      if (x.moving && !x.fired && (sp < 0.6 || (low && age > 250) || age > 2500)) { x.fired = true; this.drones.throwDecoy(t); this.g.audio && this.g.audio.play('tc_crackle', { pos: t, gain: 0.5 }); setTimeout(() => this.removeItem(x.it), 15000); }
+    }
+  }
+
+  netRelease(body, vel) {
+    if (!this.following) return false;
+    const it = this.g.interact.items.find((x) => x.body === body && x.netKey); if (!it) return false;
+    const t = body.translation();
+    this.coop.send('drop', it.netKey, t.x, t.y, t.z, vel.x || 0, vel.y || 0, vel.z || 0);
+    return true;
+  }
 
   talk(npcId, label, lines, done) {
     let busy = false;
-    this.spot({ radius: 2.6, holding: true, label, pos: () => this.npc.pos(npcId), enabled: () => !busy && !this.dlgOpen, onUse: async () => {
+    this.spot({ radius: 2.6, holding: true, label, pos: () => this.npc.pos(npcId), enabled: () => !busy && !this.dlgOpen, onUse: async (pl, def, remote) => {
       busy = true;
-      const p = this.player(); this.npc.face(npcId, p.x, p.z); this.npc.rest(npcId, 'talk');
+      const p = remote ? (remote.foot ? remote.walk.pose : remote.pos) : this.player(); this.npc.face(npcId, p.x, p.z); this.npc.rest(npcId, 'talk');
       const r = await this.say(typeof lines === 'function' ? lines(this) : lines);
       this.npc.rest(npcId, 'idle'); busy = false;
       if (done) done(r);
@@ -134,8 +197,9 @@ export class Story {
     });
   }
 
-  openDlg(L, cb) {
+  openDlg(L, cb, mirror = false) {
     const E = this.el;
+    if (!mirror) this.dlgSerial++;
     E.dw.textContent = L.who || ''; E.dc.innerHTML = '';
     const D = this.dlgOpen = { L, cb, shown: 0, full: L.text, sel: 0, t: 0, rate: 60, vh: null, wait: !!this.voice.has(L.v), after: 0 };
     E.dt.textContent = '';
@@ -173,6 +237,7 @@ export class Story {
   frontOfCar() { const c = this.g.car; if (!c || c.given) return null; return this._v.set(0, 0, 2.5).applyQuaternion(c.curr.quat).add(c.curr.pos).clone(); }
 
   frunkLabel() {
+    const side = this.side && this.side.frunkLabel(); if (side) return side;
     const it = this.heldItem(), F = this.st.frunk;
     if (it) return `Put ${it.label} in the frunk`;
     if (F.length && this.allowTake) return `Take ${F[F.length - 1] === 'part' ? 'thruster part' : 'flux canister'} from the frunk`;
@@ -182,8 +247,11 @@ export class Story {
   heldItem() { const I = this.g.interact; if (!I.held) return null; return I.items.find((x) => x.body === I.held.body && x.story) || null; }
 
   frunkUse() {
+    if (this.side && this.side.frunkUse()) return;
     const I = this.g.interact, it = this.heldItem();
-    if (it) { I.held = null; I.removeItem(it); this.st.frunk.push(it.story); this.save(); if (this.g.audio) this.g.audio.play('door_close', { pos: this.frontOfCar(), gain: 0.6 }); this.emit('stow', it.story); return; }
+    if (it && this.following && it.netKey) { this.coop.send('stow', it.netKey); I.held = null; it.body.setBodyType(this.g.R.RigidBodyType.KinematicPositionBased, true); if (this.g.audio) this.g.audio.play('door_close', { pos: this.frontOfCar(), gain: 0.6 }); return; }
+    if (it) { I.held = null; this.removeItem(it); this.st.frunk.push(it.story); this.save(); if (this.g.audio) this.g.audio.play('door_close', { pos: this.frontOfCar(), gain: 0.6 }); this.emit('stow', it.story); return; }
+    if (this.allowTake && this.st.frunk.length && this.following) { const p = this.frontOfCar(); this.coop.send('take', p.x, p.y, p.z); return; }
     if (this.allowTake && this.st.frunk.length) {
       const kind = this.st.frunk.pop(), p = this.frontOfCar();
       const item = this.item(kind, { x: p.x, y: p.y + 0.5, z: p.z });
@@ -223,7 +291,11 @@ export class Story {
     if (this.g.audio) this.g.audio.play('part_clunk', { inside: true, gain: 0.8 });
   }
 
-  item(kind, pos) { const it = this.g.interact.spawnItem(kind, pos); it.story = kind; return it; }
+  item(kind, pos) {
+    const it = this.g.interact.spawnItem(kind, pos); it.story = kind; it.key = kind + (++this.itemSerial);
+    this.items.set(it.key, { key: it.key, kind, it, holder: 0 });
+    return it;
+  }
 
   emit(type, data) { this.events.push({ type, data }); }
 
@@ -240,6 +312,17 @@ export class Story {
     if (!A.statue && this.inYear(2026)) A.statue = this.props.findSpot(c.x, c.z, 1.2, 1.2, Math.PI / 2, 120);
     if (!A.tower && this.inYear(2026)) A.tower = this.props.findSpot(c.x - 160, c.z + 260, 9.6, 9.6, 0, 300);
     if (!A.forge && this.inYear(1885)) A.forge = this.props.findSpot(c.x + 30, c.z - 50, 2.8, 2.8, Math.PI / 2, 160);
+    if (!A.park && V.region && V.region('park')) {
+      const pk = V.region('park'), xs = pk.poly.map((p) => p[0]), zs = pk.poly.map((p) => p[1]);
+      A.park = { x0: Math.min(...xs), x1: Math.max(...xs), z0: Math.min(...zs), z1: Math.max(...zs) };
+    }
+    if (A.park && !A.ktower && this.inYear(2080)) {
+      const P = A.park, cx = (P.x0 + P.x1) / 2;
+      A.ktower = this.props.findSpot(cx, P.z0 + 70, 18, 18, 0, 220);
+      A.sb = [[P.x0 - 30, P.z0 - 30], [P.x1 + 30, P.z0 - 30], [cx, P.z1 + 40]].map(([x, z], i) => this.props.findSpot(x, z, 6.5, 0.6, i === 2 ? Math.PI : 0, 120));
+    }
+    if (A.nova && this.props.inPond(A.nova.x, A.nova.z)) A.nova = null;
+    if (A.park && !A.nova && this.inYear(2080)) A.nova = this.props.findSpot((A.park.x0 + A.park.x1) / 2 + 40, A.park.z0 + 620, 1.2, 1.2, 0, 160);
     if (!A.wash) {
       const w = V.region && V.region('wash'), wc = w && w.center ? (Array.isArray(w.center) ? { x: w.center[0], z: w.center[1] } : w.center) : { x: c.x + 300, z: c.z - 300 };
       A.wash = { x: wc.x, z: wc.z, y: V.heightAt(wc.x, wc.z) };
@@ -260,9 +343,15 @@ export class Story {
       });
     }
     if (A.forge && !P.sets.has('forge')) P.forge('forge', A.forge);
+    if (A.ktower && !P.sets.has('k_tower')) {
+      P.kesslerTower('k_tower', A.ktower);
+      A.sb.forEach((p, i) => P.sketchBoard('k_sb' + i, p, ['THE FIRE CARRIAGE', 'SKETCHED BY ELIAS KESSLER, 1885 · KESSLER AEROSPACE']));
+      this.drones.build(A.ktower, 7, [{ r: 34, h: 16, sp: 1 }, { r: 60, h: 22, sp: 1.2 }, { r: 90, h: 28, sp: 1.4 }]);
+    }
     const N = this.npc;
     if (A.workshop && !N.get('ida')) { const p = P.sets.get('ws_normal').spots.inside; N.add('ida', { kind: 'human_f2026', x: p.x, z: p.z, yaw: Math.PI / 2, seed: 0.37, name: 'Ida' }); }
     if (A.statue && !N.get('marta')) { const s = A.statue; N.add('marta', { kind: 'human_f2026', x: s.x + 3.2, z: s.z + 1.5, yaw: -Math.PI / 2, seed: 0.81, name: 'Marta' }); }
+    if (A.nova && !N.get('nova')) N.add('nova', { kind: 'human_f2080', x: A.nova.x, z: A.nova.z, yaw: Math.PI, seed: 0.58, name: 'Nova' });
     if (A.forge && !N.get('kessler')) { const p = P.sets.get('forge').spots.anvil; N.add('kessler', { kind: 'human_m1885', x: p.x, z: p.z, yaw: -Math.PI / 2, seed: 0.12, name: 'Elias Kessler', scale: 1.04 }); }
   }
 
@@ -276,6 +365,12 @@ export class Story {
     N.setActive('ida', y26 && !kes && !f.idaAway);
     N.setActive('marta', y26 && kes);
     N.setActive('kessler', y85 && !f.kesslerGone);
+    const y80 = !earth && this.inYear(2080), k80 = y80 && !!f.k2080;
+    P.show('k_tower', k80); P.dim('k_tower', !!f.free2080);
+    for (const n of ['k_sb0', 'k_sb1', 'k_sb2']) P.show(n, k80 && !f.free2080);
+    this.drones.show(k80 && (!f.free2080 || this.drones.down));
+    if (k80 && f.free2080 && !this.drones.down) this.drones.powerDown();
+    N.setActive('nova', k80);
   }
 
   update(dt) {
@@ -283,6 +378,8 @@ export class Story {
     if (this.pendingTitle) { const t = this.pendingTitle; this.pendingTitle = null; this.title(...t); }
     this.t += dt;
     this.npc.update(dt); this.props.update(dt); this.enforceNozzle();
+    if (this.following && this.net && this.net.dr) this.drones.netApply(this.net.dr, dt);
+    this.drones.ticked = false;
     if (this.earth()) { if (!this.away) { this.away = true; this.el.obj.classList.remove('on'); this.el.wp.classList.remove('on'); } return; }
     if (this.away) { this.away = false; if (this.el.text.textContent && !this.st.done) this.el.obj.classList.add('on'); }
     if (this.dlgOpen) {
@@ -294,12 +391,16 @@ export class Story {
     }
     this.radioStep(dt);
     this.voice.update();
+    this.coop.update(dt);
+    this.side.update(dt);
     const s = this.step;
-    if (s && !this.st.done) {
+    if (this.following) { this.events.length = 0; }
+    else if (s && !this.st.done) {
       if (s.update && !this.sdone) { const r = s.update(this, dt, this.events); if (r) this.next(); }
       this.events.length = 0;
       if (this.sdone) { if (this.i + 1 < this.steps.length) this.goto(this.i + 1); else this.finish(); }
     } else this.events.length = 0;
+    if (!this.following && this.drones.on && !this.drones.ticked) { this.drones.update(dt, {}); this.net = { ...(this.net || {}), dr: this.drones.netState() }; }
     this.drawTarget();
   }
 
@@ -310,7 +411,7 @@ export class Story {
     if (this.radioCur) { this.radioCur.sec -= dt; if (this.radioCur.sec <= 0) { this.radioCur = null; E.radio.classList.remove('on'); this.radioGap = 0.35; } return; }
     if (this.radioGap > 0) { this.radioGap -= dt; return; }
     const r = this.radioQ.shift(); if (!r) return;
-    this.radioCur = r; E.rw.textContent = r.who; E.rt.textContent = r.text; E.radio.classList.add('on');
+    this.radioCur = r; this.radioSerial++; E.rw.textContent = r.who; E.rt.textContent = r.text; E.radio.classList.add('on');
     if (r.v && this.voice.has(r.v)) this.voice.play(r, {}).then((h) => { if (h && this.radioCur === r) r.sec = Math.max(r.sec, h.dur + 0.5); });
     else if (this.g.audio) this.g.audio.play('ui_tap', { inside: true, gain: 0.3 });
   }

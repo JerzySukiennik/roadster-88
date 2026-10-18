@@ -1,4 +1,4 @@
-// Roadster 88 story perf check: in one page, compares frame times with the story props, people and director on and off (normal present at the workshop, Kessler present with tower, billboards and drones), and times story.update itself.
+// Roadster 88 story perf check: in one page, compares frame times with the story props, people and director on and off (normal present at the workshop, Kessler present with tower, billboards and drones, and Gzowo City 2080 with Kessler Tower, patrolling drones and side job beams), and times story.update itself.
 // usage: node web/tools/story-perf.mjs [--port=8788] [--q=high]
 import { chromium } from '/Users/jurek/openclaw/node_modules/playwright-core/index.mjs';
 
@@ -17,7 +17,7 @@ await R(() => { const g = window.__r88.game; g.online.setEnabled(false); window.
 await wait(4000);
 await R(() => { const g = window.__r88.game, S = g.story, f = S.update.bind(S); window.__su = []; S.update = (dt) => { const t = performance.now(); f(dt); window.__su.push(performance.now() - t); }; });
 const measure = async (label) => { await R(() => window.__r88.resetStats()); await wait(6000); const s = await R(() => window.__r88.stats()); if (!s.n) { console.log(label, 'NO FRAMES', JSON.stringify(await R(() => ({ fc: window.__r88.game.frameCount, paused: window.__r88.game.paused, started: window.__r88.game.started })))); return { p50: 0 }; } console.log(`${label.padEnd(30)} avg ${s.avg.toFixed(1)}  p50 ${s.p50.toFixed(1)}  p95 ${s.p95.toFixed(1)}  max ${s.max.toFixed(1)} ms`); return s; };
-const story = (on) => R((on) => { const g = window.__r88.game, S = g.story; if (on) { g.storyBroken = false; S.applyWorld(); } else { g.storyBroken = true; S.props.hideAll(); S.npc.clear(); } }, on);
+const story = (on) => R((on) => { const g = window.__r88.game, S = g.story; if (on) { g.storyBroken = false; S.applyWorld(); S.side.root.visible = true; } else { g.storyBroken = true; S.props.hideAll(); S.npc.clear(); S.drones.show(false); S.side.root.visible = false; } }, on);
 const cam = (expr) => R((e) => { const g = window.__r88.game, T = window.__r88.THREE; const v = new Function('g', 'return ' + e)(g); g.debugCam = () => ({ pos: new T.Vector3(v.x + 26, v.y + 9, v.z + 14), look: new T.Vector3(v.x, v.y + 2, v.z), fov: 60 }); }, expr);
 await cam("g.story.props.sets.get('ws_normal').spots.door");
 await wait(2500);
@@ -31,6 +31,24 @@ await wait(3000);
 const b1 = await measure('Kessler present, story on');
 await story(false); await wait(1500);
 const b0 = await measure('Kessler present, story off');
+await story(true);
+await R(() => { const g = window.__r88.game, S = g.story; g.debugCam = null; S.flags.timeline = 'normal'; S.flags.k2080 = true; S.applyWorld(); g.tc.setDestination({ ...g.tc.destination, year: 2080 }); if (!g.tc.armed) g.toggleArm(); window.__r88.tg(-900, S.st.anchors.workshop.z - 900, 0, 40.5); window.__r88.keys('KeyW'); });
+for (let i = 0; i < 60 && (await R(() => window.__r88.game.tc.present.year)) !== 2080; i++) await wait(500);
+await R(() => window.__r88.release());
+await wait(4000);
+await R(() => { const g = window.__r88.game, S = g.story; S.applyWorld(); });
+await wait(1500);
+await R(() => { const g = window.__r88.game, T = window.__r88.THREE, t = g.story.st.anchors.ktower, y = g.valley.heightAt(t.x, t.z); g.debugCam = () => ({ pos: new T.Vector3(t.x + 150, y + 40, t.z + 110), look: new T.Vector3(t.x, y + 25, t.z), fov: 60 }); });
+await wait(3000);
+const c1 = await measure('2080 Kessler Tower and drones, story on');
+await R(() => window.__r88.game.story.drones.root.visible = false); await wait(1000);
+await measure('2080 without drones');
+await R(() => { const S = window.__r88.game.story; S.drones.root.visible = true; S.props.show('k_tower', false); }); await wait(1000);
+await measure('2080 without the tower');
+await R(() => { const S = window.__r88.game.story; S.props.show('k_tower', true); console.log('draw calls', window.__r88.game.gfx.renderer.info.render.drawCalls); });
+await story(false); await wait(1500);
+const c0 = await measure('2080, story off');
+console.log('drones on', await R(() => window.__r88.game.story.drones.list.length), 'delta p50 2080', (c1.p50 - c0.p50).toFixed(1), 'ms');
 console.log('story.update ms', await R(() => { const t = window.__su.slice(30).sort((a, b) => a - b); return { p50: t[t.length >> 1].toFixed(3), p95: t[Math.floor(t.length * 0.95)].toFixed(3), max: t[t.length - 1].toFixed(3) }; }));
 console.log('delta p50 normal', (a1.p50 - a0.p50).toFixed(1), 'ms, Kessler', (b1.p50 - b0.p50).toFixed(1), 'ms');
 await browser.close();

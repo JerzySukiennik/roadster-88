@@ -7,6 +7,10 @@ const ITEMS = {
   crate: { label: 'crate', size: [0.55, 0.42, 0.42], mass: 14, color: 0x8a6440, rough: 0.85 },
   canister: { label: 'canister', r: 0.17, h: 0.48, mass: 9, color: 0xb3261e, rough: 0.45, metal: 0.3 },
   part: { label: 'thruster part', r: 0.16, h: 0.42, mass: 11, color: 0xb8bcc4, rough: 0.28, metal: 1, cone: true },
+  decoy: { label: 'decoy', r: 0.09, h: 0.26, mass: 1.2, color: 0xffb648, rough: 0.35, metal: 0.4, glow: 0xffb648 },
+  book: { label: 'sketchbook', size: [0.34, 0.07, 0.26], mass: 1.5, color: 0x6b3a22, rough: 0.8 },
+  seed: { label: 'seed pod', r: 0.12, h: 0.22, mass: 1, color: 0x4f7a2a, rough: 0.6 },
+  parcel: { label: 'parcel', size: [0.42, 0.3, 0.32], mass: 4, color: 0xb08a5a, rough: 0.9 },
 };
 
 export class Interact {
@@ -21,7 +25,7 @@ export class Interact {
 
   spawnItem(kind, pos, yaw = 0) {
     const g = this.g, R = g.R, d = ITEMS[kind] || ITEMS.crate;
-    const mat = new THREE.MeshStandardMaterial({ color: d.color, roughness: d.rough, metalness: d.metal || 0 });
+    const mat = new THREE.MeshStandardMaterial({ color: d.color, roughness: d.rough, metalness: d.metal || 0, emissive: d.glow || 0x000000, emissiveIntensity: d.glow ? 1.2 : 0 });
     const geo = d.size ? new THREE.BoxGeometry(...d.size) : d.cone ? new THREE.CylinderGeometry(d.r * 0.45, d.r, d.h, 20, 1, true) : new THREE.CylinderGeometry(d.r, d.r, d.h, 20);
     const mesh = new THREE.Mesh(geo, mat); mesh.castShadow = true; mesh.receiveShadow = true; mesh.name = 'Item_' + kind;
     g.gfx.scene.add(mesh);
@@ -96,6 +100,7 @@ export class Interact {
 
   release(vel) {
     const g = this.g, h = this.held; if (!h) return;
+    if (g.story && g.story.netRelease && g.story.netRelease(h.body, vel)) { for (const e of h.cols) e.c.setCollisionGroups(e.gr); this.held = null; return; }
     h.body.setBodyType(g.R.RigidBodyType.Dynamic, true);
     for (const e of h.cols) e.c.setCollisionGroups(e.gr);
     h.body.setLinvel(vel, true);
@@ -139,6 +144,13 @@ export class Interact {
     h.body.setNextKinematicTranslation({ x: p.x, y: p.y, z: p.z });
     const r = h.q0.clone().slerp(q, e);
     h.body.setNextKinematicRotation({ x: r.x, y: r.y, z: r.z, w: r.w });
+  }
+
+  hold(dt, down) {
+    const s = this.focus && this.focus.spot;
+    if (!down || !s || !s.onHold) { this.holdAcc = 0; return; }
+    this.holdAcc = (this.holdAcc || 0) + dt;
+    if (this.holdAcc >= 0.2) { s.onHold(this.holdAcc); this.holdAcc = 0; }
   }
 
   update() {

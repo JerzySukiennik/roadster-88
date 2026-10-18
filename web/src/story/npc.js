@@ -50,13 +50,20 @@ export class NPCs {
       if (!n.on && inLife) { life.agents.splice(life.agents.indexOf(n.a), 1); continue; }
       if (!n.on || !n.a || n.a.down) continue;
       const a = n.a;
-      if (n.walk) {
+      if (n.net) {
+        const k = Math.min(1, dt * 8), N = n.net;
+        if (Math.hypot(N.x - a.x, N.z - a.z) > 12) { a.x = N.x; a.z = N.z; } else { a.x += (N.x - a.x) * k; a.z += (N.z - a.z) * k; }
+        let dy = N.yaw - a.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); a.yaw += dy * k;
+        a.speed = N.sp || 0; a.want = a.speed; n.walk = null;
+      } else if (n.walk) {
         a.tx = n.walk.x; a.tz = n.walk.z; a.want = n.walk.speed;
         steerGround(life, a, dt, { arrive: 1.2 });
         if (Math.hypot(a.x - n.walk.x, a.z - n.walk.z) < 1.4) { const w = n.walk; n.walk = null; a.want = 0; a.speed = 0; if (w.done) w.done(); }
       } else { a.want = 0; a.speed = Math.max(0, a.speed - dt * 4); }
     }
   }
+
+  clearAll() { this.clear(); this.list.clear(); }
 
   clear() { const life = this.g.life; for (const n of this.list.values()) { if (life && n.a) { const i = life.agents.indexOf(n.a); if (i >= 0) life.agents.splice(i, 1); } n.on = false; } }
 }

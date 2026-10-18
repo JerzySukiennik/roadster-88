@@ -169,13 +169,14 @@ export class Cockpit {
     g.textAlign = 'right';
     g.fillText(`${eraOf(p.year).label} · ${formatYear(p.year)}`, W - 32, 34);
     g.textAlign = 'left';
-    if (this.app === 'tc') this.drawTC(g); else if (this.app === 'map') this.drawMap(g); else if (this.app === 'car') this.drawCar(g); else if (this.app === 'space') this.drawSpace(g); else this.drawRadio(g);
+    if (this.app === 'tc') this.drawTC(g); else if (this.app === 'map') this.drawMap(g); else if (this.app === 'car') this.drawCar(g); else if (this.app === 'space') this.drawSpace(g); else if (this.app === 'jobs' && this.g.story && this.g.story.side) this.g.story.side.drawBoard(g, this, { W, H, C, FONT, rr }); else this.drawRadio(g);
     const apps = [['tc', 'Time Circuits'], ['map', 'Map'], ['car', 'Car'], ['radio', 'Radio']];
     if (this.g.space) apps.push(['space', this.g.space.active ? 'Earth' : 'Space']);
+    if (this.g.story && this.g.story.side) apps.push(['jobs', 'Jobs']);
     g.fillStyle = '#08090b'; g.fillRect(0, H - 96, W, 96);
     g.fillStyle = C.line; g.fillRect(0, H - 96, W, 1);
     apps.forEach(([id, label], i) => {
-      const bw = 230, x = W / 2 - (apps.length * bw) / 2 + i * bw, y = H - 82;
+      const bw = Math.min(230, (W - 40) / apps.length), x = W / 2 - (apps.length * bw) / 2 + i * bw, y = H - 82;
       const hot = this.btn('app_' + id, x + 10, y, bw - 20, 68, () => { this.app = id; this.keypad = null; this.g.audio.play('ui_toggle', { inside: true, gain: 0.6 }); });
       if (this.app === id) { g.fillStyle = 'rgba(255,255,255,0.1)'; rr(g, x + 10, y, bw - 20, 68, 16); g.fill(); }
       else if (hot) { g.fillStyle = 'rgba(255,255,255,0.05)'; rr(g, x + 10, y, bw - 20, 68, 16); g.fill(); }
@@ -196,6 +197,7 @@ export class Cockpit {
     if (id === 'tc') { g.arc(x, y, 12, 0, Math.PI * 2); g.moveTo(x, y); g.lineTo(x, y - 8); g.moveTo(x, y); g.lineTo(x + 6, y + 3); }
     else if (id === 'map') { g.moveTo(x - 13, y - 9); g.lineTo(x - 4, y - 12); g.lineTo(x + 4, y - 9); g.lineTo(x + 13, y - 12); g.lineTo(x + 13, y + 9); g.lineTo(x + 4, y + 12); g.lineTo(x - 4, y + 9); g.lineTo(x - 13, y + 12); g.closePath(); }
     else if (id === 'car') { rr(g, x - 15, y - 3, 30, 10, 4); g.moveTo(x - 9, y - 3); g.lineTo(x - 5, y - 10); g.lineTo(x + 6, y - 10); g.lineTo(x + 10, y - 3); }
+    else if (id === 'jobs') { rr(g, x - 13, y - 6, 26, 18, 4); g.moveTo(x - 5, y - 6); g.lineTo(x - 5, y - 11); g.lineTo(x + 5, y - 11); g.lineTo(x + 5, y - 6); g.moveTo(x - 13, y + 2); g.lineTo(x + 13, y + 2); }
     else if (id === 'space') { g.arc(x, y, 9, 0, Math.PI * 2); g.moveTo(x + 17, y - 2); g.ellipse(x, y, 17, 6, -0.35, 0, Math.PI * 2); }
     else { g.arc(x, y + 2, 9, Math.PI, 0); g.moveTo(x - 13, y + 2); g.lineTo(x - 13, y + 10); g.moveTo(x + 13, y + 2); g.lineTo(x + 13, y + 10); }
     g.stroke();

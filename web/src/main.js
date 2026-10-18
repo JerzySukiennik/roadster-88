@@ -763,6 +763,7 @@ class Game {
     const clicks = this.input.consumeClicks();
     if (this.walker.active && clicks && !this.paused) this.interact.click();
     this.interact.update();
+    this.interact.hold(fdt, this.walker.active && !this.paused && this.input.is('KeyE'));
     if (ownCab && clicks && !this.paused && this.cockpit.tap() && this.driver.ready) this.driver.touch(hit.point);
     if (this.driver.ready && this.walker.active) {
       this.driver.setHeadVisible(!this.rig.footClose);

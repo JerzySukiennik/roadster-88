@@ -71,6 +71,7 @@ class Remote {
     if (d.lf) { this.lf = d.lf; this.lfNew = true; }
     this.so = Array.isArray(d.s) ? d.s : null;
     if (d.le) this.le = (this.le || []).concat(d.le).slice(-40);
+    if (d.sf) { this.sf = d.sf; this.sfAt = performance.now(); } if (d.se) this.se = d.se; if (d.sx) this.sx = d.sx;
     this.name = String(d.n || '').slice(0, 20); this.outfit = d.o | 0; this.last = now; this.paint = PAINTS[d.p] ? d.p : 'white'; this.ride = d.r || null; this.dy = typeof d.dy === 'number' ? d.dy : null;
     const fl = (d.k && d.k[1]) || 0, was = this.lastFl === undefined ? 0 : this.lastFl;
     if ((fl & 128) && !(was & 128) && this.lastFl !== undefined) { this.departed = true; this.pendingFx = 'depart'; }
@@ -502,6 +503,7 @@ export class Online {
     const life = g.life;
     if (life && life.netExport && this.lifeLead === true) { this.lfTick = !this.lfTick; if (this.lfTick) d.lf = life.netExport(60, this.players().map((q) => [q.x, q.z])); }
     if (life && life.netEvents && this.lifeLead === false) { const ev = life.netEvents(); if (ev && ev.length) d.le = ev; }
+    if (g.story && g.story.coop && !g.storyBroken) { const sx = g.story.coop.netOut(); if (sx) Object.assign(d, sx); }
     if (gone) return;
     F.set(this.me, d).catch(() => {});
   }
