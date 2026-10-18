@@ -79,6 +79,7 @@ export class Story {
   player() { const g = this.g, host = g.ride && g.online && g.online.remotes.get(g.ride); return host ? host.pos : g.walker.active ? g.walker.pos : g.car.sim.pos; }
   near(p, r) { if (!p) return false; const q = this.player(); return Math.hypot(q.x - p.x, q.z - p.z) < r; }
   dist(p) { const q = this.player(); return Math.hypot(q.x - p.x, q.z - p.z); }
+  anyNear(p, r, ok) { if (!p) return false; for (const q of this.drones.players()) if (Math.hypot(q.x - p.x, q.z - p.z) < r && (!ok || ok(q))) return true; return false; }
 
   objective(text, target = null, meta = '') {
     this.ob = [text, target, meta];
@@ -130,7 +131,7 @@ export class Story {
     return false;
   }
 
-  removeItem(it) { if (!it) return; this.g.interact.removeItem(it); if (it.key) this.items.delete(it.key); }
+  removeItem(it) { if (!it) return; if (it.key) this.items.delete(it.key); this.g.interact.removeItem(it); }
 
   giveItem(kind, at, remote) {
     const it = this.item(kind, { x: at.x, y: (at.y ?? this.g.valley.heightAt(at.x, at.z)) + 0.9, z: at.z });
@@ -321,6 +322,8 @@ export class Story {
       A.ktower = this.props.findSpot(cx, P.z0 + 70, 18, 18, 0, 220);
       A.sb = [[P.x0 - 30, P.z0 - 30], [P.x1 + 30, P.z0 - 30], [cx, P.z1 + 40]].map(([x, z], i) => this.props.findSpot(x, z, 6.5, 0.6, i === 2 ? Math.PI : 0, 120));
     }
+    if (A.park && A.ktower && !A.sbCity && this.inYear(2080)) { const P = A.park, cx = (P.x0 + P.x1) / 2; A.sbCity = [[cx - 170, P.z0 - 150], [cx + 170, P.z0 - 170]].map(([x, z]) => this.props.findSpot(x, z, 6.5, 0.6, 0, 140)).filter(Boolean); }
+    if (A.town && !A.sbTown && this.inYear(2080)) A.sbTown = this.props.findSpot(A.town.x + 40, A.town.z + 60, 6.5, 0.6, 0, 160);
     if (A.nova && this.props.inPond(A.nova.x, A.nova.z)) A.nova = null;
     if (A.park && !A.nova && this.inYear(2080)) A.nova = this.props.findSpot((A.park.x0 + A.park.x1) / 2 + 40, A.park.z0 + 620, 1.2, 1.2, 0, 160);
     if (!A.wash) {
@@ -346,8 +349,15 @@ export class Story {
     if (A.ktower && !P.sets.has('k_tower')) {
       P.kesslerTower('k_tower', A.ktower);
       A.sb.forEach((p, i) => P.sketchBoard('k_sb' + i, p, ['THE FIRE CARRIAGE', 'SKETCHED BY ELIAS KESSLER, 1885 · KESSLER AEROSPACE']));
-      this.drones.build(A.ktower, 7, [{ r: 34, h: 16, sp: 1 }, { r: 60, h: 22, sp: 1.2 }, { r: 90, h: 28, sp: 1.4 }]);
+      this.drones.build(A.ktower, [
+        { h: 14, pace: { half: 22, off: 21.5, period: 12 } },
+        { r: 45, h: 18, sp: 1, ph: 0 }, { r: 45, h: 18, sp: 1, ph: Math.PI },
+        { r: 75, h: 22, sp: 1.2, ph: 0 }, { r: 75, h: 22, sp: 1.2, ph: 2.1 }, { r: 75, h: 22, sp: 1.2, ph: 4.2 },
+        { r: 110, h: 24, sp: 1.3, ph: 1 },
+      ]);
     }
+    (A.sbCity || []).forEach((p, i) => { if (!P.sets.has('k_sc' + i)) P.sketchBoard('k_sc' + i, p, ['THE FIRE CARRIAGE', 'SKETCHED BY ELIAS KESSLER, 1885 · KESSLER AEROSPACE']); });
+    if (A.sbTown && !P.sets.has('k_st')) P.sketchBoard('k_st', A.sbTown, ['THE FIRE CARRIAGE', 'KESSLER AEROSPACE · DOWNTOWN GZOWO CITY']);
     const N = this.npc;
     if (A.workshop && !N.get('ida')) { const p = P.sets.get('ws_normal').spots.inside; N.add('ida', { kind: 'human_f2026', x: p.x, z: p.z, yaw: Math.PI / 2, seed: 0.37, name: 'Ida' }); }
     if (A.statue && !N.get('marta')) { const s = A.statue; N.add('marta', { kind: 'human_f2026', x: s.x + 3.2, z: s.z + 1.5, yaw: -Math.PI / 2, seed: 0.81, name: 'Marta' }); }
@@ -367,7 +377,7 @@ export class Story {
     N.setActive('kessler', y85 && !f.kesslerGone);
     const y80 = !earth && this.inYear(2080), k80 = y80 && !!f.k2080;
     P.show('k_tower', k80); P.dim('k_tower', !!f.free2080);
-    for (const n of ['k_sb0', 'k_sb1', 'k_sb2']) P.show(n, k80 && !f.free2080);
+    for (const n of ['k_sb0', 'k_sb1', 'k_sb2', 'k_sc0', 'k_sc1', 'k_st']) P.show(n, k80 && !f.free2080);
     this.drones.show(k80 && (!f.free2080 || this.drones.down));
     if (k80 && f.free2080 && !this.drones.down) this.drones.powerDown();
     N.setActive('nova', k80);

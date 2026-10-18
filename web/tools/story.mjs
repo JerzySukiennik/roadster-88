@@ -215,6 +215,8 @@ if (!args.includes('--no2')) {
     w.enter(p.x, p.y + 0.05, p.z, yaw); g.rig.mode = 'foot'; g.rig.footYaw = yaw; g.rig.footPitch = 0.3; g.rig.footInit = false;
     if (g.driver.root && g.driver.root.parent !== g.gfx.scene) { g.driver.attach(g.gfx.scene, true); g.driver.root.visible = true; }
   }, [p, face]).then(() => live(60000));
+  await R(() => { const S = window.__r88.game.story; window.__rl = []; const r = S.radio.bind(S); S.radio = (a, b, c) => { window.__rl.push(typeof a === 'object' ? a.v : a); return r(a, b, c); }; });
+  const heard = () => R(() => window.__rl.slice());
   await check('2.start (Ida, radio advert)', await until('2.start', 12000), await step());
   await check('dialog c2 Ida 1', await talk());
   await wait(9000);
@@ -224,7 +226,14 @@ if (!args.includes('--no2')) {
   const y5 = await timeJump(2080);
   await check('jumped to 2080', y5 === 2080, y5);
   await check('2.jump -> 2.city', await until('2.city', 8000), await step());
-  await wait(2500);
+  await wait(9000);
+  const h1 = await heard(), o1 = await R(() => window.__r88.game.story.el.text.textContent);
+  await check('arrival radio points to Gzowo City (Ida, then Nova)', h1.includes('c2_arrive_r1') && h1.includes('c2_nova_r0') && o1.includes('Gzowo City'), { h1, o1 });
+  await check('no drones-everywhere thought in the small town', !h1.includes('c2_city_t'), h1);
+  await shot('arrival_2080');
+  const stb = await where('S.st.anchors.sbTown');
+  await check('Kessler sketch board in the 2080 town', !!stb && await R(() => !!window.__r88.game.story.props.sets.get('k_st')?.group.visible), stb);
+  if (stb) { await R(([t]) => { const g = window.__r88.game, T = window.__r88.THREE, y = g.valley.heightAt(t.x, t.z); g.debugCam = () => ({ pos: new T.Vector3(t.x + 6, y + 9, t.z - 26), look: new T.Vector3(t.x, y + 10, t.z), fov: 55 }); }, [stb]); await wait(2000); await shot('town_board_2080'); await R(() => { window.__r88.game.debugCam = null; }); }
   const nova = await where("S.npc.pos('nova') || S.st.anchors.nova");
   const ktw = await where("S.st.anchors.ktower");
   await check('Kessler tower and Nova placed', !!nova && !!ktw, { nova, ktw });
@@ -232,6 +241,7 @@ if (!args.includes('--no2')) {
   await wait(2500); await shot('kessler_tower_2080'); await R(() => { window.__r88.game.debugCam = null; });
   await carTo(nova.x + 14, nova.z + 4, -Math.PI / 2, 0); await wait(2000);
   await check('2.city -> 2.nova', await until('2.nova', 10000), await step());
+  await check('the thought plays once inside the city', (await heard()).filter((x) => x === 'c2_city_t').length === 1, await heard());
   const nv = await where("S.npc.pos('nova')");
   await check('Nova spawned', !!nv, nv);
   await putWalker(near(nv, 1.8, 0.4), nv); await wait(800);

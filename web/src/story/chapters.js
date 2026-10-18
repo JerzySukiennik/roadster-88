@@ -1,5 +1,6 @@
 // Roadster 88 story chapters, "The Butterfly Effect": chapter 0 (the first test jump to 1885 loses a thruster nozzle and the present turns into Kessler's world) and chapter 1 (find out who Elias Kessler was, beat him to the fallen part in 1885 or trade for it, and bring the present back), as steps for the story director.
 import { L } from './lines.js';
+import { pointInPoly } from '../world/valley.js';
 const arrived = (S, ev, year) => ev.some((e) => e.type === 'arrive' && e.data === S.period(year));
 const ws = (S) => { const s = S.props.sets.get(S.flags.timeline === 'kessler' ? 'ws_kessler' : 'ws_normal'); return s ? s.spots.door : null; };
 const HWY = (S) => ({ x: -900, z: (S.st.anchors.workshop ? S.st.anchors.workshop.z : 0) - 250 });
@@ -265,6 +266,7 @@ const chapter1 = {
 };
 
 const tower = (S) => S.props.sets.get('k_tower');
+const inCity = (S, p) => { const V = S.g.valley, R = V && ['city', 'park'].map((id) => V.region(id)).filter(Boolean); return !R || !R.length || R.some((r) => pointInPoly(p.x, p.z, r.poly)); };
 const hackerOf = (S, r) => (r ? { uid: r.uid } : { uid: (S.g.online && S.g.online.uid) || 'me' });
 
 const chapter2 = {
@@ -293,10 +295,15 @@ const chapter2 = {
       id: '2.city',
       enter(S) {
         S.applyWorld();
-        setTimeout(() => S.radio(L('c2_city_t'), 4), 1500);
-        S.objective('Find Nova in Central Park', () => S.npc.pos('nova') || S.st.anchors.nova);
+        if (!S.flags.c2seen && !S.flags.c2heard) { S.flags.c2heard = true; setTimeout(() => { S.radio(L('c2_arrive_r1'), 5); S.radio(L('c2_nova_r0'), 6); }, 1500); }
       },
-      update(S) { return S.near(S.npc.pos('nova') || S.st.anchors.nova, 30); },
+      update(S) {
+        const k = S.st.anchors.ktower, nova = () => S.npc.pos('nova') || S.st.anchors.nova;
+        if (!S.flags.c2seen && k && S.anyNear(k, 650, (p) => inCity(S, p))) { S.flags.c2seen = true; S.radio(L('c2_city_t'), 4); }
+        if (!S.flags.c2seen) { S.objective('Drive downtown to Gzowo City, where Kessler Tower stands', () => S.st.anchors.ktower); return false; }
+        S.objective('Find Nova in Central Park', nova);
+        return S.anyNear(nova(), 30);
+      },
     },
     {
       id: '2.nova',
@@ -325,10 +332,11 @@ const chapter2 = {
       },
       update(S, dt) {
         const T = tower(S), hacking = S.hacker && performance.now() - (S.hackAt || 0) < 600;
-        const r = S.drones.update(dt, { hacker: hacking ? S.hacker : null });
+        const r = S.drones.update(dt, { hacker: hacking ? S.hacker : null }), me = (S.g.online && S.g.online.uid) || 'me';
+        if (r.watching && (r.watching.local || r.watching.uid === me) && performance.now() - (S.beepT || 0) > 380) { S.beepT = performance.now(); if (S.g.audio) S.g.audio.play('ui_tap', { inside: true, gain: 0.55 }); }
         if (r.spotted && hacking && r.spotted.uid === S.hacker.uid) {
           if (performance.now() - S.spotT > 6000) S.radio(L('c2_spot_r1'), 3);
-          S.spotT = performance.now(); S.hack = Math.max(0, S.hack - 0.35);
+          S.spotT = performance.now(); S.hack = Math.max(0, S.hack - 0.25); S.hackSpots = (S.hackSpots || 0) + 1;
         }
         S.flags.hack = Math.round(S.hack * 100) / 100;
         S.meta = `Hack ${Math.round(S.hack * 100)}%`;

@@ -445,6 +445,16 @@
 "peak": -2.6,
 "voice": "ad"
 },
+"c2_arrive_r1": {
+"asr": 0.83,
+"cps": 14.9,
+"dur": 6.45,
+"engine": "kokoro",
+"key": "d8947da5c692",
+"mean": -18.1,
+"peak": -1.9,
+"voice": "ida"
+},
 "c2_caught_r1": {
 "asr": 1.0,
 "cps": 19.5,
@@ -623,6 +633,16 @@
 "key": "7cbe299f10d0",
 "mean": -20.6,
 "peak": -2.4,
+"voice": "nova"
+},
+"c2_nova_r0": {
+"asr": 0.96,
+"cps": 19.5,
+"dur": 6.631,
+"engine": "kokoro",
+"key": "c97ef51e821e",
+"mean": -18.1,
+"peak": -1.9,
 "voice": "nova"
 },
 "c2_page_t": {

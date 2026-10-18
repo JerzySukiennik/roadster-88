@@ -41,6 +41,7 @@ export class Interact {
   }
 
   removeItem(it) {
+    if (!it || !this.items.includes(it)) return;
     if (this.held && this.held.body === it.body) this.held = null;
     this.g.gfx.scene.remove(it.mesh); this.g.phys.world.removeRigidBody(it.body);
     this.items.splice(this.items.indexOf(it), 1);
