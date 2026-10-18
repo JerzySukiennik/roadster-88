@@ -158,6 +158,10 @@ export class Scatter {
     }
     const P = ctx.period || (ctx.period = periodInfo(ctx.eraId)), natural = P.natural;
     if ((Math.abs(x) > INNER || Math.abs(z) > INNER) && V.surfaceAt && BLOCKED_SURF.has(V.surfaceAt(x, z))) wet = 0;
+    if (wet && V.O && !V.isInner(x, z)) {
+      if (V.O.waterAt(x, z)) wet = 0;
+      else for (const p of V.ponds || []) { const e = Math.hypot((x - p.x) / p.rx, (z - p.z) / p.rz); if (e < 1.15 && V.O.hAt(x, z) < p.level + 0.4) { wet = 0; depth = Math.max(depth, p.level - h); break; } }
+    }
     return { x, z, h, slope: 1 - n.y, flag: natural ? flag & ~F.TOWN : flag, road: natural ? 0 : L.roadNear(x, z, P.loop), blocked: L.blocked(x, z), n1: fbm2(x / 420, z / 420, 11), n2: fbm2(x / 70, z / 70, 23), wet, depth, shore };
   }
 
